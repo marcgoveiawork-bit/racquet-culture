@@ -3,6 +3,6 @@
    Fill them in (steps in SETUP.md) and every player shares one set of accounts, profiles and rankings.
    The anon key is designed to be public, so it is fine here. */
 window.RC_LIVE = {
-  url: '',
-  key: ''
+  url: 'https://snormmbkocezylbhzurh.supabase.co',
+  key: 'sb_publishable_ihxSJ3hsAnZCY8bz8Z565A_xYx-1vbt'
 };
