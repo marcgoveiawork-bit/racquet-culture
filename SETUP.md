@@ -106,4 +106,14 @@ Keep the same `id`s so anyone who already picked an avatar gets the new picture.
 - Sending game invites (players can already say whether they are open to invites, and others can filter for them).
 - Confirming scores: right now a score counts as soon as one player logs it. A later version could ask an opponent to confirm.
 - Password reset emails are built in (**Get help** on the sign-in page), but only arrive once an email service is connected (see step 2).
-  Until then an admin can reset a password in Supabase under **Authentication → Users**, where players are listed by email.
+  Until then an admin can set a temporary password in Supabase: open **SQL Editor → New query**, run the lines below
+  with the player's email and a temporary password, tell the player the temporary password, and ask them to change it
+  in the app under **Profile → Change password**.
+
+```sql
+update auth.users
+set encrypted_password = extensions.crypt('Temporary123', extensions.gen_salt('bf'))
+where email = 'player@example.com';
+```
+
+  It should say **Success. 1 row affected**. **0 rows** means no account uses that email.
