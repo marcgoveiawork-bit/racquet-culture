@@ -20,6 +20,34 @@ function setPref(k,v){prefs[k]=v;ls.set('rc_prefs',prefs);applyPrefs()}
 const tick=()=>{try{if(prefs.haptics&&navigator.vibrate)navigator.vibrate(10)}catch(e){}};
 applyPrefs();
 
+/* Icon animations. Each is defined twice (a_ and b_) so an icon can play again on hover right after its opening animation. */
+const ANIMS={
+ spin:'0%{transform:rotate(0)}100%{transform:rotate(360deg)}',
+ roll:'0%{transform:translateX(0) rotate(0)}45%{transform:translateX(3px) rotate(170deg)}100%{transform:translateX(0) rotate(360deg)}',
+ rise:'0%,100%{transform:translateY(0)}35%{transform:translateY(4px)}70%{transform:translateY(-3px)}',
+ sink:'0%,100%{transform:translateY(0)}35%{transform:translateY(-3px)}70%{transform:translateY(4px)}',
+ pulse:'0%,100%{transform:scale(1)}40%{transform:scale(1.24)}70%{transform:scale(.93)}',
+ rock:'0%,100%{transform:rotate(0)}25%{transform:rotate(-24deg)}55%{transform:rotate(14deg)}80%{transform:rotate(-6deg)}',
+ swing:'0%,100%{transform:rotate(0)}30%{transform:rotate(-30deg)}60%{transform:rotate(12deg)}85%{transform:rotate(-4deg)}',
+ ring:'0%,100%{transform:rotate(0)}15%{transform:rotate(16deg)}30%{transform:rotate(-14deg)}45%{transform:rotate(9deg)}60%{transform:rotate(-6deg)}75%{transform:rotate(3deg)}',
+ shake:'0%,100%{transform:translateX(0)}15%,55%{transform:translateX(-3px) rotate(-6deg)}35%,75%{transform:translateX(3px) rotate(6deg)}',
+ pop:'0%,100%{transform:scale(1)}35%{transform:translateY(-4px) scale(1.25)}65%{transform:translateY(0) scale(.92)}',
+ bounce:'0%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}55%{transform:translateY(1px)}75%{transform:translateY(-2px)}',
+ bars:'0%,100%{transform:scale(1)}50%{transform:scale(1.08)}',
+ grow:'0%{transform:scaleY(.15)}60%{transform:scaleY(1.18)}100%{transform:scaleY(1)}'
+};
+(function(){
+ const kids=p=>`${p} [data-a]>svg,${p} [data-a]>.ai`,run=v=>`{animation:var(${v}) .9s var(--ease) both}`;let css='';
+ for(const [k,v] of Object.entries(ANIMS))css+=`@keyframes a_${k}{${v}}@keyframes b_${k}{${v}}[data-a=${k}]{--ka:a_${k};--kb:b_${k}}`;
+ css+=kids('.intro')+run('--kb');
+ for(let i=1;i<=6;i++)css+=`.intro .opt:nth-child(${i}) [data-a]>svg,.intro .opt:nth-child(${i}) [data-a]>.ai{animation-delay:${180+i*90}ms}`;
+ css+=`@media (hover:hover){.opt:hover [data-a]>svg,.opt:hover [data-a]>.ai,#dock>button:hover>svg,.upload:hover>svg${run('--ka')}.opt:hover [data-a=bars] path,#dock>button:hover[data-a=bars] path{animation:a_grow .7s var(--ease) both}}`;
+ css+=`${kids('.near')},${kids('.play')},#dock>button.play>svg${run('--ka')}`;
+ css+=`.intro [data-a=bars] path{animation:b_grow .7s var(--ease) both}.near [data-a=bars] path,.play [data-a=bars] path,#dock>button.play[data-a=bars] path{animation:a_grow .7s var(--ease) both}`;
+ css+=`[data-a=bars] path:nth-child(2){animation-delay:.08s!important}[data-a=bars] path:nth-child(3){animation-delay:.16s!important}`;
+ const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+})();
+
 /* ---------- Sports, levels and the level questions ---------- */
 /* Padel uses the 0 to 7 scale most clubs and apps use. Pickleball uses the 1.0 to 5.5+ skill rating scale.
    scale: how many level points make a big favourite. K: how far one match can move a level. */
@@ -185,7 +213,76 @@ const Live={
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
  async delMatch(id){const {error}=await sb.from('rc_matches').delete().eq('id',id);if(error)throw error}
 };
-const Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
+let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
+
+/* ---------- Demo mode ----------
+   A made-up club of 100 players and several hundred games, kept in memory only.
+   Nothing here is saved, and the real club database is never touched. */
+const Demo={
+ mode:'demo',d:null,
+ async init(){},async session(){return S.uid},async signOut(){},
+ async taken(u){const k=u.trim().toLowerCase();return this.d.profiles.some(p=>p.username.toLowerCase()===k)},
+ async load(){return{profiles:this.d.profiles.slice(),matches:this.d.matches.slice()}},
+ async saveProfile(p){const i=this.d.profiles.findIndex(x=>x.id===p.id);if(i>=0)this.d.profiles[i]=p;else this.d.profiles.push(p)},
+ async addMatch(m){this.d.matches.push(m)},
+ async delMatch(id){this.d.matches=this.d.matches.filter(m=>m.id!==id)},
+ async email(){return S.email||''},
+ async newPassword(){throw errc('demo')}
+};
+const D_FN=['Aarav','Aditi','Akash','Alisha','Amit','Ananya','Arjun','Avinash','Bianca','Carlos','Celina','Chris','Clara','Daniel','Deepa','Dev','Diya','Elena','Eshan','Farah','Gaurav','Gina','Hrishi','Isha','Ishaan','Jason','Jaya','Karan','Kavya','Kiara','Leon','Lina','Maya','Meera','Mihir','Nikhil','Nina','Omkar','Pooja','Pranav','Priya','Rahul','Rhea','Rohan','Sahil','Sana','Sara','Shaun','Simran','Tanvi','Tara','Varun','Vikram','Zoya'];
+const D_LN=['Naik','Kamat','DSouza','Fernandes','Prabhu','Sawant','Shetty','Pai','Menezes','Gaonkar','Rane','Rodrigues','Dias','Pereira','Costa','Almeida','Lobo','Desai','Kerkar','Borkar','Shirodkar','Mascarenhas','Noronha','Sequeira','Gomes','Coutinho','Verma','Mehta','Kapoor','Iyer','Nair','Singh','Malhotra','Bhat','Joshi'];
+function buildDemo(you){
+ const r=rng(2026),pick=a=>a[Math.floor(r()*a.length)],gauss=()=>{let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+ const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),now=Date.now(),DAYS=120;
+ const used=new Set([you.username.toLowerCase()]),names=new Set(),ps=[];
+ while(ps.length<100){
+  const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;names.add(name);
+  let un=(fn+'.'+ln.slice(0,4)).toLowerCase(),k=2;while(used.has(un))un=(fn+'.'+ln.slice(0,4)).toLowerCase()+(k++);used.add(un);
+  const x=r(),sports=x<.5?['padel','pickleball']:x<.85?['padel']:['pickleball'],levels={},skill={},grow={};
+  sports.forEach(sp=>{const S_=SPORTS[sp],v=sp==='padel'?clamp(3+gauss()*1.15,.8,6.6):clamp(3.2+gauss()*.75,1.2,5.4),st=Math.round(v*10)/10;
+   levels[sp]={start:st,band:tierOf(sp,st),at:new Date(now-DAYS*864e5).toISOString()};skill[sp]=v+gauss()*.25;grow[sp]=(.1+gauss()*.3)*(sp==='padel'?1:.6)});
+  const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.45?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
+  ps.push({id:'d_'+ps.length,username:un,name,setup:true,demo:true,avatar:r()<.82?{kind:'preset',id:'px'+(1+Math.floor(r()*12))}:null,sports,
+   hand:r()<.82?'right':r()<.6?'left':'none',invites:r()<.65,times,side:pick(['left','right','either','either']),levels,_skill:skill,_grow:grow});
+ }
+ const all=[you,...ps];
+ if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
+ const ms=[],sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
+ const setsFor=(sp,aw,close)=>{const lg=()=>Math.min(4,Math.floor(r()*(2+close*4)));let sets;
+  if(sp==='padel'){sets=r()<.25+close*.3?[[6,lg()],[lg(),6],[6,lg()]]:[[6,lg()],[6,lg()]];if(r()<.15)sets[0]=r()<.5?[7,5]:[7,6]}
+  else{const lp=()=>Math.min(9,Math.floor(r()*(4+close*6)));sets=r()<.55?[[11,lp()]]:r()<.6?[[11,lp()],[11,lp()]]:[[11,lp()],[lp(),11],[11,lp()]]}
+  return aw?sets:sets.map(x=>[x[1],x[0]])};
+ const N=720,youN=you._skill&&Object.keys(you._skill).length?18:0;
+ for(let k=0;k<N;k++){
+  const t=k/N,sp=r()<.6?'padel':'pickleball',pool=all.filter(p=>p._skill&&p._skill[sp]!=null&&(p!==you||k%Math.floor(N/Math.max(1,youN))===0));
+  const singles=sp==='pickleball'&&r()<.15,n=singles?2:4;
+  let anchor=k%Math.floor(N/Math.max(1,youN))===0&&you._skill[sp]!=null?you:pick(pool.filter(p=>p!==you));
+  if(!anchor)continue;
+  const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t)));
+  const cand=r()<.8?near.slice(0,14):near;if(cand.length<n-1)continue;
+  const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
+  const half=n/2,A_=grp.slice(0,half),B_=grp.slice(half);
+  const ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa;
+  const slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
+  const b=B_.map(slot);if(!singles&&r()<.08){const g=B_[1];b[1]={name:pick(D_FN),level:Math.round(clampL(sp,sk(g,sp,t))*10)/10}}
+  const d=new Date(now-(1-t)*DAYS*864e5-Math.floor(r()*8)*36e5);
+  ms.push({id:'dm_'+k,demo:true,sport:sp,format:singles?'singles':'doubles',date:iso(d),a:A_.map(slot),b,sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+ }
+ const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
+ return{profiles:all.map(clean),matches:ms};
+}
+let demoPrev=null;
+async function startDemo(){
+ const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'you',name:'You (demo)',setup:true,avatar:{kind:'preset',id:'px1'},sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
+ demoPrev={store:Store,uid:S.uid};closeSheet(true);
+ Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ splash('Demo mode','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
+}
+async function exitDemo(){
+ const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
+ if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
+ else{S.uid=null;S.profiles=[];S.matches=[];rate();showAuth()}
+}
 
 /* ---------- App state ---------- */
 const S={uid:null,profiles:[],matches:[],R:{padel:{},pickleball:{}},D:{}};
@@ -331,14 +428,15 @@ function reveal(root=document){
  io=io||new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -5% 0px'});
  let k=0;els.forEach(e=>{const r=e.getBoundingClientRect();e.style.setProperty('--d',(r.top<innerHeight?Math.min(k++,9)*60:0)+'ms');io.observe(e)});
 }
-const NEAR_SEL='#main .card,#main .rrow,#main .mrow';
+const NEAR_SEL='#main .card,#main .rrow,#main .mrow,#main .pod,#main .slot',WIZ_SEL='#wiz .opt,#wiz .avpick button';
 let scRaf=0,nearEl=null,nearT=0;
 function onScroll(){
  scRaf=0;const maxS=document.documentElement.scrollHeight-innerHeight,prog=maxS>0?clamp(scrollY/maxS,0,1):0;
- $('sprog').style.transform=`scaleX(${$('app').hidden?0:prog})`;
- if(matchMedia('(hover:hover)').matches||calm()||$('app').hidden)return;
+ $('sprog').style.transform=`scaleX(${$('app').hidden&&$('wiz').hidden?0:prog})`;
+ const sel=!$('app').hidden?NEAR_SEL:!$('wiz').hidden?WIZ_SEL:null;
+ if(matchMedia('(hover:hover)').matches||calm()||!sel)return;
  const top=80,bot=innerHeight-110,mid=top+(bot-top)*(maxS>0?prog:.5);let best=null,bd=1e9;
- qsa(NEAR_SEL).forEach(el=>{if(el.querySelector('.seg,input'))return;const r=el.getBoundingClientRect();if(!r.height||r.bottom<40||r.top>innerHeight-40)return;const d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=el}});
+ qsa(sel).forEach(el=>{if(el.querySelector('.seg,input'))return;const r=el.getBoundingClientRect();if(!r.height||r.bottom<40||r.top>innerHeight-40)return;const d=Math.abs((r.top+r.bottom)/2-mid);if(d<bd){bd=d;best=el}});
  if(nearEl&&!document.contains(nearEl))nearEl=null;
  if(best!==nearEl){if(nearEl)nearEl.classList.remove('near');if(best)best.classList.add('near');nearEl=best}
  clearTimeout(nearT);nearT=setTimeout(()=>{if(nearEl){nearEl.classList.remove('near');nearEl=null}},1100);
@@ -375,7 +473,8 @@ function paintAuth(dir){
    <p class="aerr" id="aErr" role="alert"></p>
    <button class="btn brand wide" id="aBtn" type="submit">${up?'Create account':'Sign in'}</button>
    ${up?'':`<p class="small muted" style="text-align:center;margin-top:14px">Forgot your password? <button type="button" class="btn link small" data-act="forgot">Get help</button></p>`}
-  </form></div>`;
+  </form>
+  <p class="small muted" style="text-align:center;margin-top:18px">Just looking? <button type="button" class="btn link small" data-act="demo">Try the demo</button></p></div>`;
  vInit();syncGliders();
  $('pwT').onclick=()=>{const p=$('aPass'),s=p.type==='password';p.type=s?'text':'password';$('pwT').textContent=s?'Hide':'Show';$('pwT').setAttribute('aria-pressed',String(s))};
  $('aForm').onsubmit=e=>{e.preventDefault();up?doSignUp():doSignIn()};
@@ -528,7 +627,7 @@ const ICON={
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
  bars:n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 19v-3" ${n<1?'opacity=".3"':''}/><path d="M12 19v-8" ${n<2?'opacity=".3"':''}/><path d="M18 19V5" ${n<3?'opacity=".3"':''}/></svg>`
 };
-const letter=t=>`<span style="font:500 17px var(--display)">${t}</span>`;
+const letter=t=>`<span class="ai" style="font:500 17px var(--display)">${t}</span>`;
 const HANDS=[['right','Right-handed','',letter('R')],['left','Left-handed','',letter('L')],['none','No preference','Comfortable with either hand',letter('R/L')]];
 const TIMES=[['early','Early morning','6 to 9 am',ICON.sunrise],['morning','Morning','9 am to 12',ICON.sun],['afternoon','Afternoon','12 to 4 pm',ICON.noon],['evening','Evening','4 to 8 pm',ICON.sunset],['night','Night','8 to 11 pm',ICON.moon]];
 const SIDES=[['left','Left side','The backhand side (revés)'],['right','Right side','The forehand side (drive)'],['either','Either side','Happy on both']];
@@ -548,8 +647,9 @@ function wSteps(){
   const n=b?QS[sp][b].length:5;for(let i=0;i<n;i++)st.push('q:'+sp+':'+i);st.push('result:'+sp)});
  st.push(W.mode==='setup'?'done':'save');return st;
 }
-function opt(o){const role=o.multi?'aria-pressed':'aria-checked';
- return `<button type="button" class="opt${o.big?' big':''}" ${o.multi?'':'role="radio"'} ${role}="${!!o.on}" data-act="${o.act}" data-v="${esc(o.v)}">${o.icon?`<span class="oi">${o.icon}</span>`:''}<span class="ot"><b>${esc(o.title)}</b>${o.sub?`<span>${esc(o.sub)}</span>`:''}</span><span class="ock">${ICON.check}</span></button>`}
+const ANIM_OF=new Map([[ICON.padel,'swing'],[ICON.pickleball,'roll'],[ICON.mail,'ring'],[ICON.nomail,'shake'],[ICON.sunrise,'rise'],[ICON.sun,'spin'],[ICON.noon,'pulse'],[ICON.sunset,'sink'],[ICON.moon,'rock'],[ICON.any,'spin']]);
+function opt(o){const role=o.multi?'aria-pressed':'aria-checked',a=o.icon?ANIM_OF.get(o.icon)||(/M6 19v-3/.test(o.icon)?'bars':'pop'):'';
+ return `<button type="button" class="opt${o.big?' big':''}${W&&W.jp===o.act+'|'+o.v?' play':''}" ${o.multi?'':'role="radio"'} ${role}="${!!o.on}" data-act="${o.act}" data-v="${esc(o.v)}">${o.icon?`<span class="oi" data-a="${a}">${o.icon}</span>`:''}<span class="ot"><b>${esc(o.title)}</b>${o.sub?`<span>${esc(o.sub)}</span>`:''}</span><span class="ock">${ICON.check}</span></button>`}
 function courtSVG(side){
  const on=s=>side===s||side==='either'?' on':'';
  return `<svg class="cdiag" viewBox="0 0 220 150" aria-hidden="true">
@@ -604,11 +704,12 @@ function paintWiz(anim=true){
  const pct=Math.round((W.i+1)/st.length*100);
  $('wiz').innerHTML=`<div class="wtop"><button class="wback" data-act="wBack" aria-label="Back" ${W.i===0&&W.mode==='setup'?'disabled':''}>${ICON.back}</button>
   <div class="wprog"><div class="wbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Profile set-up progress"><i style="width:${W.prevPct||0}%"></i></div><div class="wcount"><span>${esc(s.eyebrow||'')}</span><span class="num">${W.i+1} of ${st.length}</span></div></div></div>
-  <div class="wbody"><div class="wstep${anim?'':' still'}${W.dir<0?' back':''}" ${anim?'':'style="animation:none"'}>
+  <div class="wbody"><div class="wstep${anim?' intro':' still'}${W.dir<0?' back':''}" ${anim?'':'style="animation:none"'}>
    <h1>${esc(s.title)}</h1>${s.sub?`<p class="muted">${esc(s.sub)}</p>`:''}${s.body}</div></div>
   <div class="wfoot">${W.mode!=='setup'&&W.i===0?`<button class="btn ghost" data-act="wCancel">Cancel</button>`:''}<button class="btn brand wide" data-act="wNext" ${s.valid?'':'disabled'}>${esc(s.next||'Continue')}</button></div>`;
+ W.jp=null;clearTimeout(W.it);if(anim)W.it=setTimeout(()=>{const st=$('wiz').querySelector('.wstep.intro');if(st)st.classList.remove('intro')},1600);
  requestAnimationFrame(()=>{const b=$('wiz').querySelector('.wbar i');if(b)b.style.width=pct+'%';W.prevPct=pct});
- const ph=$('wPhoto');if(ph)ph.onchange=async()=>{try{W.d.avatar={kind:'img',src:await readPhoto(ph.files[0])};paintWiz(false);toast('Looking good.')}catch(e){toast(e.message)}};
+ const up=$('wiz').querySelector('.upload');if(up)up.dataset.a='bounce';const ph=$('wPhoto');if(ph)ph.onchange=async()=>{try{W.d.avatar={kind:'img',src:await readPhoto(ph.files[0])};paintWiz(false);toast('Looking good.')}catch(e){toast(e.message)}};
  if(s.result&&anim)countUp(s.result.sp,s.result.v);else if(s.result){$('lvlNum').textContent=fmtL(s.result.v,1);markAt(s.result.sp,s.result.v)}
 }
 function markAt(sp,v){const S_=SPORTS[sp],m=$('lvlMark');if(m)m.style.left=`calc(${((v-S_.min)/(S_.max-S_.min)*100).toFixed(1)}% - 2px)`}
@@ -618,7 +719,7 @@ function countUp(sp,v){
  const step=now=>{const k=Math.min(1,(now-t0)/D),e=1-Math.pow(1-k,4);if(!document.contains(el))return;el.textContent=fmtL(from+(v-from)*e,1);if(k<1)requestAnimationFrame(step);else tick()};requestAnimationFrame(step);
 }
 function wGo(delta){W.dir=delta;W.i+=delta;window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});paintWiz()}
-function wPickThenNext(){paintWiz(false);if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock=false;const s=wStep(wSteps()[W.i]);if(s.valid)wGo(1)},380)}
+function wPickThenNext(){if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock=false;const s=wStep(wSteps()[W.i]);if(s.valid)wGo(1)},380)}
 async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
  Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]={start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()}});
@@ -637,8 +738,8 @@ function render(){
  after=()=>{};const t=view.tab,html={home:vHome,rank:vRank,add:vAdd,players:vPlayers,me:vMe}[t]();
  $('main').innerHTML=`<div class="view">${html}</div>`;
  $('meBtn').innerHTML=avHTML(me());
- qsa('#dock>button').forEach(b=>{if(b.dataset.v===t)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
- $('banner').innerHTML=Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md). Then everyone shares one ranking.</div>`:'';
+ qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});
+ $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> 100 made-up players. Nothing here is saved.</span><button class="btn ball sm" data-act="exitDemo">Exit demo</button></div>`:Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md). Then everyone shares one ranking.</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
 }
 let after=()=>{};
@@ -651,7 +752,7 @@ function spark(hist,sp){
  const lo=Math.min(...pts),hi=Math.max(...pts),rng_=Math.max(.05,hi-lo),W_=300,H_=46;
  const xy=pts.map((v,i)=>[i/(pts.length-1)*W_,H_-4-((v-lo)/rng_)*(H_-10)]);
  const l=xy.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
- return `<svg class="spark" viewBox="0 0 ${W_} ${H_}" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${l} L${W_},${H_} L0,${H_} Z"/><path class="l" d="${l}"/></svg>`;
+ return `<svg class="spark" viewBox="0 0 ${W_} ${H_}" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${l} L${W_},${H_} L0,${H_} Z"/><path class="l" pathLength="1" d="${l}"/></svg>`;
 }
 function levelCard(sp,id){
  const e=S.R[sp][id],S_=SPORTS[sp];
@@ -691,7 +792,7 @@ function vRank(){
  const t=view.rt,all=Object.entries(S.R[sp]).filter(([id])=>{const p=prof(id);return p&&p.setup}).map(([id,e])=>({id,e,p:prof(id)}));
  const inT=all.filter(x=>tierOf(sp,x.e.r)===t),ranked=inT.filter(x=>x.e.n).sort((a,b)=>b.e.r-a.e.r),wait=inT.filter(x=>!x.e.n).sort((a,b)=>b.e.r-a.e.r);
  const counts=Object.fromEntries(TIERS.map(([k])=>[k,all.filter(x=>x.e.n&&tierOf(sp,x.e.r)===k).length]));
- const row=(x,i)=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">${i+1}</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}${x.p.demo?' <span class="chip" style="font-size:10px;padding:1px 7px">Demo</span>':''}</b><span>@${esc(x.p.username)} · ${x.e.w}–${x.e.l}</span></span><span class="sc"><b class="num">${fmtL(x.e.r)}</b><span class="delta ${dcls(x.e.last)}">${fmtD(x.e.last)}</span></span></button>`;
+ const row=(x,i)=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">${i+1}</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)} · ${x.e.w}–${x.e.l}</span></span><span class="sc"><b class="num">${fmtL(x.e.r)}</b><span class="delta ${dcls(x.e.last)}">${fmtD(x.e.last)}</span></span></button>`;
  const pod=ranked.slice(0,3),order=[1,0,2].filter(i=>pod[i]);
  const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} rv" data-act="player" data-v="${x.id}"><span class="medal">${i+1}</span><br>${avHTML(x.p)}<span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span></button>`}).join('')}</div>`:'';
  return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div></div>
@@ -809,9 +910,9 @@ function vMe(){
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
   <div class="sec"><h2>Settings</h2></div>
-  <div class="card rv"><div class="setline"><div><b>Account</b><p class="small muted">${esc(S.email||'')} · only you can see this</p></div><button class="btn ghost sm" data-act="changePw">Change password</button></div>${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
-  ${Store.mode==='local'?`<div class="card rv" style="margin-top:12px"><b>Preview mode</b><p class="small muted" style="margin:4px 0 12px">Everything is saved on this device only. To try the rankings, add some example players with made-up scores. They are marked Demo and can be removed.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="demoAdd">Add demo players</button><button class="btn ghost sm" data-act="demoClear">Remove demo players</button></div></div>`:''}
-  <button class="btn danger wide" style="margin-top:22px" data-act="signOut">Sign out</button>`;
+  <div class="card rv"><div class="setline"><div><b>Account</b><p class="small muted">${esc(S.email||'')} · only you can see this</p></div>${Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change password</button>'}</div>${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
+  <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Log scores, edit your profile and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players and hundreds of games, with you in the rankings. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
+  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:22px" data-act="signOut">Sign out</button>`}`;
 }
 
 /* ---------- Sheets ---------- */
@@ -853,7 +954,7 @@ function askMemberLevel(id){
 }
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>[...m.a,...m.b].some(s=>s.uid===id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${p.demo?' · Demo player':''}</p></div>
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}</p></div>
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p></div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
@@ -862,28 +963,6 @@ function playerSheet(id){
 }
 function confirmSheet(title,text,okLabel,act,v){
  openSheet(`<h2>${esc(title)}</h2><p class="muted" style="margin:6px 0 18px">${esc(text)}</p><div class="cta"><button class="btn ghost" data-act="closeSheet" style="flex:1">Cancel</button><button class="btn danger" data-act="${act}" data-v="${esc(v||'')}" style="flex:1">${esc(okLabel)}</button></div>`);
-}
-
-/* ---------- Demo players (preview mode only) ---------- */
-const DEMO=[['Aarav Naik','aarav.n'],['Tanvi Kamat','tanvi_k'],['Rohan DSouza','rohan.dz'],['Kiara Fernandes','kiara.f'],['Vikram Prabhu','vikprabhu'],['Neha Sawant','neha.s'],['Dev Shetty','devshetty'],['Isha Pai','isha.pai'],['Kabir Menezes','kabir.m'],['Riya Gaonkar','riya.g'],['Aditya Rane','adi.rane'],['Sara Rodrigues','sara.r']];
-async function demoAdd(){
- if(S.profiles.some(p=>p.demo))return toast('Demo players are already here.');
- const r=rng(42),ps=DEMO.map(([name,username],i)=>{const pl=+(1+r()*5).toFixed(1),pb=+(1.5+r()*3.8).toFixed(1),sports=i%4===3?['pickleball']:i%5===4?['padel']:['padel','pickleball'];
-  const levels={};sports.forEach(sp=>levels[sp]={start:sp==='padel'?pl:pb,band:tierOf(sp,sp==='padel'?pl:pb),at:new Date().toISOString()});
-  return{id:'demo_'+i,username,name,demo:true,setup:true,avatar:{kind:'preset',id:'px'+((i%12)+1)},sports,hand:['right','left','right','none'][i%4],invites:i%3!==0,times:[TIMES[i%5][0],TIMES[(i+2)%5][0]],side:['left','right','either'][i%3],levels}});
- const ms=[];
- for(let k=0;k<40;k++){const sp=r()>.45?'padel':'pickleball',pool=ps.filter(p=>p.sports.includes(sp)).map(p=>p.id);if(pool.length<4)continue;
-  const pick=[];while(pick.length<4){const x=pool[Math.floor(r()*pool.length)];if(!pick.includes(x))pick.push(x)}
-  const d=new Date(Date.now()-(40-k)*864e5*1.1),date=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-  const st=x=>ps.find(p=>p.id===x).levels[sp].start,sa=st(pick[0])+st(pick[1]),sbv=st(pick[2])+st(pick[3]),aw=r()<1/(1+Math.pow(10,(sbv-sa)/2/SPORTS[sp].scale));
-  const g=n=>Math.floor(r()*n);let fs=sp==='padel'?(r()>.5?[[6,g(5)],[g(5),6],[6,g(5)]]:[[6,g(5)],[7,5]]):[[11,g(9)],[11,g(9)]];
-  if(!aw)fs=fs.map(s=>[s[1],s[0]]);
-  ms.push({id:'demo_m'+k,demo:true,sport:sp,format:'doubles',date,a:[{uid:pick[0]},{uid:pick[1]}],b:[{uid:pick[2]},{uid:pick[3]}],sets:fs,winner:aw?'a':'b',by:pick[0],at:d.toISOString()})}
- for(const p of ps)await Store.saveProfile(p);for(const m of ms)await Store.addMatch(m);await reload();render();toast('Added 12 demo players and 40 example games.');
-}
-async function demoClear(){
- ls.set('rc2_profiles',ls.get('rc2_profiles',[]).filter(p=>!p.demo));ls.set('rc2_matches',ls.get('rc2_matches',[]).filter(m=>!m.demo&&![...(m.a||[]),...(m.b||[])].some(s=>s.uid&&/^demo_/.test(s.uid))));
- await reload();render();toast('Demo players removed.');
 }
 
 /* ================= Actions ================= */
@@ -899,13 +978,13 @@ const ACT={
  wCancel(){W=null;showApp()},
  wNext(){const st=wSteps(),s=wStep(st[W.i]);if(!s.valid)return;if(W.i>=st.length-1)return wFinish();wGo(1)},
  wAvatar(v){W.d.avatar={kind:'preset',id:v};tick();paintWiz(false)},
- wSport(v){const a=W.d.sports;W.d.sports=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
- wHand(v){W.d.hand=v;wPickThenNext()},
- wInv(v){W.d.invites=v==='yes';wPickThenNext()},
- wTime(v){const a=W.d.times;W.d.times=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
- wSide(v){W.d.side=v;wPickThenNext()},
- wBand(v){const [sp,b]=v.split('|'),q=W.d.q[sp];if(q.band!==b){q.band=b;q.ans=[];q.pick=[]}wPickThenNext()},
- wAns(v){const [sp,qi,j]=v.split('|'),q=W.d.q[sp];q.pick=q.pick||[];q.pick[+qi]=+j;q.ans[+qi]=QS[sp][q.band][+qi][1][+j][1];wPickThenNext()},
+ wSport(v){W.jp='wSport|'+v;const a=W.d.sports;W.d.sports=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
+ wHand(v){W.jp='wHand|'+v;W.d.hand=v;paintWiz(false);wPickThenNext()},
+ wInv(v){W.jp='wInv|'+v;W.d.invites=v==='yes';paintWiz(false);wPickThenNext()},
+ wTime(v){W.jp='wTime|'+v;const a=W.d.times;W.d.times=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
+ wSide(v){W.jp='wSide|'+v;W.d.side=v;paintWiz(false);wPickThenNext()},
+ wBand(v){W.jp='wBand|'+v;const [sp,b]=v.split('|'),q=W.d.q[sp];if(q.band!==b){q.band=b;q.ans=[];q.pick=[]}paintWiz(false);wPickThenNext()},
+ wAns(v){W.jp='wAns|'+v;const [sp,qi,j]=v.split('|'),q=W.d.q[sp];q.pick=q.pick||[];q.pick[+qi]=+j;q.ans[+qi]=QS[sp][q.band][+qi][1][+j][1];paintWiz(false);wPickThenNext()},
  go(v){go(v)},
  rankSport(v){view.rs=v;const e=S.R[v][S.uid];view.rt=e?tierOf(v,e.r):view.rt;render()},
  rankTier(v){view.rt=v;render()},
@@ -929,9 +1008,9 @@ const ACT={
  editProfile(){startWiz('edit')},
  retake(v){startWiz('level',[v])},
  pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)tick()},
- demoAdd(){demoAdd()},demoClear(){demoClear()},
+ demo(){startDemo()},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your username and password.','Sign out','signOutYes')},
- async signOutYes(){closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()}
+ async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()}
 };
 document.addEventListener('click',e=>{
  const el=e.target.closest&&e.target.closest('[data-act]');if(!el||el.disabled)return;const f=ACT[el.dataset.act];if(!f)return;
@@ -945,7 +1024,7 @@ document.addEventListener('keydown',e=>{
 
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
-function onRemote(){clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid)return;try{await reload()}catch(e){return}
+function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;try{await reload()}catch(e){return}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);
  if($('app').hidden||typing||$('sheetBg')||view.tab==='add'){rmPending=true;return}render()},400)}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
