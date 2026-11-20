@@ -14,7 +14,7 @@ A web app for the Racquet Culture community in Goa: accounts, player profiles, a
 
 ## Try it now (preview mode)
 
-Open `index.html` in a browser, or deploy the folder to Vercel. With `config.js` empty, the app runs in **preview mode**:
+Open `index.html` in a browser, or use the GitHub Pages site. With `config.js` empty, the app runs in **preview mode**:
 accounts, profiles and scores are saved in that browser only. Each phone has its own separate club.
 
 To see full rankings straight away, sign up, finish your profile, then go to **Profile → Add demo players**.
@@ -30,12 +30,21 @@ When this is done, everyone shares one set of accounts, profiles and rankings, a
 2. Create a **new project** for Racquet Culture. Pick the Mumbai (South Asia) region if it is offered.
 3. Wait for it to finish setting up.
 
-### 2. Let players sign up with a username
+### 2. Sign-in settings
 
-Players sign in with a username and password, not an email, so email confirmation must be off.
+Players create an account with their email, a username and a password, and sign in with email and password.
+Emails stay private: other players only see names and usernames.
 
-1. Open **Authentication → Sign In / Providers → Email**.
-2. Turn **Confirm email** off and save.
+1. Open **Authentication → URL Configuration**. Set **Site URL** to the app's address,
+   `https://marcgoveiawork-bit.github.io/racquet-culture/`, and add the same address under **Redirect URLs**.
+   Links in password reset and confirmation emails come back here.
+2. Open **Authentication → Sign In / Providers → Email** and turn **Confirm email** off for now, then save.
+
+Why off for now: Supabase's built-in email sender is only for testing. It sends very few emails an hour and only to
+members of your Supabase team, so players would never receive their confirmation or password reset emails.
+To send real emails, connect an email service under **Authentication → Emails → SMTP Settings**
+(Resend, Brevo and similar services have free plans). Once that works, you can turn **Confirm email** back on:
+the app already handles confirmation links and password reset emails.
 
 ### 3. Create the tables
 
@@ -51,12 +60,11 @@ Players sign in with a username and password, not an email, so email confirmatio
 ```js
 window.RC_LIVE = {
   url: 'https://xxxx.supabase.co',
-  key: 'eyJ...',
-  emailDomain: 'players.racquetculture.app'
+  key: 'eyJ...'
 };
 ```
 
-4. Commit the change. Vercel redeploys on its own.
+4. Commit the change. GitHub Pages updates the site on its own within a minute or two.
 
 ### 5. Check it
 
@@ -97,4 +105,5 @@ Keep the same `id`s so anyone who already picked an avatar gets the new picture.
 
 - Sending game invites (players can already say whether they are open to invites, and others can filter for them).
 - Confirming scores: right now a score counts as soon as one player logs it. A later version could ask an opponent to confirm.
-- Password reset by email (players have no email). For now an admin can reset one in Supabase: find the player's `id` in the `rc_profiles` table, then find the user with the same id under **Authentication → Users** and set a new password.
+- Password reset emails are built in (**Get help** on the sign-in page), but only arrive once an email service is connected (see step 2).
+  Until then an admin can reset a password in Supabase under **Authentication → Users**, where players are listed by email.

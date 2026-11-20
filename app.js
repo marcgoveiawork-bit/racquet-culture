@@ -130,42 +130,51 @@ let sb=null;
 const Local={
  mode:'local',
  async init(){},
- async session(){return ls.get('rc_session',null)},
- async taken(u){return !!ls.get('rc_accounts',{})[u.toLowerCase()]},
- async signUp(name,username,pw){
-  const acc=ls.get('rc_accounts',{}),k=username.toLowerCase();if(acc[k])throw errc('taken');
-  const id='u_'+rid(),salt=rid()+rid();acc[k]={id,salt,hash:await sha(salt+'|'+pw)};ls.set('rc_accounts',acc);
-  const ps=ls.get('rc_profiles',[]);ps.push({id,username,name,setup:false,created:new Date().toISOString()});ls.set('rc_profiles',ps);
-  ls.set('rc_session',id);return id;
+ async session(){return ls.get('rc2_session',null)},
+ async taken(u){const k=u.trim().toLowerCase();return ls.get('rc2_profiles',[]).some(p=>(p.username||'').toLowerCase()===k)},
+ async signUp(name,username,email,pw){
+  const acc=ls.get('rc2_accounts',{}),k=email.toLowerCase();if(acc[k])throw errc('emailtaken');if(await this.taken(username))throw errc('taken');
+  const id='u_'+rid(),salt=rid()+rid();acc[k]={id,salt,hash:await sha(salt+'|'+pw)};ls.set('rc2_accounts',acc);
+  const ps=ls.get('rc2_profiles',[]);ps.push({id,username,name,setup:false,created:new Date().toISOString()});ls.set('rc2_profiles',ps);
+  ls.set('rc2_session',id);return id;
  },
- async signIn(username,pw){const a=ls.get('rc_accounts',{})[username.toLowerCase()];if(!a||a.hash!==await sha(a.salt+'|'+pw))throw errc('nomatch');ls.set('rc_session',a.id);return a.id},
- async signOut(){ls.del('rc_session')},
- async load(){return{profiles:ls.get('rc_profiles',[]),matches:ls.get('rc_matches',[])}},
- async saveProfile(p){const ps=ls.get('rc_profiles',[]),i=ps.findIndex(x=>x.id===p.id);if(i>=0)ps[i]=p;else ps.push(p);ls.set('rc_profiles',ps)},
- async addMatch(m){const ms=ls.get('rc_matches',[]);ms.push(m);ls.set('rc_matches',ms)},
- async delMatch(id){ls.set('rc_matches',ls.get('rc_matches',[]).filter(m=>m.id!==id))}
+ async signIn(email,pw){const a=ls.get('rc2_accounts',{})[email.toLowerCase()];if(!a||a.hash!==await sha(a.salt+'|'+pw))throw errc('nomatch');ls.set('rc2_session',a.id);return a.id},
+ async signOut(){ls.del('rc2_session')},
+ async load(){return{profiles:ls.get('rc2_profiles',[]),matches:ls.get('rc2_matches',[])}},
+ async saveProfile(p){const ps=ls.get('rc2_profiles',[]),i=ps.findIndex(x=>x.id===p.id);if(i>=0)ps[i]=p;else ps.push(p);ls.set('rc2_profiles',ps)},
+ async addMatch(m){const ms=ls.get('rc2_matches',[]);ms.push(m);ls.set('rc2_matches',ms)},
+ async delMatch(id){ls.set('rc2_matches',ls.get('rc2_matches',[]).filter(m=>m.id!==id))},
+ async email(){const acc=ls.get('rc2_accounts',{});return Object.keys(acc).find(k=>acc[k].id===S.uid)||''},
+ async resetPassword(){throw errc('local')},
+ async newPassword(pw){const acc=ls.get('rc2_accounts',{}),k=Object.keys(acc).find(x=>acc[x].id===S.uid);if(!k)throw errc('local');acc[k].salt=rid()+rid();acc[k].hash=await sha(acc[k].salt+'|'+pw);ls.set('rc2_accounts',acc)}
 };
-/* Live: Supabase accounts. The username is turned into a private sign-in address, so players never need an email. */
-const emailFor=async u=>'p'+(await sha('rc|'+u.trim().toLowerCase())).slice(0,40)+'@'+(LIVE.emailDomain||'players.racquetculture.app');
+/* Live: Supabase accounts. Players sign in with email and password. Emails stay in Supabase's account system:
+   they are never stored in the profiles table, so other players only ever see names and usernames. */
+const here=()=>location.origin+location.pathname;
+let recovery=false,booted=false;
 const flat=r=>Object.assign({},r.data||{},{id:r.id,username:r.username,name:r.name});
 const Live={
  mode:'live',
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
+  sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
   sb.channel('rc-live').on('postgres_changes',{event:'*',schema:'public',table:'rc_profiles'},onRemote)
    .on('postgres_changes',{event:'*',schema:'public',table:'rc_matches'},onRemote).subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
- async signUp(name,username,pw){
-  const {data,error}=await sb.auth.signUp({email:await emailFor(username),password:pw,options:{data:{name,username}}});
-  if(error){if(/already|registered|exists/i.test(error.message))throw errc('taken');throw error}
+ async signUp(name,username,email,pw){
+  const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,username},emailRedirectTo:here()}});
+  if(error){const m=error.message||'';if(/already|registered|exists/i.test(m))throw errc('emailtaken');if(/rate|too many|security purposes/i.test(m))throw errc('rate');if(/password/i.test(m))throw errc('weak',m);if(/email/i.test(m))throw errc('bademail');throw error}
+  if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length)throw errc('emailtaken');
   if(!data.session)throw errc('confirm');
-  await this.saveProfile({id:data.user.id,username,name,setup:false,created:new Date().toISOString()});
-  return data.user.id;
+  return data.user.id; /* the profile row is made on entering, from the name and username saved with the account */
  },
- async signIn(username,pw){const {data,error}=await sb.auth.signInWithPassword({email:await emailFor(username),password:pw});
-  if(error){if(/invalid|credentials/i.test(error.message))throw errc('nomatch');if(/confirm/i.test(error.message))throw errc('confirm');throw error}return data.user.id},
+ async signIn(email,pw){const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error){const m=error.message||'';if(/confirm/i.test(m))throw errc('confirm');if(/invalid|credentials/i.test(m))throw errc('nomatch');throw error}return data.user.id},
+ async email(){const {data}=await sb.auth.getUser();return data.user&&data.user.email||''},
+ async resetPassword(email){const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:here()});if(error){if(/rate|security purposes/i.test(error.message))throw errc('rate');throw error}},
+ async newPassword(pw){const {error}=await sb.auth.updateUser({password:pw});if(error)throw error},
  async signOut(){await sb.auth.signOut()},
  async load(){
   const all=async(t,cols)=>{const out=[];for(let f=0;;f+=1000){const {data,error}=await sb.from(t).select(cols).order('id').range(f,f+999);if(error)throw error;out.push(...data);if(data.length<1000)return out}};
@@ -352,9 +361,11 @@ function paintAuth(dir){
   <p class="muted">${up?'Create your account, then set up your player profile.':'Sign in to see the rankings and log your scores.'}</p>
   <form id="aForm" novalidate autocomplete="on">
    ${up?`<label for="aName">Your name</label><input id="aName" name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rhea Fernandes">`:''}
-   <label for="aUser">Username</label>
-   <input id="aUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="${up?'Choose a username':'Your username'}">
-   ${up?`<div class="fieldnote"><span id="uNote"></span><span id="uCount" class="num">0/100</span></div>`:''}
+   <label for="aEmail">Email</label>
+   <input id="aEmail" name="email" type="email" inputmode="email" autocomplete="${up?'email':'username'}" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com">
+   ${up?`<label for="aUser">Username</label>
+   <input id="aUser" name="nickname" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="How other players will see you">
+   <div class="fieldnote"><span id="uNote"></span><span id="uCount" class="num">0/100</span></div>`:''}
    <label for="aPass">${up?'Create a password':'Password'}</label>
    <div class="pw"><input id="aPass" name="password" type="password" autocomplete="${up?'new-password':'current-password'}" ${up?'minlength="6"':''}><button type="button" class="pwtoggle" id="pwT" aria-controls="aPass" aria-pressed="false">Show</button></div>
    ${up?`<div class="strength" aria-hidden="true"><i id="pwS"></i></div><div class="fieldnote"><span id="pwN">At least 6 characters.</span></div>`:''}
@@ -369,8 +380,9 @@ function paintAuth(dir){
  $('pwT').onclick=()=>{const p=$('aPass'),s=p.type==='password';p.type=s?'text':'password';$('pwT').textContent=s?'Hide':'Show';$('pwT').setAttribute('aria-pressed',String(s))};
  $('aForm').onsubmit=e=>{e.preventDefault();up?doSignUp():doSignIn()};
  if(up){$('aUser').oninput=checkUser;$('aPass').oninput=paintStrength}
- setTimeout(()=>{const f=$(up?'aName':'aUser');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
+ setTimeout(()=>{const f=$(up?'aName':'aEmail');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
 }
+const EMAIL_RE=/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const aerr=(m,info)=>{const el=$('aErr');if(!el)return;el.textContent=m||'';el.classList.toggle('info',!!info)};
 function userProblem(u){if(!u)return'Choose a username.';if(u.length<3)return'Use at least 3 characters.';if(u.length>100)return'Use 100 characters or fewer.';if(!UN_RE.test(u))return'Use letters, numbers, dots, dashes or underscores. No spaces.';return''}
 function checkUser(){
@@ -386,31 +398,37 @@ function paintStrength(){
 }
 async function doSignIn(){
  if(Date.now()<lockUntil)return aerr(`Too many attempts. Try again in ${Math.ceil((lockUntil-Date.now())/1000)} seconds.`);
- const u=$('aUser').value.trim(),p=$('aPass').value;
- if(!u||!p)return aerr('Enter your username and password.');
+ const u=$('aEmail').value.trim(),p=$('aPass').value;
+ if(!u||!p)return aerr('Enter your email and password.');
+ if(!EMAIL_RE.test(u))return aerr('That email address does not look right.');
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Sign in failed. Refresh the page and try again.');
  busy(true,'Signing in…');
  try{S.uid=await Store.signIn(u,p)}
  catch(e){busy(false);$('aPass').value='';fails++;
-  if(e.code==='confirm')return aerr('This account is waiting for email confirmation. Ask the club admin to turn off "Confirm email" in Supabase.');
+  if(e.code==='confirm')return aerr('Confirm your email first: open the link we sent you, then sign in.');
   if(e.code!=='nomatch')return aerr('Could not reach the club database. Check your connection and try again.');
   if(fails>=5){fails=0;lockUntil=Date.now()+30000;vReset();return aerr('Too many attempts. Try again in 30 seconds.')}
-  if(fails%3===0)vReset();return aerr("That username and password don't match. Check them and try again.")}
+  if(fails%3===0)vReset();return aerr("That email and password don't match. Check them and try again.")}
  fails=0;await enter(true);
 }
 async function doSignUp(){
- const n=$('aName').value.trim(),u=$('aUser').value.trim(),p=$('aPass').value;
+ const n=$('aName').value.trim(),em=$('aEmail').value.trim(),u=$('aUser').value.trim(),p=$('aPass').value;
  if(!n)return aerr('Enter your name.');
+ if(!EMAIL_RE.test(em))return aerr('Enter a valid email address.');
  const bad=userProblem(u);if(bad)return aerr(bad);
  if(p.length<6)return aerr('Your password needs at least 6 characters.');
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Something went wrong. Refresh the page and try again.');
  busy(true,'Creating your account…');
- try{if(await Store.taken(u))throw errc('taken');S.uid=await Store.signUp(n,u,p)}
+ try{if(await Store.taken(u))throw errc('taken');S.uid=await Store.signUp(n,u,em,p)}
  catch(e){busy(false);
   if(e.code==='taken'){const el=$('uNote');if(el){el.className='bad';el.textContent='This username is already taken. Try another one.'}$('aUser').focus();return aerr('This username is already taken. Try another one.')}
-  if(e.code==='confirm'){authMode='in';paintAuth(-1);return aerr('Account created. Email confirmation is switched on in Supabase, so ask the club admin to turn it off (see SETUP.md), then sign in.',true)}
+  if(e.code==='emailtaken')return aerr('There is already an account with this email. Sign in instead.');
+  if(e.code==='bademail')return aerr('That email address was not accepted. Check it and try again.');
+  if(e.code==='weak')return aerr('Choose a stronger password.');
+  if(e.code==='rate')return aerr('Too many attempts right now. Wait a few minutes and try again.');
+  if(e.code==='confirm'){authMode='in';paintAuth(-1);$('aEmail').value=em;return aerr('Nearly there. We sent a link to '+em+'. Open it to confirm your account, then sign in.',true)}
   return aerr('Could not create your account. Check your connection and try again.')}
  await enter(true);
 }
@@ -461,11 +479,33 @@ async function enter(fresh){
  try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}
  let p=me();
  if(!p&&Store.mode==='live'){try{const {data}=await sb.auth.getUser();const md=data.user&&data.user.user_metadata||{};
-  if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};await Store.saveProfile(p);S.profiles.push(p)}}catch(e){}}
+  if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};
+   try{await Store.saveProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505')return pickUsername(p);throw e}}}catch(e){p=null}}
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
+ try{S.email=await Store.email()}catch(e){}
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
  if(fresh)splash(first(p),greet());
  showApp();
+}
+/* Someone else took the username between sign-up and the first sign-in: choose another */
+function pickUsername(p){
+ showAuth();
+ openSheet(`<h2>Choose a new username</h2><p class="muted small">Someone took <b>${esc(p.username)}</b> while your account was being set up.</p>
+  <label for="nUser">Username</label><input id="nUser" maxlength="100" autocapitalize="none" spellcheck="false" value="">
+  <p class="ferr" id="nErr"></p><button class="btn brand wide" id="nSave">Continue</button>`,bg=>{
+  bg.querySelector('#nSave').onclick=async()=>{const u=$('nUser').value.trim(),bad=userProblem(u);if(bad){$('nErr').textContent=bad;return}
+   try{if(await Store.taken(u)){$('nErr').textContent='This username is already taken. Try another one.';return}
+    p.username=u;await Store.saveProfile(p);closeSheet(true);await enter(true)}catch(e){$('nErr').textContent=e.code==='23505'?'This username is already taken. Try another one.':'Could not save. Check your connection.'}}});
+}
+/* Arrived from a password reset email, or changing the password from Profile */
+function showReset(){
+ openSheet(`<h2>Set a new password</h2><p class="muted small">At least 6 characters.</p>
+  <label for="rPass">New password</label><div class="pw"><input id="rPass" type="password" autocomplete="new-password" minlength="6"><button type="button" class="pwtoggle" id="rT">Show</button></div>
+  <p class="ferr" id="rErr"></p><button class="btn brand wide" id="rSave">Save password</button>`,bg=>{
+  bg.querySelector('#rT').onclick=()=>{const i=$('rPass'),sh=i.type==='password';i.type=sh?'text':'password';$('rT').textContent=sh?'Hide':'Show'};
+  bg.querySelector('#rSave').onclick=async()=>{const pw=$('rPass').value;if(pw.length<6){$('rErr').textContent='Use at least 6 characters.';return}
+   try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick();toast('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
+   catch(e){$('rErr').textContent='Could not update the password. Open the reset link again, or try once more.'}}});
 }
 function showApp(){$('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=false;render();}
 
@@ -769,7 +809,7 @@ function vMe(){
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
   <div class="sec"><h2>Settings</h2></div>
-  <div class="card rv">${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
+  <div class="card rv"><div class="setline"><div><b>Account</b><p class="small muted">${esc(S.email||'')} · only you can see this</p></div><button class="btn ghost sm" data-act="changePw">Change password</button></div>${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
   ${Store.mode==='local'?`<div class="card rv" style="margin-top:12px"><b>Preview mode</b><p class="small muted" style="margin:4px 0 12px">Everything is saved on this device only. To try the rankings, add some example players with made-up scores. They are marked Demo and can be removed.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="demoAdd">Add demo players</button><button class="btn ghost sm" data-act="demoClear">Remove demo players</button></div></div>`:''}
   <button class="btn danger wide" style="margin-top:22px" data-act="signOut">Sign out</button>`;
 }
@@ -842,14 +882,19 @@ async function demoAdd(){
  for(const p of ps)await Store.saveProfile(p);for(const m of ms)await Store.addMatch(m);await reload();render();toast('Added 12 demo players and 40 example games.');
 }
 async function demoClear(){
- ls.set('rc_profiles',ls.get('rc_profiles',[]).filter(p=>!p.demo));ls.set('rc_matches',ls.get('rc_matches',[]).filter(m=>!m.demo&&![...(m.a||[]),...(m.b||[])].some(s=>s.uid&&/^demo_/.test(s.uid))));
+ ls.set('rc2_profiles',ls.get('rc2_profiles',[]).filter(p=>!p.demo));ls.set('rc2_matches',ls.get('rc2_matches',[]).filter(m=>!m.demo&&![...(m.a||[]),...(m.b||[])].some(s=>s.uid&&/^demo_/.test(s.uid))));
  await reload();render();toast('Demo players removed.');
 }
 
 /* ================= Actions ================= */
 const ACT={
  authMode(v){if(v===authMode)return;authMode=v;paintAuth(v==='up'?1:-1)},
- forgot(){aerr(Store.mode==='live'?'Ask a club admin to reset it for you in the club database. Password reset by email is coming later.':'In preview mode, accounts live on this device. Ask a club admin, or create a new account.',true)},
+ async forgot(){
+  if(Store.mode!=='live')return aerr('In preview mode, accounts live on this device only, so there is no reset email. Create a new account instead.',true);
+  const em=$('aEmail').value.trim();if(!EMAIL_RE.test(em)){aerr('Type your email above, then tap Get help again.',true);$('aEmail').focus();return}
+  try{await Store.resetPassword(em);aerr('If there is an account for '+em+', a reset link is on its way. Check your inbox and spam folder.',true)}
+  catch(e){aerr(e.code==='rate'?'A reset email was sent recently. Wait a few minutes and try again.':'Could not send the reset email. Try again later.')}},
+ changePw(){showReset()},
  wBack(){if(W.i===0){if(W.mode!=='setup'){W=null;showApp()}return}wGo(-1)},
  wCancel(){W=null;showApp()},
  wNext(){const st=wSteps(),s=wStep(st[W.i]);if(!s.valid)return;if(W.i>=st.length-1)return wFinish();wGo(1)},
@@ -910,4 +955,5 @@ document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app')
  try{await Store.init()}catch(e){console.warn(e)}
  let id=null;try{id=await Store.session()}catch(e){}
  if(id){S.uid=id;await enter(false)}else showAuth();
+ booted=true;if(recovery)setTimeout(showReset,300);
 })();

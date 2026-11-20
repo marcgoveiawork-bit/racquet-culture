@@ -4,8 +4,5 @@
    The anon key is designed to be public, so it is fine here. */
 window.RC_LIVE = {
   url: '',
-  key: '',
-  /* Players sign in with a username. Behind the scenes each username becomes a private
-     sign-in address at this domain. No email is ever sent to it. Leave it as it is. */
-  emailDomain: 'players.racquetculture.app'
+  key: ''
 };
