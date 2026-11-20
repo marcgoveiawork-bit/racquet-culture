@@ -71,6 +71,32 @@ window.RC_LIVE = {
 Create an account on one phone and finish the profile. On a second phone, start creating an account with the same username.
 It should say **This username is already taken. Try another one.**
 
+## Admins
+
+Admins use the same sign-in as everyone else, with extra control:
+
+- See who booked every court slot, cancel any booking, and block slots (coaching, maintenance, events)
+- Review disputed scores and set the final score, or edit and delete any score
+- Everyone in the game, and the other admins, are told which admin changed a score
+
+Only you can make someone an admin, in Supabase: **SQL Editor → New query**, paste this with their app username, and **Run**:
+
+```sql
+insert into public.rc_admins (user_id)
+select id from public.rc_profiles where lower(username) = lower('USERNAME')
+on conflict do nothing;
+```
+
+It should say **Success. 1 row affected**. The person sees the admin tools the next time they open the app.
+
+## Court bookings, confirmations and the inbox
+
+- Courts open from 6:00 am to midnight, in 30-minute slots. Players can book up to 3 hours and invite up to 3 players.
+  To change the hours, edit `OPEN_H`, `CLOSE_H` and `MAX_GAME` near the top of `app.js` (and the slot limits in `setup.sql`).
+- When a score is added, the other players in the game get a message asking them to confirm it.
+  If someone taps **Change score**, the admins and the other players are told, and the score is left out of the rankings until an admin sets the final score.
+- Messages arrive live while the app is open; the number on the inbox shows unread ones.
+
 ## How levels and rankings work
 
 - **Starting level.** During profile set-up each player picks Beginner, Intermediate or Expert, then answers 5 or 6 questions

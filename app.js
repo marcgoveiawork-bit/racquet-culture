@@ -114,27 +114,13 @@ const QS={
 };
 const levelFrom=(sp,band,ans)=>{const [lo,hi]=SPORTS[sp].bands[band];return Math.round((lo+(hi-lo)*avg(ans.map(x=>+x||0)))*10)/10};
 
-/* ---------- Avatars ----------
-   Place-holder pixel avatars for now. To use your own artwork later, put the files in an "avatars" folder
-   and change an entry to {id:'a1',src:'avatars/a1.png'}. Anyone who picked that id gets the new picture. */
-const AVATARS=Array.from({length:12},(_,i)=>({id:'px'+(i+1),seed:i+1}));
-const PALS=[['#6045a7','#dcf55a'],['#24184a','#8b6fe6'],['#dcf55a','#2b1d55'],['#1a5a4a','#9df2c8'],['#ff8a9b','#3b1630'],['#f5f2fc','#6045a7'],['#3a2775','#ffb86b'],['#0f3b4f','#7fd6ff'],['#5a1f45','#ffc2e0'],['#203018','#c5f07a'],['#40306e','#ffffff'],['#e9e3ff','#3b2775']];
+/* ---------- Avatars: purple initials, or a photo the player uploads ---------- */
 function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-const pxCache={};
-function pixelSVG(seed){
- if(pxCache[seed])return pxCache[seed];
- const r=rng(seed*7919+13),[bg,fg]=PALS[(seed-1)%PALS.length],N=8;let s='';
- for(let y=0;y<N;y++)for(let x=0;x<N/2;x++){const on=y===0||y===N-1?r()>.75:r()>.48;if(!on)continue;
-  const acc=r()>.86;const col=acc?bg==='#dcf55a'?'#6045a7':'#dcf55a':fg;
-  s+=`<rect x="${x+1}" y="${y+1}" width="1" height="1" fill="${col}"/><rect x="${N-x}" y="${y+1}" width="1" height="1" fill="${col}"/>`}
- return pxCache[seed]=`<svg viewBox="0 0 10 10" shape-rendering="crispEdges" aria-hidden="true"><rect width="10" height="10" fill="${bg}"/>${s}</svg>`;
-}
 const safeSrc=s=>typeof s==='string'&&(/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(s)||/^avatars\/[\w.-]+$/.test(s));
-const initials=p=>{const n=(p&&(p.name||p.username)||'?').trim().split(/\s+/);return((n[0]||'?')[0]+(n.length>1?n[n.length-1][0]:'')).toUpperCase()};
+const initials=p=>{let n=(p&&(p.name||p.username)||'?').trim().split(/\s+/).filter(w=>/^[\p{L}\p{N}]/u.test(w));if(!n.length)n=['?'];return((n[0]||'?')[0]+(n.length>1?n[n.length-1][0]:'')).toUpperCase()};
 function avHTML(p,size){
  const st=size?` style="width:${size}px;height:${size}px;font-size:${Math.round(size*.36)}px"`:'',a=p&&p.avatar;
  if(a&&a.kind==='img'&&safeSrc(a.src))return `<span class="av"${st}><img src="${a.src}" alt=""></span>`;
- if(a&&a.kind==='preset'){const d=AVATARS.find(x=>x.id===a.id);if(d&&d.src&&safeSrc(d.src))return `<span class="av"${st}><img src="${d.src}" alt=""></span>`;if(d)return `<span class="av"${st}>${pixelSVG(d.seed)}</span>`}
  return `<span class="av"${st}>${esc(initials(p))}</span>`;
 }
 /* Photos are cropped to a square and shrunk to 320 pixels so they load fast for everyone */
@@ -147,7 +133,21 @@ function readPhoto(file){return new Promise((res,rej)=>{
  img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('That photo could not be opened. Try a JPG or PNG.'))};img.src=url;
 })}
 
-/* ---------- Storage: this device (until config.js is filled in) or the shared live database ---------- */
+/* ---------- Court times: 30-minute slots from 6:00 am to midnight ---------- */
+const OPEN_H=6,CLOSE_H=24,NSLOT=(CLOSE_H-OPEN_H)*2,MAX_GAME=6/* longest player booking: 3 hours */;
+const COURTS={padel:'Padel court',pickleball:'Pickleball court'};
+const slotLabel=i=>{const m=OPEN_H*60+i*30,h=Math.floor(m/60)%24,mm=m%60;return `${h%12||12}:${pad(mm)} ${h<12?'am':'pm'}`};
+const slotRange=(s,len)=>`${slotLabel(s)} – ${slotLabel(s+len)}`;
+const slotDate=(date,i)=>{const d=new Date(date+'T00:00:00');d.setMinutes(OPEN_H*60+i*30);return d};
+const isoDay=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoDay(d)};
+const nowSlot=()=>{const d=new Date();return Math.floor((d.getHours()*60+d.getMinutes()-OPEN_H*60)/30)};
+const bkEnd=b=>slotDate(b.date,b.start+b.len);
+const overlaps=(a,b)=>a.court===b.court&&a.date===b.date&&a.start<b.start+b.len&&b.start<a.start+a.len;
+const upsert=(arr,x)=>{const i=arr.findIndex(y=>y.id===x.id);if(i>=0)arr[i]=x;else arr.push(x)};
+
+/* ---------- Storage ----------
+   Three stores with the same shape: the live database, this device only (preview), and the in-memory demo club. */
 const errc=(code,msg)=>Object.assign(new Error(msg||code),{code});
 async function sha(s){
  try{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
@@ -155,8 +155,21 @@ async function sha(s){
 }
 const LIVE=window.RC_LIVE||{};
 let sb=null;
-const Local={
- mode:'local',
+function memStore(mode,get,put){return{mode,
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid)}},
+ async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
+ async addMatch(m){const d=get();d.matches.push(m);put(d)},
+ async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
+ async delMatch(id){const d=get();d.matches=d.matches.filter(m=>m.id!==id);d.confs=d.confs.filter(c=>c.match!==id);put(d)},
+ async addBooking(b){const d=get();if(d.bookings.some(x=>overlaps(x,b)))throw errc('clash');d.bookings.push(b);put(d)},
+ async updateBooking(b){const d=get();upsert(d.bookings,b);put(d)},
+ async delBooking(id){const d=get();d.bookings=d.bookings.filter(b=>b.id!==id);put(d)},
+ async addConf(c){const d=get();d.confs.push(c);put(d)},
+ async send(list){const d=get(),at=new Date().toISOString();list.forEach(m=>d.msgs.push(Object.assign({id:'g_'+rid(),from:S.uid,read:false,at},m)));put(d)},
+ async updateMsg(m){const d=get();upsert(d.msgs,m);put(d)}
+}}
+const LKEYS=['profiles','matches','bookings','confs','msgs'];
+const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
  async taken(u){const k=u.trim().toLowerCase();return ls.get('rc2_profiles',[]).some(p=>(p.username||'').toLowerCase()===k)},
@@ -168,26 +181,26 @@ const Local={
  },
  async signIn(email,pw){const a=ls.get('rc2_accounts',{})[email.toLowerCase()];if(!a||a.hash!==await sha(a.salt+'|'+pw))throw errc('nomatch');ls.set('rc2_session',a.id);return a.id},
  async signOut(){ls.del('rc2_session')},
- async load(){return{profiles:ls.get('rc2_profiles',[]),matches:ls.get('rc2_matches',[])}},
- async saveProfile(p){const ps=ls.get('rc2_profiles',[]),i=ps.findIndex(x=>x.id===p.id);if(i>=0)ps[i]=p;else ps.push(p);ls.set('rc2_profiles',ps)},
- async addMatch(m){const ms=ls.get('rc2_matches',[]);ms.push(m);ls.set('rc2_matches',ms)},
- async delMatch(id){ls.set('rc2_matches',ls.get('rc2_matches',[]).filter(m=>m.id!==id))},
  async email(){const acc=ls.get('rc2_accounts',{});return Object.keys(acc).find(k=>acc[k].id===S.uid)||''},
  async resetPassword(){throw errc('local')},
  async newPassword(pw){const acc=ls.get('rc2_accounts',{}),k=Object.keys(acc).find(x=>acc[x].id===S.uid);if(!k)throw errc('local');acc[k].salt=rid()+rid();acc[k].hash=await sha(acc[k].salt+'|'+pw);ls.set('rc2_accounts',acc)}
-};
-/* Live: Supabase accounts. Players sign in with email and password. Emails stay in Supabase's account system:
+});
+/* Live: Supabase. Players sign in with email and password. Emails stay in Supabase's account system:
    they are never stored in the profiles table, so other players only ever see names and usernames. */
 const here=()=>location.origin+location.pathname;
 let recovery=false,booted=false;
 const flat=r=>Object.assign({},r.data||{},{id:r.id,username:r.username,name:r.name});
+const bRow=r=>Object.assign({},r.data||{},{id:r.id,court:r.court,date:r.day,start:r.start_slot,len:r.len,kind:r.kind,by:r.created_by});
+const cRow=r=>Object.assign({},r.data||{},{id:r.id,match:r.match_id,user:r.user_id,verdict:r.verdict,at:r.created_at});
+const gRow=r=>({id:r.id,to:r.to_user,from:r.from_user,kind:r.kind,data:r.data||{},read:r.read,at:r.created_at});
+const bData=b=>{const {id,court,date,start,len,kind,by,...data}=b;return data};
+const missing=e=>/schema cache|does not exist|PGRST205|42P01/i.test((e&&(e.message+' '+e.code))||'');
 const Live={
  mode:'live',
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  sb.channel('rc-live').on('postgres_changes',{event:'*',schema:'public',table:'rc_profiles'},onRemote)
-   .on('postgres_changes',{event:'*',schema:'public',table:'rc_matches'},onRemote).subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -205,59 +218,69 @@ const Live={
  async newPassword(pw){const {error}=await sb.auth.updateUser({password:pw});if(error)throw error},
  async signOut(){await sb.auth.signOut()},
  async load(){
-  const all=async(t,cols)=>{const out=[];for(let f=0;;f+=1000){const {data,error}=await sb.from(t).select(cols).order('id').range(f,f+999);if(error)throw error;out.push(...data);if(data.length<1000)return out}};
-  const [p,m]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data')]);
-  return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id}))};
+  const all=async(t,cols,f0)=>{const out=[];for(let f=0;;f+=1000){let q=sb.from(t).select(cols).order('id').range(f,f+999);if(f0)q=f0(q);const {data,error}=await q;if(error)throw error;out.push(...data);if(data.length<1000)return out}};
+  /* tables added in the bookings update: if setup.sql has not been run again yet, the rest of the app keeps working */
+  const opt=p=>p.then(x=>x,e=>{if(missing(e)){S.needSql=true;return[]}throw e});
+  S.needSql=false;
+  const [p,m,b,c,a,g]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+   opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id')),
+   opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data}))]);
+  return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow)};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
- async delMatch(id){const {error}=await sb.from('rc_matches').delete().eq('id',id);if(error)throw error}
+ async updateMatch(m){const {data,error}=await sb.from('rc_matches').update({data:m}).eq('id',m.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async delMatch(id){const {data,error}=await sb.from('rc_matches').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async addBooking(b){const {error}=await sb.from('rc_bookings').insert({id:b.id,court:b.court,day:b.date,start_slot:b.start,len:b.len,kind:b.kind,data:bData(b)});if(error){if(error.code==='23P01')throw errc('clash');throw error}},
+ async updateBooking(b){const {data,error}=await sb.from('rc_bookings').update({data:bData(b)}).eq('id',b.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async delBooking(id){const {data,error}=await sb.from('rc_bookings').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async addConf(c){const {id,match,user,verdict,at,...data}=c;const {error}=await sb.from('rc_confirmations').insert({id,match_id:match,verdict,data});if(error)throw error},
+ async send(list){if(!list.length)return;const {error}=await sb.from('rc_messages').insert(list.map(m=>({id:'g_'+rid(),to_user:m.to,kind:m.kind,data:m.data||{}})));if(error)throw error},
+ async updateMsg(m){const {error}=await sb.from('rc_messages').update({read:!!m.read,data:m.data||{}}).eq('id',m.id);if(error)throw error}
 };
 let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
 
 /* ---------- Demo mode ----------
-   A made-up club of 100 players and several hundred games, kept in memory only.
+   A made-up club of 100 players, with games, court bookings and messages, kept in memory only.
    Nothing here is saved, and the real club database is never touched. */
-const Demo={
- mode:'demo',d:null,
- async init(){},async session(){return S.uid},async signOut(){},
+const Demo=Object.assign(memStore('demo',()=>Demo.d,()=>{}),{
+ d:null,async init(){},async session(){return S.uid},async signOut(){},
  async taken(u){const k=u.trim().toLowerCase();return this.d.profiles.some(p=>p.username.toLowerCase()===k)},
- async load(){return{profiles:this.d.profiles.slice(),matches:this.d.matches.slice()}},
- async saveProfile(p){const i=this.d.profiles.findIndex(x=>x.id===p.id);if(i>=0)this.d.profiles[i]=p;else this.d.profiles.push(p)},
- async addMatch(m){this.d.matches.push(m)},
- async delMatch(id){this.d.matches=this.d.matches.filter(m=>m.id!==id)},
- async email(){return S.email||''},
- async newPassword(){throw errc('demo')}
-};
+ async email(){return S.email||''},async newPassword(){throw errc('demo')}
+});
 const D_FN=['Aarav','Aditi','Akash','Alisha','Amit','Ananya','Arjun','Avinash','Bianca','Carlos','Celina','Chris','Clara','Daniel','Deepa','Dev','Diya','Elena','Eshan','Farah','Gaurav','Gina','Hrishi','Isha','Ishaan','Jason','Jaya','Karan','Kavya','Kiara','Leon','Lina','Maya','Meera','Mihir','Nikhil','Nina','Omkar','Pooja','Pranav','Priya','Rahul','Rhea','Rohan','Sahil','Sana','Sara','Shaun','Simran','Tanvi','Tara','Varun','Vikram','Zoya'];
 const D_LN=['Naik','Kamat','DSouza','Fernandes','Prabhu','Sawant','Shetty','Pai','Menezes','Gaonkar','Rane','Rodrigues','Dias','Pereira','Costa','Almeida','Lobo','Desai','Kerkar','Borkar','Shirodkar','Mascarenhas','Noronha','Sequeira','Gomes','Coutinho','Verma','Mehta','Kapoor','Iyer','Nair','Singh','Malhotra','Bhat','Joshi'];
 function buildDemo(you){
  const r=rng(2026),pick=a=>a[Math.floor(r()*a.length)],gauss=()=>{let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
- const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),now=Date.now(),DAYS=120;
- const used=new Set([you.username.toLowerCase()]),names=new Set(),ps=[];
- while(ps.length<100){
+ const now=Date.now(),DAYS=120,T=today(),ago=h=>new Date(now-h*36e5).toISOString();
+ const used=new Set([you.username.toLowerCase(),'caelan','surya']),names=new Set(['Caelan DaCosta','Surya N']),ps=[];
+ const lv=(sp,v)=>({start:v,band:tierOf(sp,v),at:new Date(now-DAYS*864e5).toISOString()});
+ const caelan={id:'d_caelan',username:'caelan',name:'Caelan DaCosta',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['early','evening'],side:'left',levels:{padel:lv('padel',5.2),pickleball:lv('pickleball',4.1)},_skill:{padel:5.3,pickleball:4.2},_grow:{padel:.05,pickleball:.05}};
+ const surya={id:'d_surya',username:'surya',name:'Surya N',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'left',invites:true,times:['morning','night'],side:'right',levels:{padel:lv('padel',4.7),pickleball:lv('pickleball',3.9)},_skill:{padel:4.8,pickleball:4.0},_grow:{padel:.1,pickleball:.08}};
+ while(ps.length<98){
   const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;names.add(name);
   let un=(fn+'.'+ln.slice(0,4)).toLowerCase(),k=2;while(used.has(un))un=(fn+'.'+ln.slice(0,4)).toLowerCase()+(k++);used.add(un);
   const x=r(),sports=x<.5?['padel','pickleball']:x<.85?['padel']:['pickleball'],levels={},skill={},grow={};
-  sports.forEach(sp=>{const S_=SPORTS[sp],v=sp==='padel'?clamp(3+gauss()*1.15,.8,6.6):clamp(3.2+gauss()*.75,1.2,5.4),st=Math.round(v*10)/10;
-   levels[sp]={start:st,band:tierOf(sp,st),at:new Date(now-DAYS*864e5).toISOString()};skill[sp]=v+gauss()*.25;grow[sp]=(.1+gauss()*.3)*(sp==='padel'?1:.6)});
+  sports.forEach(sp=>{const v=sp==='padel'?clamp(3+gauss()*1.15,.8,6.6):clamp(3.2+gauss()*.75,1.2,5.4),st=Math.round(v*10)/10;
+   levels[sp]=lv(sp,st);skill[sp]=v+gauss()*.25;grow[sp]=(.1+gauss()*.3)*(sp==='padel'?1:.6)});
   const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.45?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
-  ps.push({id:'d_'+ps.length,username:un,name,setup:true,demo:true,avatar:r()<.82?{kind:'preset',id:'px'+(1+Math.floor(r()*12))}:null,sports,
+  ps.push({id:'d_'+ps.length,username:un,name,setup:true,demo:true,avatar:null,sports,
    hand:r()<.82?'right':r()<.6?'left':'none',invites:r()<.65,times,side:pick(['left','right','either','either']),levels,_skill:skill,_grow:grow});
  }
+ ps.push(caelan,surya);
  const all=[you,...ps];
  if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
- const ms=[],sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
+ const sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
  const setsFor=(sp,aw,close)=>{const lg=()=>Math.min(4,Math.floor(r()*(2+close*4)));let sets;
   if(sp==='padel'){sets=r()<.25+close*.3?[[6,lg()],[lg(),6],[6,lg()]]:[[6,lg()],[6,lg()]];if(r()<.15)sets[0]=r()<.5?[7,5]:[7,6]}
   else{const lp=()=>Math.min(9,Math.floor(r()*(4+close*6)));sets=r()<.55?[[11,lp()]]:r()<.6?[[11,lp()],[11,lp()]]:[[11,lp()],[lp(),11],[11,lp()]]}
   return aw?sets:sets.map(x=>[x[1],x[0]])};
- const N=720,youN=you._skill&&Object.keys(you._skill).length?18:0;
+ /* games over the last four months */
+ const ms=[],N=720,youN=Object.keys(you._skill).length?18:0,every=Math.floor(N/Math.max(1,youN));
  for(let k=0;k<N;k++){
-  const t=k/N,sp=r()<.6?'padel':'pickleball',pool=all.filter(p=>p._skill&&p._skill[sp]!=null&&(p!==you||k%Math.floor(N/Math.max(1,youN))===0));
-  const singles=sp==='pickleball'&&r()<.15,n=singles?2:4;
-  let anchor=k%Math.floor(N/Math.max(1,youN))===0&&you._skill[sp]!=null?you:pick(pool.filter(p=>p!==you));
-  if(!anchor)continue;
+  const t=k/N,sp=r()<.6?'padel':'pickleball',withYou=youN&&k%every===every-1&&you._skill[sp]!=null;
+  const pool=all.filter(p=>p!==you&&p._skill&&p._skill[sp]!=null);
+  const singles=sp==='pickleball'&&r()<.15,n=singles?2:4,anchor=withYou?you:pick(pool);
   const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t)));
   const cand=r()<.8?near.slice(0,14):near;if(cand.length<n-1)continue;
   const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
@@ -265,37 +288,82 @@ function buildDemo(you){
   const ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa;
   const slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
   const b=B_.map(slot);if(!singles&&r()<.08){const g=B_[1];b[1]={name:pick(D_FN),level:Math.round(clampL(sp,sk(g,sp,t))*10)/10}}
-  const d=new Date(now-(1-t)*DAYS*864e5-Math.floor(r()*8)*36e5);
-  ms.push({id:'dm_'+k,demo:true,sport:sp,format:singles?'singles':'doubles',date:iso(d),a:A_.map(slot),b,sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5),time=clamp(Math.floor(r()*NSLOT),0,NSLOT-3);
+  ms.push({id:'dm_'+k,demo:true,sport:sp,format:singles?'singles':'doubles',date:isoDay(d),time,a:A_.map(slot),b,sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
  }
+ ms.sort(byWhen);
+ /* confirmations: older games are confirmed by everyone, the newest are still waiting */
+ const confs=[],msgs=[],cut=addDays(T,-4),regs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
+ ms.forEach(m=>regs(m).filter(u=>u!==m.by&&u!==you.id).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
+ const recent=ms.filter(m=>m.date>=addDays(T,-6)),mineRecent=recent.filter(m=>regs(m).includes(you.id)),others=recent.filter(m=>!regs(m).includes(you.id));
+ /* games you played that someone else logged: waiting for your confirmation */
+ mineRecent.slice(-2).forEach((m,i)=>{const o=regs(m).find(u=>u!==you.id);if(!o)return;m.by=o;
+  msgs.push({id:'dg_c'+i,to:you.id,from:o,kind:'confirm',data:{match:m.id},read:false,at:ago(5+i*20)})});
+ /* disputed scores waiting for an admin */
+ others.filter(m=>m.format==='doubles'&&m.b.every(s=>s.uid)).slice(-3).forEach((m,i)=>{
+  const loser=(m.winner==='a'?m.b:m.a).find(s=>s.uid&&s.uid!==m.by);if(!loser)return;
+  const prop=m.sets.map(s=>s.slice());const j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];
+  if(prop.length===2)prop.push(m.sport==='padel'?(m.winner==='a'?[4,6]:[6,4]):(m.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(s=>s[0]>s[1]).length;
+  const notes=['We won the last set, not them.','Wrong score for the final set, we took it 6–4.','The last game went our way. Please check.'];
+  const c={id:'dc_x'+i,match:m.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:notes[i%3],at:ago(3+i*9)};confs.push(c);
+  msgs.push({id:'dg_d'+i,to:you.id,from:loser.uid,kind:'dispute',data:{match:m.id,conf:c.id},read:false,at:c.at})});
+ /* an older game of yours that an admin corrected */
+ const fixed=ms.filter(m=>regs(m).includes(you.id)&&m.date<addDays(T,-10)).pop();
+ if(fixed){const prev=fixed.sets.map(s=>s.slice());fixed.sets=fixed.sets.map(s=>s[0]>s[1]?[s[0],Math.max(0,s[1]-1)]:[Math.max(0,s[0]-1),s[1]]);
+  fixed.review={by:caelan.id,at:ago(30),prev};msgs.push({id:'dg_r',to:you.id,from:caelan.id,kind:'resolved',data:{match:fixed.id,sets:fixed.sets},read:true,at:ago(30)})}
+ /* court bookings: a few days back and a week ahead, busier in the evenings */
+ const bks=[],addB=b=>{if(!bks.some(x=>overlaps(x,b))){bks.push(b);return true}return false};
+ const playersOf=c=>ps.filter(p=>p.sports.includes(c));
+ for(let dd=-3;dd<=7;dd++){const date=addDays(T,dd);
+  if(dd%3===0)addB({id:'db_c'+dd,court:'padel',date,start:0,len:3,kind:'block',by:caelan.id,reason:'Coaching',note:'Morning coaching clinic'});
+  if(dd===2)addB({id:'db_m',court:'pickleball',date,start:16,len:4,kind:'block',by:surya.id,reason:'Maintenance',note:'Repainting the court lines'});
+  for(const court of Object.keys(COURTS))for(let i=0;i<16;i++){
+   const len=r()<.6?2:3,start=r()<.6?clamp(22+Math.floor(r()*12),0,NSLOT-len):Math.floor(r()*(NSLOT-len));
+   const pool=playersOf(court),host=pick(pool),inv=[];while(inv.length<3){const p=pick(pool);if(p!==host&&!inv.includes(p.id))inv.push(p.id)}
+   const going=inv.filter(()=>r()<.8);
+   addB({id:'db_'+court[0]+dd+'_'+i,court,date,start,len,kind:'game',by:host.id,invited:inv,going,declined:inv.filter(x=>!going.includes(x)&&r()<.5),note:r()<.3?pick(['Friendly doubles','Practice match','Ladder game','Mixed doubles']):'',at:ago(48)});
+  }
+ }
+ /* your own games: one you host tomorrow evening, one you are invited to, and one you played yesterday */
+ const yourSport=Object.keys(you._skill)[0]||'padel',buddies=playersOf(yourSport).slice(0,40).sort((a,b)=>Math.abs(sk(a,yourSport,1)-sk(you,yourSport,1))-Math.abs(sk(b,yourSport,1)-sk(you,yourSport,1))).slice(0,6).map(p=>p.id);
+ const place=(b)=>{for(let s=b.start;s<NSLOT-b.len;s++){const x=Object.assign({},b,{start:s});const i=bks.findIndex(y=>overlaps(y,x)&&y.kind==='game'&&!y.mine);if(i>=0)bks.splice(i,1);if(addB(x))return x}return null};
+ const host=place({id:'db_you1',mine:1,court:yourSport,date:addDays(T,1),start:26,len:3,kind:'game',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(0,2),declined:[],note:'Evening doubles',at:ago(20)});
+ const invB=place({id:'db_you2',mine:1,court:yourSport,date:addDays(T,2),start:25,len:2,kind:'game',by:buddies[3],invited:[you.id,buddies[4],buddies[5]],going:[buddies[4]],declined:[],note:'Need a fourth!',at:ago(6)});
+ place({id:'db_you3',mine:1,court:yourSport,date:addDays(T,-1),start:24,len:3,kind:'game',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(0,3),declined:[],note:'',at:ago(70)});
+ if(invB)msgs.push({id:'dg_i',to:you.id,from:invB.by,kind:'invite',data:{booking:invB.id},read:false,at:ago(6)});
+ if(host)msgs.push({id:'dg_ir',to:you.id,from:buddies[1],kind:'invite_reply',data:{booking:host.id,ok:true},read:true,at:ago(14)});
+ bks.forEach(b=>delete b.mine);
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
- return{profiles:all.map(clean),matches:ms};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,confs,admins:[you.id,caelan.id,surya.id],msgs};
 }
 let demoPrev=null;
 async function startDemo(){
- const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'you',name:'You (demo)',setup:true,avatar:{kind:'preset',id:'px1'},sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
+ const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'you',name:'You (demo)',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid};closeSheet(true);
- Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,bk:null});
  splash('Demo mode','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
 async function exitDemo(){
- const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
+ const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null,bk:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;S.profiles=[];S.matches=[];rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,profiles:[],matches:[],R:{padel:{},pickleball:{}},D:{}};
-let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''}};
+const S={uid:null,profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},bk:null,ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
-async function reload(){const d=await Store.load();S.profiles=d.profiles||[];S.matches=d.matches||[];rate()}
+const isAdmin=id=>S.admins.includes(id||S.uid);
+async function reload(){const d=await Store.load();Object.assign(S,{profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
    Each team's strength is the average of its players' levels. Beating a stronger team earns more,
    losing to a weaker one costs more, so a strong player with a newer partner is not punished for it.
-   New players move faster for their first matches so their level settles quickly. */
+   New players move faster for their first matches so their level settles quickly.
+   A disputed score is left out until an admin has reviewed it. */
 function totals(sets){let a=0,b=0;(sets||[]).forEach(s=>{a+=+s[0]||0;b+=+s[1]||0});return[a,b]}
 function applyMatch(R,m,ensure){
  const sp=SPORTS[m.sport];if(!sp)return null;
@@ -308,12 +376,23 @@ function applyMatch(R,m,ensure){
  return{d:out,ea,ta,tb};
 }
 const okMatch=m=>m&&SPORTS[m.sport]&&Array.isArray(m.a)&&Array.isArray(m.b)&&m.a.length&&m.b.length&&(m.winner==='a'||m.winner==='b');
-const byWhen=(x,y)=>(x.date||'').localeCompare(y.date||'')||(x.at||'').localeCompare(y.at||'');
+const byWhen=(x,y)=>(x.date||'').localeCompare(y.date||'')||((x.time??99)-(y.time??99))||(x.at||'').localeCompare(y.at||'');
+const regsOf=m=>[...m.a,...m.b].filter(s=>s&&s.uid).map(s=>s.uid);
+/* pending: waiting for the other players; confirmed; disputed: someone asked for a change; reviewed: an admin set the score */
+function statusMap(){
+ const by={},st={};S.confs.forEach(c=>(by[c.match]=by[c.match]||[]).push(c));
+ S.matches.forEach(m=>{const rv=m.review&&m.review.at||'',cs=(by[m.id]||[]).filter(c=>!rv||c.at>rv),disp=cs.filter(c=>c.verdict==='dispute');
+  if(disp.length){st[m.id]={st:'disputed',disp};return}
+  if(m.review){st[m.id]={st:'reviewed'};return}
+  const need=regsOf(m).filter(u=>u!==m.by),ok=need.filter(u=>cs.some(c=>c.user===u&&c.verdict==='ok'));
+  st[m.id]=ok.length>=need.length?{st:'confirmed'}:{st:'pending',need,ok}});
+ return st;
+}
 function rate(){
- const R={},D={};SP_KEYS.forEach(sp=>R[sp]={});
+ const R={},D={};SP_KEYS.forEach(sp=>R[sp]={});S.ST=statusMap();
  const mk=(sp,id,l)=>R[sp][id]={r:l,start:l,n:0,w:0,l:0,hist:[],last:0};
  S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(L&&isFinite(+L.start))mk(sp,p.id,clampL(sp,L.start))}));
- S.matches.filter(okMatch).sort(byWhen).forEach(m=>{D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
+ S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
  S.R=R;S.D=D;
 }
 /* What a result would do, without saving it */
@@ -326,6 +405,7 @@ const lvlOf=(sp,id)=>{const e=S.R[sp][id];return e?e.r:null};
 function rankOf(sp,id){const e=S.R[sp][id];if(!e||!e.n)return null;const t=tierOf(sp,e.r);
  const list=Object.entries(S.R[sp]).filter(([pid,x])=>x.n&&prof(pid)&&tierOf(sp,x.r)===t).sort((a,b)=>b[1].r-a[1].r);
  return{pos:list.findIndex(([pid])=>pid===id)+1,of:list.length,tier:t}}
+
 
 /* ---------- Small pieces of polish ---------- */
 function toast(msg,ms=2600){const el=document.createElement('div');el.className='toast';el.textContent=msg;$('toasts').appendChild(el);
@@ -663,11 +743,10 @@ function wStep(key){
  const d=W.d,[kind,sp,qi]=key.split(':'),S_=sp&&SPORTS[sp];
  if(kind==='avatar'){
   const p=me(),pv=Object.assign({},p,{avatar:d.avatar});
-  return{eyebrow:'Your profile',title:'Add a profile picture',sub:'Upload a photo, or pick one of the club avatars. You can change it any time.',valid:true,next:d.avatar?'Continue':'Skip for now',
+  return{eyebrow:'Your profile',title:'Add a profile picture',sub:'Upload a photo, or keep the club initials badge. You can change it any time.',valid:true,next:'Continue',
    body:`<div class="avbig">${avHTML(pv,132)}</div>
-   <label class="upload">${ICON.upload}<span>Upload a photo</span><input type="file" accept="image/*" id="wPhoto"></label>
-   <div class="divider">or choose an avatar</div>
-   <div class="avpick" role="radiogroup" aria-label="Club avatars">${AVATARS.map(a=>`<button type="button" role="radio" aria-checked="${!!(d.avatar&&d.avatar.kind==='preset'&&d.avatar.id===a.id)}" data-act="wAvatar" data-v="${a.id}" aria-label="Avatar ${a.id.replace(/\D/g,'')}">${avHTML({avatar:{kind:'preset',id:a.id}})}</button>`).join('')}</div>`}}
+   <label class="upload">${ICON.upload}<span>${d.avatar?'Choose a different photo':'Upload a photo'}</span><input type="file" accept="image/*" id="wPhoto"></label>
+   ${d.avatar?`<p style="text-align:center;margin-top:10px"><button type="button" class="btn link small" data-act="wNoPhoto">Remove photo and use my initials</button></p>`:`<p class="small muted" style="text-align:center;margin-top:12px">No photo? Your initials on club purple look great too.</p>`}`}}
  if(kind==='sports')return{eyebrow:'Your game',title:'Which sports do you play?',sub:'Choose one or both. Each sport has its own level and its own rankings.',valid:d.sports.length>0,
   body:`<div class="opts two">${SP_KEYS.map(k=>opt({multi:1,big:1,act:'wSport',v:k,on:d.sports.includes(k),title:SPORTS[k].name,sub:k==='padel'?'Our purple court':'Our pickleball court',icon:ICON[k]})).join('')}</div>`};
  if(kind==='hand')return{eyebrow:'Your game',title:'Which hand do you play with?',sub:'Helps partners plan who covers the middle.',valid:!!d.hand,single:1,
@@ -733,19 +812,31 @@ async function wFinish(){
 }
 
 /* ================= App views ================= */
+const VIEWS={home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
 function render(){
  if(!me())return showAuth();
- after=()=>{};const t=view.tab,html={home:vHome,rank:vRank,add:vAdd,players:vPlayers,me:vMe}[t]();
+ after=()=>{};const t=view.tab,html=(VIEWS[t]||VIEWS.home)();
  $('main').innerHTML=`<div class="view">${html}</div>`;
- $('meBtn').innerHTML=avHTML(me());
+ $('meBtn').innerHTML=avHTML(me());paintBadge();
  qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});
- $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> 100 made-up players. Nothing here is saved.</span><button class="btn ball sm" data-act="exitDemo">Exit demo</button></div>`:Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md). Then everyone shares one ranking.</div>`:'';
+ $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> 100 made-up players. You are an admin here. Nothing is saved.</span><button class="btn ball sm" data-act="exitDemo">Exit demo</button></div>`
+  :S.needSql?`<div class="banner"><b>Almost ready.</b> Court bookings, the inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
+  :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
 }
 let after=()=>{};
 function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
+const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':'';
+const unread=()=>S.msgs.filter(m=>!m.read).length;
+function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
+function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoDay(new Date(iso)))}
+const setsStr=sets=>(sets||[]).map(s=>s[0]+'–'+s[1]).join(', ');
+function teamNames(slots){const xs=(slots||[]).filter(Boolean);if(!xs.length)return'';return xs.map(s=>s.uid===S.uid?'You':slotName(s)).join(' & ')}
+const matchLine=m=>`${esc(teamNames(m.a))} <span class="muted">vs</span> ${esc(teamNames(m.b))}`;
+const whenOf=m=>dateLabel(m.date)+(m.time!=null?', '+slotLabel(m.time):'');
+async function notify(list){list=list.filter(m=>m.to&&m.to!==S.uid);if(!list.length)return;try{await Store.send(list)}catch(e){console.warn(e)}}
 
 function spark(hist,sp){
  if(!hist||hist.length<1)return'';const pts=[hist[0].r-hist[0].d,...hist.map(h=>h.r)].slice(-16);if(pts.length<2)return'';
@@ -764,24 +855,41 @@ function levelCard(sp,id){
 }
 function slotName(s){if(!s)return'';if(s.uid){const p=prof(s.uid);return p?first(p)+(p.name&&p.name.trim().includes(' ')?' '+p.name.trim().split(/\s+/).pop()[0]+'.':''):'Former member'}return(s.name||'Guest')+' (guest)'}
 function slotAv(s){if(s&&s.uid){const p=prof(s.uid);if(p)return avHTML(p)}return avHTML({name:s&&s.name||'G'})}
+const ST_LABEL={pending:'Awaiting confirmation',disputed:'Under review',reviewed:'Score set by an admin',confirmed:'Confirmed'};
 function matchRow(m,opts={}){
- const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',mineD=D&&D.d&&D.d[opts.for||S.uid];
+ const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
  const team=(t,w)=>`<div class="tm${w?' win':''}"><span class="avs">${m[t].map(slotAv).join('')}</span><span>${m[t].map(s=>esc(slotName(s))).join(' & ')}</span></div>`;
- return `<div class="mrow rv"><div class="side">${team('a',aw)}${team('b',!aw)}
-  <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(dateLabel(m.date))}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
-  ${opts.del&&m.by===S.uid?`<button class="btn link small" style="margin-top:4px" data-act="delMatch" data-v="${esc(m.id)}">Delete this score</button>`:''}</div>
+ const acts=[];if(isAdmin())acts.push(`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">${st==='disputed'?'Review score':'Edit score'}</button>`);
+ if(opts.del&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
+ return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',!aw)}
+  <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(whenOf(m))}${st&&st!=='confirmed'?` · <span class="stx st-${st}">${ST_LABEL[st]}</span>`:''}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
+  ${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
   <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}</div></div>`;
 }
+const myBookings=()=>S.bookings.filter(b=>b.kind==='game'&&bkEnd(b)>new Date()&&(b.by===S.uid||(b.invited||[]).includes(S.uid))&&!(b.declined||[]).includes(S.uid)).sort((x,y)=>(x.date+pad(x.start)).localeCompare(y.date+pad(y.start)));
+function bookingRow(b){
+ const host=prof(b.by),you=b.by===S.uid,inv=(b.invited||[]).includes(S.uid)&&!(b.going||[]).includes(S.uid)&&!you;
+ return `<button class="mrow brow rv" data-act="bkOpen" data-v="${esc(b.id)}"><span class="bdate"><b>${new Date(b.date+'T12:00:00').getDate()}</b>${new Date(b.date+'T12:00:00').toLocaleDateString('en-IN',{month:'short'})}</span>
+  <span class="side"><b>${COURTS[b.court]}</b><span class="small muted">${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}</span><span class="tiny ${inv?'invt':'muted'}">${inv?'You are invited by '+esc(first(host)):you?'You are hosting · '+(b.going||[]).length+' going':'Hosted by '+esc(host?first(host):'a member')}</span></span>
+  <span class="avs">${[b.by,...(b.going||[])].slice(0,4).map(id=>avHTML(prof(id)||{name:'?'})).join('')}</span></button>`;
+}
 function vHome(){
- const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>[...m.a,...m.b].some(s=>s.uid===S.uid));
+ const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>regsOf(m).includes(S.uid));
  const players=S.profiles.filter(x=>x.setup).length,open=S.profiles.filter(x=>x.setup&&x.invites&&x.id!==S.uid).length;
+ const todo=S.msgs.filter(needsAction),up=myBookings(),disputes=S.matches.filter(m=>(S.ST[m.id]||{}).st==='disputed').length;
+ const todayB=S.bookings.filter(b=>b.date===today()&&b.kind==='game').length;
  return `<div class="card hero rv"><p class="eyebrow">${esc(greet())}</p><h1>${esc(first(p))}, ready to play?</h1>
   <p class="muted" style="margin-top:6px">${players} player${players===1?'':'s'} in the club · ${open} open to invites right now.</p>
-  <div class="cta"><button class="btn ball" data-act="go" data-v="add">Log a score</button><button class="btn ghost" data-act="go" data-v="players">Find players</button></div></div>
+  <div class="cta"><button class="btn ball" data-act="go" data-v="book">Book a court</button><button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>
+  ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
+   <div class="astats"><button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button><button data-act="go" data-v="book"><b class="num">${todayB}</b><span>game${todayB===1?'':'s'} on court today</span></button></div></div>`:''}
+  ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm, invites and reviews in your inbox</span></span><span class="go">›</span></button>`:''}
+  <div class="sec"><h2>Your next games</h2><button class="btn link small" data-act="go" data-v="book">Court schedule</button></div>
+  <div class="list">${up.slice(0,3).map(bookingRow).join('')||`<div class="card empty rv"><b>Nothing booked</b>Find a free slot and invite players to a game.</div>`}</div>
   <div class="sec"><h2>Your levels</h2><button class="btn link small" data-act="go" data-v="rank">Rankings</button></div>
   <div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="sec"><h2>Your recent games</h2></div>
-  <div class="list">${mine.slice(0,4).map(m=>matchRow(m)).join('')||`<div class="card empty rv"><b>No games yet</b>Played today? Log the score and your level starts to move.</div>`}</div>
+  <div class="list">${mine.slice(0,4).map(m=>matchRow(m)).join('')||`<div class="card empty rv"><b>No games yet</b>Played today? Add the score and your level starts to move.</div>`}</div>
   <div class="sec"><h2>Around the club</h2></div>
   <div class="list">${ms.filter(m=>!mine.includes(m)).slice(0,6).map(m=>matchRow(m,{for:'-'})).join('')||`<div class="card empty rv"><b>Quiet on court</b>Scores from everyone in the club will appear here.</div>`}</div>`;
 }
@@ -796,18 +904,110 @@ function vRank(){
  const pod=ranked.slice(0,3),order=[1,0,2].filter(i=>pod[i]);
  const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} rv" data-act="player" data-v="${x.id}"><span class="medal">${i+1}</span><br>${avHTML(x.p)}<span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span></button>`}).join('')}</div>`:'';
  return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div></div>
-  <div class="ctrls">${SP_KEYS.length>1?seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport'):''}
+  <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}</div>
-  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises.</p>
+  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises. Scores under review are left out until an admin checks them.</p>
   ${podium}<div class="list">${(pod.length>=3?ranked.slice(3).map((x,i)=>row(x,i+3)):ranked.map(row)).join('')}</div>
-  ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Log a score and the ranking fills up.</div>`:''}
+  ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Add a score and the ranking fills up.</div>`:''}
   ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
 }
 
-/* ---------- Log a score ---------- */
+/* ---------- Court bookings ---------- */
+function bkState(){if(!view.bk)view.bk={court:mySports()[0]||'padel',day:today(),sel:null,block:false,invite:[]};return view.bk}
+const dayBookings=(court,day)=>S.bookings.filter(b=>b.court===court&&b.date===day);
+function cellOf(i){const bk=bkState(),b=dayBookings(bk.court,bk.day).find(x=>i>=x.start&&i<x.start+x.len),past=slotDate(bk.day,i)<=new Date();
+ const sel=bk.sel&&i>=bk.sel[0]&&i<=bk.sel[1];return{b,past,sel}}
+const inGame=b=>b.by===S.uid||(b.invited||[]).includes(S.uid);
+function cellHTML(i){
+ const {b,past,sel}=cellOf(i);let cls='free',sub='Free';
+ if(b){if(b.kind==='block'){cls='blocked';sub=b.reason||'Closed'}
+  else if(inGame(b)&&!(b.declined||[]).includes(S.uid)){cls='mine';sub=b.by===S.uid?'Your game':'Invited'}
+  else{cls='booked';sub=isAdmin()?first(prof(b.by))||'Booked':'Booked'}
+  if(i!==b.start)cls+=' cont'}
+ else if(sel){cls='sel';sub=view.bk.block?'Block':'Selected'}
+ if(past&&!b)cls+=' past';
+ return `<button type="button" class="sl ${cls}" data-act="slot" data-v="${i}" ${past&&!b?'aria-disabled="true"':''}><b>${slotLabel(i).replace(' ',' ')}</b><span>${esc(sub)}</span></button>`;
+}
+function slotsHTML(){
+ const parts=[['Morning',0,12],['Afternoon',12,22],['Evening',22,NSLOT]];
+ return parts.map(([n,a,z])=>`<p class="eyebrow period">${n}</p><div class="slots">${Array.from({length:z-a},(_,k)=>cellHTML(a+k)).join('')}</div>`).join('');
+}
+function bkBarHTML(){const bk=bkState();if(!bk.sel)return'';const [s,e]=bk.sel,len=e-s+1;
+ return `<div style="height:96px" aria-hidden="true"></div><div class="bkbar"><div class="grow"><b>${COURTS[bk.court]}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${len*30} min</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':'Book'}</button></div>`}
+function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();const bar=$('bkBar');if(bar)bar.innerHTML=bkBarHTML()}
+function vBook(){
+ const bk=bkState(),days=Array.from({length:14},(_,k)=>addDays(today(),k));
+ if(S.needSql)return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div><div class="card empty rv"><b>Bookings are almost ready</b>A club admin needs to run the latest setup.sql in Supabase to switch them on.</div>`;
+ const n=dayBookings(bk.court,bk.day).filter(b=>b.kind==='game').length;
+ return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>${isAdmin()?'Court schedule':'Book a court'}</h1></div></div>
+  ${seg('bc','Court',Object.keys(COURTS).map(k=>[k,COURTS[k]]),bk.court,'bkCourt')}
+  <div class="dstrip" role="group" aria-label="Day">${days.map(d=>{const dt=new Date(d+'T12:00:00');return`<button type="button" class="dchip" aria-pressed="${d===bk.day}" data-act="bkDay" data-v="${d}"><span>${d===today()?'Today':dt.toLocaleDateString('en-IN',{weekday:'short'})}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
+  ${bk.invite.length?`<div class="card invnote rv"><span>Inviting ${bk.invite.map(id=>esc(first(prof(id)))).join(', ')}. Pick a free time, then tap Book.</span><button class="btn link small" data-act="bkInvClear">Clear</button></div>`:''}
+  ${isAdmin()?`<div class="card rv"><div class="setline"><div><b>Block slots</b><p class="small muted">Close the court for coaching, maintenance or events. Players see it as closed.</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
+  <div class="legend"><span><i class="lg-free"></i>Free</span><span><i class="lg-mine"></i>Your games</span><span><i class="lg-booked"></i>Booked</span><span><i class="lg-block"></i>Closed</span><span class="muted">${n} game${n===1?'':'s'} this day</span></div>
+  <p class="small muted" style="margin:-4px 0 4px">Tap a free time, then tap the next ones to make it longer (up to ${MAX_GAME/2} hours).${isAdmin()?' As an admin you see who booked each slot. Tap a booking to see the players or cancel it.':''}</p>
+  <div id="slotGrid">${slotsHTML()}</div><div id="bkBar">${bkBarHTML()}</div>`;
+}
+function rangeFree(a,z){for(let i=a;i<=z;i++){const c=cellOf(i);if(c.b||c.past)return false}return true}
+function bookSheet(){
+ const bk=bkState(),[s,e]=bk.sel,len=e-s+1,sp=bk.court;
+ openSheet(`<h2>Book the ${COURTS[bk.court].toLowerCase()}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${len*30} minutes</p>
+  <label>Invite players <span class="muted">(optional, up to 3)</span></label><div class="chips" id="invChips"></div>
+  <div class="search" style="margin-top:10px">${ICON.search}<input id="invQ" type="search" placeholder="Search players open to invites" aria-label="Search players"></div>
+  <div class="pickl" id="invR" style="max-height:30vh"></div>
+  <label for="bNote">Note <span class="muted">(optional)</span></label><input id="bNote" maxlength="80" placeholder="e.g. Friendly doubles, all levels welcome">
+  <p class="ferr" id="bErr"></p><button class="btn brand wide" data-act="bookSave">Book court</button>`,bg=>{bg.querySelector('#invQ').oninput=paintInv;paintInv()});
+ function paintInv(){
+  const q=($('invQ').value||'').trim().toLowerCase(),my=lvlOf(sp,S.uid)??3;
+  $('invChips').innerHTML=bk.invite.map(id=>`<button type="button" class="fchip on" data-act="invDel" data-v="${id}">${esc(first(prof(id)))} ✕</button>`).join('')||'<span class="small muted">No one yet. You can also just book the court.</span>';
+  const list=S.profiles.filter(p=>p.setup&&p.id!==S.uid&&p.invites&&!bk.invite.includes(p.id)&&(!q||(p.name+' '+p.username).toLowerCase().includes(q)))
+   .sort((a,b)=>Math.abs((lvlOf(sp,a.id)??9)-my)-Math.abs((lvlOf(sp,b.id)??9)-my)).slice(0,25);
+  $('invR').innerHTML=list.map(p=>{const r=lvlOf(sp,p.id);return`<button type="button" data-act="invAdd" data-v="${p.id}">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span>@${esc(p.username)} · ${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')}</span></span>${r!=null?`<span class="chip t-${tierOf(sp,r)} num">${fmtL(r,1)}</span>`:''}</button>`}).join('')||'<p class="small muted" style="padding:8px 4px">No players found.</p>';
+ }
+ bookSheet.paint=paintInv;
+}
+function blockSheet(){
+ const bk=bkState(),[s,e]=bk.sel,len=e-s+1;
+ openSheet(`<h2>Close the ${COURTS[bk.court].toLowerCase()}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</p>
+  <label>Reason</label><div class="chips" id="rsn">${['Coaching','Maintenance','Private event','Tournament','Closed'].map((x,i)=>`<button type="button" class="fchip${i?'':' on'}" aria-pressed="${!i}" data-act="rsn" data-v="${x}">${x}</button>`).join('')}</div>
+  <label for="bNote">Note for players <span class="muted">(optional)</span></label><input id="bNote" maxlength="80" placeholder="e.g. Junior coaching clinic">
+  <p class="ferr" id="bErr"></p><button class="btn danger wide" data-act="blockSave">Block these slots</button>`);
+}
+function bookingSheet(id){
+ const b=S.bookings.find(x=>x.id===id);if(!b)return toast('That booking was cancelled.');
+ const when=`${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}`,future=slotDate(b.date,b.start)>new Date(),started=!future,adm=isAdmin();
+ if(b.kind==='block')return openSheet(`<h2>${esc(b.reason||'Closed')}</h2><p class="muted small">${COURTS[b.court]} · ${when}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
+  ${adm?`<p class="small muted" style="margin-top:10px">Blocked by ${esc(prof(b.by)?prof(b.by).name:'an admin')}</p><button class="btn danger wide" style="margin-top:16px" data-act="bkCancel" data-v="${esc(b.id)}">Unblock</button>`:''}
+  <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Close</button>`);
+ const host=prof(b.by),seeAll=adm||inGame(b),going=b.going||[],declined=b.declined||[];
+ const status=id=>id===b.by?'<span class="chip ball">Host</span>':going.includes(id)?'<span class="chip st-confirmed">Going</span>':declined.includes(id)?'<span class="chip st-disputed">Can’t make it</span>':'<span class="chip st-pending">Invited</span>';
+ const pending=(b.invited||[]).includes(S.uid)&&!going.includes(S.uid)&&!declined.includes(S.uid);
+ const acts=[];
+ if(pending&&future)acts.push(`<button class="btn brand" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button>`);
+ if(going.includes(S.uid)&&future)acts.push(`<button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it any more</button>`);
+ if(started&&(b.by===S.uid||going.includes(S.uid)))acts.push(`<button class="btn ball" data-act="bkScore" data-v="${esc(b.id)}">Add the score</button>`);
+ if(future&&(b.by===S.uid||adm))acts.push(`<button class="btn danger" data-act="bkCancel" data-v="${esc(b.id)}">Cancel booking</button>`);
+ openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${when}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
+  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b></span>${status(id)}</div>`}).join('')}</div>`
+   :`<p class="small muted" style="margin-top:12px">This time is booked by ${esc(host?first(host):'a member')}.</p>`}
+  ${acts.length?`<div class="cta">${acts.join('')}</div>`:''}<button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">Close</button>`);
+}
+async function saveBooking(b,okMsg){
+ const btn=document.querySelector('#sheetBg .btn.wide:not(.ghost)');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+ const live=slotDate(b.date,b.start)>new Date();if(!live){if(btn){btn.disabled=false}return $('bErr').textContent='That time has already started. Pick a later one.'}
+ try{await Store.addBooking(b)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}
+  if(e.code==='clash'){try{await reload()}catch(x){}paintSlots();return $('bErr').textContent='Someone has just booked part of this time. Pick another slot.'}
+  return $('bErr').textContent='Could not book. Check your connection and try again.'}
+ S.bookings.push(b);const bk=bkState();bk.sel=null;bk.invite=[];closeSheet();doneTick();toast(okMsg,3200);paintSlots();
+ if(b.kind==='game')notify((b.invited||[]).map(to=>({to,kind:'invite',data:{booking:b.id}})));
+ if(view.tab==='book')render();
+}
+async function patchBooking(b,msg){try{await Store.updateBooking(b)}catch(e){toast('Could not update the booking. Check your connection.');return false}upsert(S.bookings,b);if(msg)toast(msg);return true}
+
+/* ---------- Add a score ---------- */
 let A=null;
 const addSports=()=>SP_KEYS.filter(k=>S.R[k][S.uid]);
-function newA(){const sp=addSports()[0]||mySports()[0];return{sport:sp,format:'doubles',date:today(),a:[{uid:S.uid},null],b:[null,null],sets:[['',''],['',''],['','']],err:''}}
+function newA(){const sp=addSports()[0]||mySports()[0];return{sport:sp,format:'doubles',date:today(),time:clamp(nowSlot()-2,0,NSLOT-1),a:[{uid:S.uid},null],b:[null,null],sets:[['',''],['',''],['','']],err:''}}
 function fitFormat(){const n=A.format==='singles'?1:2;['a','b'].forEach(t=>{A[t]=A[t].slice(0,n);while(A[t].length<n)A[t].push(null)});if(!A.a[0])A.a[0]={uid:S.uid}}
 function slotLevel(s){if(!s)return null;if(s.uid){const r=lvlOf(A.sport,s.uid);return r!=null?r:(s.level!=null?+s.level:null)}return s.level!=null?+s.level:null}
 function slotHTML(t,i){
@@ -815,67 +1015,160 @@ function slotHTML(t,i){
  if(!s)return `<button type="button" class="slot" data-act="pick" data-v="${t}${i}"><span class="plus">+</span><span class="sn"><b>${t==='a'?'Add your partner':'Add opponent'}</b><span>Member or guest</span></span></button>`;
  return `<${fixed?'div':'button type="button"'} class="slot filled${fixed?' fixed':''}" ${fixed?'':`data-act="pick" data-v="${t}${i}"`}>${slotAv(s)}<span class="sn"><b>${esc(fixed?'You':slotName(s))}</b><span>${lv!=null?'Level '+fmtL(lv,s.uid?2:1):'Level needed'}${s.uid?'':' · entered'}</span></span></${fixed?'div':'button'}>`;
 }
+/* The score grid: a clear column for each team, with who is in it, so no one types a score on the wrong side */
+function teamHead(label,slots,mine){return `<div class="sh${mine?' mine':''}"><em>${esc(label)}</em><span class="avs">${(slots||[]).filter(Boolean).map(slotAv).join('')}</span><b>${esc(teamNames(slots)||'–')}</b></div>`}
+function scoreGrid(sport,rows,key,heads,mineCol){const S_=SPORTS[sport];
+ return `<div class="scorehead"><span></span>${heads[0]}<i></i>${heads[1]}</div><div class="sets">${rows.map((s,r)=>`<div class="setrow"><span class="eyebrow">${S_.setName} ${r+1}</span>${[0,1].map(c=>`<input class="${c===mineCol?'mine':''}" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, ${c?'right':'left'} team" data-${key}="${r},${c}" value="${esc(s[c])}" placeholder="–">`).join('<i>–</i>')}</div>`).join('')}</div>`}
+function bindGrid(key,rows,onChange){qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');rows[+r][+c]=el.value.replace(/\D/g,'').slice(0,2);if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
 function vAdd(){
  if(!A)A=newA();fitFormat();const S_=SPORTS[A.sport];
- after=()=>{qsa('[data-set]').forEach(el=>el.oninput=()=>{const [r,c]=el.dataset.set.split(',');A.sets[+r][+c]=el.value.replace(/\D/g,'').slice(0,2);if(el.value!==A.sets[+r][+c])el.value=A.sets[+r][+c];paintFair()});
-  const dt=$('mDate');if(dt)dt.onchange=()=>{A.date=dt.value};paintFair()};
- return `<div class="hd"><div><p class="eyebrow">After the game</p><h1>Log a score</h1></div></div>
+ after=()=>{bindGrid('set',A.sets,paintFair);const dt=$('mDate');if(dt)dt.onchange=()=>{A.date=dt.value};const tm=$('mTime');if(tm)tm.onchange=()=>{A.time=+tm.value};paintFair()};
+ return `<div class="hd"><div><p class="eyebrow">After the game</p><h1>Add score</h1></div></div>
  <div class="card rv">
   ${addSports().length>1?seg('as','Sport',addSports().map(k=>[k,SPORTS[k].name]),A.sport,'aSport'):`<p class="eyebrow">${S_.name}</p>`}
-  ${SP_KEYS.filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To log ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
+  ${SP_KEYS.filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To add ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
   ${A.sport==='pickleball'?`<div style="margin-top:10px">${seg('af','Format',[['doubles','Doubles'],['singles','Singles']],A.format,'aFormat')}</div>`:''}
-  <label for="mDate">Date played</label><input type="date" id="mDate" value="${A.date}" max="${today()}">
+  <div class="timerow"><div><label for="mDate">Date played</label><input type="date" id="mDate" value="${A.date}" max="${today()}"></div>
+  <div><label for="mTime">Start time</label><select id="mTime">${Array.from({length:NSLOT},(_,i)=>`<option value="${i}" ${i===A.time?'selected':''}>${slotLabel(i)}</option>`).join('')}</select></div></div>
+  ${A.booking?'<p class="tiny muted" style="margin-top:8px">Filled in from your court booking.</p>':''}
  </div>
  <div class="card rv"><div class="teams">
   <div class="team"><p class="eyebrow">${A.format==='singles'?'You':'Your team'}</p>${A.a.map((_,i)=>slotHTML('a',i)).join('')}</div>
   <span class="vs">VS</span>
   <div class="team"><p class="eyebrow">${A.format==='singles'?'Opponent':'Opponents'}</p>${A.b.map((_,i)=>slotHTML('b',i)).join('')}</div>
  </div><p class="small muted" style="margin-top:12px">Members' levels fill in on their own. For anyone without an account, you enter their level so the points stay fair.</p></div>
- <div class="card rv"><h3>Score</h3><p class="small muted" style="margin:-4px 0 12px">Your team on the left. ${A.sport==='padel'?'Leave the third set empty if you played two.':'Add each game you played.'}</p>
-  <div class="sets">${A.sets.map((s,r)=>`<div class="setrow"><span class="eyebrow">${S_.setName} ${r+1}</span><input inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, your team" data-set="${r},0" value="${esc(s[0])}" placeholder="–"><i>–</i><input inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, opponents" data-set="${r},1" value="${esc(s[1])}" placeholder="–"></div>`).join('')}</div></div>
+ <div class="card rv"><h3>Score</h3><p class="small muted" style="margin:-4px 0 14px">Games won by each team. ${A.sport==='padel'?'Leave the third set empty if you played two.':'Add each game you played.'}</p>
+  ${scoreGrid(A.sport,A.sets,'set',[teamHead(A.format==='singles'?'You':'Your team',A.a,1),teamHead(A.format==='singles'?'Opponent':'Opponents',A.b,0)],0)}
+  <p class="ssum" id="ssum"></p></div>
  <div class="card fair rv" id="fair"></div>
  <p class="ferr" id="aErr2" role="alert"></p>
- <button class="btn brand wide" data-act="submitMatch" style="margin-top:6px">Save score</button>`;
+ <button class="btn brand wide" data-act="submitMatch" style="margin-top:6px">Save score</button>
+ <p class="tiny muted" style="text-align:center;margin-top:10px">The other players are asked to confirm it. If someone disagrees, an admin checks it.</p>`;
 }
-function readSets(){
- const S_=SPORTS[A.sport],out=[];
- for(let r=0;r<A.sets.length;r++){const [x,y]=A.sets[r];if(x===''&&y==='')continue;if(x===''||y==='')return{err:`Fill in both scores for ${S_.setName.toLowerCase()} ${r+1}.`};
+function readSetsOf(sport,rows){
+ const S_=SPORTS[sport],out=[];
+ for(let r=0;r<rows.length;r++){const [x,y]=rows[r];if(x===''&&y==='')continue;if(x===''||y==='')return{err:`Fill in both scores for ${S_.setName.toLowerCase()} ${r+1}.`};
   const a=+x,b=+y;if(a===b)return{err:`${S_.setName} ${r+1} can't be a draw.`};
-  if(A.sport==='padel'&&r<2&&(Math.max(a,b)>7||Math.max(a,b)<6))return{err:`Set ${r+1} looks unusual. A padel set ends at 6 or 7 games.`};out.push([a,b])}
+  if(sport==='padel'&&r<2&&(Math.max(a,b)>7||Math.max(a,b)<6))return{err:`Set ${r+1} looks unusual. A padel set ends at 6 or 7 games.`};out.push([a,b])}
  if(!out.length)return{err:'Enter the score.'};
  const wa=out.filter(s=>s[0]>s[1]).length,wb=out.length-wa;if(wa===wb)return{err:`Sets are level at ${wa}–${wb}. Add the deciding ${S_.setName.toLowerCase()}.`};
- return{sets:out,winner:wa>wb?'a':'b'};
+ return{sets:out,winner:wa>wb?'a':'b',wa,wb};
 }
+const readSets=()=>readSetsOf(A.sport,A.sets);
 function draft(){
  const sl=[...A.a,...A.b];if(sl.some(s=>!s||slotLevel(s)==null))return null;
  const c=s=>s.uid?{uid:s.uid,level:+fmtL(slotLevel(s))}:{name:s.name,level:+fmtL(s.level,1)};
- return{sport:A.sport,format:A.format,date:A.date,a:A.a.map(c),b:A.b.map(c)};
+ return{sport:A.sport,format:A.format,date:A.date,time:A.time,a:A.a.map(c),b:A.b.map(c)};
 }
 function paintFair(){
+ const rs=readSets(),sum=$('ssum');
+ if(sum){const filled=A.sets.some(s=>s[0]!==''||s[1]!=='');sum.className='ssum'+(rs.sets?rs.winner==='a'?' win':' lose':'');
+  sum.textContent=rs.sets?(rs.winner==='a'?`Your team wins ${rs.wa}–${rs.wb}`:`Your opponents win ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games'):filled?rs.err:''}
  const el=$('fair');if(!el)return;const m=draft();
  if(!m){el.innerHTML=`<h3>Fair points</h3><p class="small muted">Add all the players to see how many points this game is worth for each of you.</p>`;return}
- const ta=avg(m.a.map(s=>s.level)),tb=avg(m.b.map(s=>s.level)),ea=1/(1+Math.pow(10,(tb-ta)/SPORTS[m.sport].scale)),rs=readSets();
+ const ta=avg(m.a.map(s=>s.level)),tb=avg(m.b.map(s=>s.level)),ea=1/(1+Math.pow(10,(tb-ta)/SPORTS[m.sport].scale));
  let rows;
  if(rs.sets){const pv=preview(Object.assign({},m,{sets:rs.sets,winner:rs.winner}));
   rows=[...m.a,...m.b].filter(s=>s.uid).map(s=>`<div class="prow"><span>${s.uid===S.uid?'You':esc(slotName(s))}</span><span class="delta ${dcls(pv.d[s.uid])}">${fmtD(pv.d[s.uid])}</span></div>`).join('');
   rows=`<p class="small" style="margin:10px 0 4px"><b>${rs.winner==='a'?'Your team wins.':'Your opponents win.'}</b> Points from this result:</p>${rows}`}
  else{const w=preview(Object.assign({},m,{sets:[[1,0]],winner:'a'})),l=preview(Object.assign({},m,{sets:[[0,1]],winner:'b'}));
-  rows=`<div class="prow"><span>If you win</span><span class="delta up">${fmtD(w.d[S.uid]*1.0)}</span></div><div class="prow"><span>If you lose</span><span class="delta down">${fmtD(l.d[S.uid])}</span></div><p class="tiny muted" style="margin-top:6px">Bigger wins move the number a little more.</p>`}
+  rows=`<div class="prow"><span>If you win</span><span class="delta up">${fmtD(w.d[S.uid])}</span></div><div class="prow"><span>If you lose</span><span class="delta down">${fmtD(l.d[S.uid])}</span></div><p class="tiny muted" style="margin-top:6px">Bigger wins move the number a little more.</p>`}
  el.innerHTML=`<h3>Fair points</h3><p class="small muted">Your team averages <b class="num">${fmtL(ta)}</b>, your opponents <b class="num">${fmtL(tb)}</b>. ${Math.abs(ta-tb)<.15?'An even match.':ta>tb?'You are the favourites, so a win earns less and a loss costs more.':'You are the underdogs, so a win earns more and a loss costs less.'}</p>
   <div class="bar" aria-hidden="true"><i style="width:${(ea*100).toFixed(0)}%"></i><b></b></div><p class="tiny muted">Expected chance your team wins: <b class="num">${Math.round(ea*100)}%</b></p>${rows}`;
 }
 async function submitMatch(){
  const err=m=>{$('aErr2').textContent=m;toast(m)};$('aErr2').textContent='';
  if(!A.date||A.date>today())return err('Choose the date you played.');
+ if(slotDate(A.date,A.time)>new Date())return err('That start time has not happened yet. Check the date and time.');
  const m=draft();if(!m)return err('Add every player, with a level for anyone who does not have one yet.');
- const ids=[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);if(new Set(ids).size!==ids.length)return err('The same player is in the game twice.');
+ const ids=regsOf(m);if(new Set(ids).size!==ids.length)return err('The same player is in the game twice.');
  const rs=readSets();if(rs.err)return err(rs.err);
- const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});
+ const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});if(A.booking)rec.booking=A.booking;
  const btn=document.querySelector('[data-act="submitMatch"]');btn.disabled=true;btn.textContent='Saving…';
  try{await Store.addMatch(rec)}catch(e){btn.disabled=false;btn.textContent='Save score';return err('Could not save the score. Check your connection and try again.')}
  S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick();
- toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}.`,3600);
+ notify(ids.filter(u=>u!==S.uid).map(to=>({to,kind:'confirm',data:{match:rec.id}})));
+ toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}. The other players are asked to confirm.`,4200);
  view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render()},500);
+}
+
+/* ---------- Inbox ---------- */
+const myConf=mid=>{const m=S.matches.find(x=>x.id===mid),rv=m&&m.review&&m.review.at||'';return S.confs.filter(c=>c.match===mid&&c.user===S.uid&&(!rv||c.at>rv)).pop()};
+function needsAction(g){const d=g.data||{};
+ if(g.kind==='confirm'){const m=S.matches.find(x=>x.id===d.match);return !!m&&!myConf(m.id)&&!m.review}
+ if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
+ if(g.kind==='invite'){const b=S.bookings.find(x=>x.id===d.booking);return !!b&&slotDate(b.date,b.start)>new Date()&&!(b.going||[]).includes(S.uid)&&!(b.declined||[]).includes(S.uid)}
+ return false}
+const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>',
+ flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+ shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+ cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'};
+function msgView(g){
+ const d=g.data||{},from=prof(g.from),fn=from?first(from):'Someone',m=d.match&&S.matches.find(x=>x.id===d.match),b=d.booking&&S.bookings.find(x=>x.id===d.booking);
+ const score=m?`<span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>`:'';
+ const gone={i:MI.flag,t:'No longer available',p:'This game or booking has since been removed.'};
+ switch(g.kind){
+  case 'confirm':{if(!m)return gone;const c=myConf(m.id);
+   return{i:MI.check,t:'Is this score right?',p:`${esc(fn)} added your ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))}.${score}`,
+    a:m.review?'<span class="chip st-reviewed">An admin has set this score</span>':c?`<span class="chip ${c.verdict==='ok'?'st-confirmed':'st-disputed'}">${c.verdict==='ok'?'You confirmed it':'You asked for a change'}</span>`
+     :`<button class="btn brand sm" data-act="cfOk" data-v="${g.id}">Yes, confirm</button><button class="btn ghost sm" data-act="cfChange" data-v="${g.id}">Change score</button>`}}
+  case 'dispute':{if(!m)return gone;const c=S.confs.find(x=>x.id===d.conf),st=(S.ST[m.id]||{}).st;
+   return{i:MI.flag,warn:1,t:'Score disputed',p:`${esc(fn)} says ${esc(prof(m.by)?first(prof(m.by))+'\u2019s':'the')} score for this ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))} is wrong.${score}${c?`<span class="scoreline prop">Their score: ${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}`:''}`,
+    a:st==='disputed'?(isAdmin()?`<button class="btn brand sm" data-act="review" data-v="${esc(m.id)}">Review score</button>`:''):'<span class="chip st-reviewed">Reviewed</span>'}}
+  case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game on ${esc(whenOf(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
+  case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(fn)} (admin) ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
+  case 'invite':{if(!b)return gone;const st=(b.going||[]).includes(S.uid)?'in':(b.declined||[]).includes(S.uid)?'out':'';
+   return{i:MI.cal,t:`${esc(fn)} invited you to play`,p:`${COURTS[b.court]} · ${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}${b.note?`<span class="quote">“${esc(b.note)}”</span>`:''}`,
+    a:st==='in'?'<span class="chip st-confirmed">You’re in</span>':st==='out'?'<span class="chip st-disputed">You said you can’t make it</span>':slotDate(b.date,b.start)<=new Date()?'<span class="chip">This game has started</span>'
+     :`<button class="btn brand sm" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost sm" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button><button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">Details</button>`}}
+  case 'invite_reply':return{i:MI.cal,t:`${esc(fn)} ${d.ok?'is in':'can’t make it'}`,p:b?`${COURTS[b.court]} · ${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}`:'Your booking'};
+  case 'cancelled':{const s=d.snap||{};return{i:MI.cal,warn:1,t:`${esc(fn)} cancelled a game`,p:s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}`:'A game you were invited to was cancelled.'}}
+ }
+ return{i:MI.check,t:'Message',p:''};
+}
+function vInbox(){
+ const all=S.msgs,todo=all.filter(needsAction),f=view.ib||'all',list=f==='todo'?todo:all;
+ after=()=>{const un=S.msgs.filter(g=>!g.read);if(!un.length)return;setTimeout(()=>{un.forEach(g=>{g.read=true;Store.updateMsg(g).catch(()=>{})});paintBadge()},1500)};
+ return `<div class="hd"><div><p class="eyebrow">Messages</p><h1>Inbox</h1></div></div>
+  ${seg('ib','Show',[['all','All'],['todo',`To do${todo.length?' · '+todo.length:''}`]],f,'ibTab')}
+  <div class="list" style="margin-top:14px">${list.map(g=>{const v=msgView(g);return`<div class="card msg rv${g.read?'':' unread'}${v.warn?' warn':''}"><span class="mi">${v.i}</span><div class="mb"><b class="mt">${v.t}</b><p>${v.p}</p><span class="tiny muted">${esc(timeAgo(g.at))}</span>${v.a?`<div class="cta">${v.a}</div>`:''}</div></div>`}).join('')
+   ||`<div class="card empty rv"><b>${f==='todo'?'All done':'No messages yet'}</b>${f==='todo'?'Nothing needs you right now.':'Invites, scores to confirm and updates from admins arrive here.'}</div>`}</div>`;
+}
+/* A player says the score is wrong: they enter what they think it was, and admins and the other players hear about it */
+function disputeSheet(mid,msgId){
+ const m=S.matches.find(x=>x.id===mid);if(!m)return;const rows=[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):['','']),mc=m.a.some(s=>s.uid===S.uid)?0:1;
+ openSheet(`<h2>What was the score?</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))}. Enter the score you think is right. Admins and the other players will see it, and an admin will decide.</p>
+  <div style="margin-top:14px">${scoreGrid(m.sport,rows,'ds',[teamHead('Team 1',m.a,mc===0),teamHead('Team 2',m.b,mc===1)],mc)}</div>
+  <label for="dNote">What happened? <span class="muted">(optional)</span></label><input id="dNote" maxlength="140" placeholder="e.g. We won the third set 6–4">
+  <p class="ferr" id="dErr"></p><button class="btn brand wide" id="dSave">Send to the admins</button>`,bg=>{
+  bindGrid('ds',rows);
+  bg.querySelector('#dSave').onclick=async()=>{const rs=readSetsOf(m.sport,rows);if(rs.err){$('dErr').textContent=rs.err;return}
+   if(setsStr(rs.sets)===setsStr(m.sets)){$('dErr').textContent='That is the same as the score already added. Change it, or confirm it instead.';return}
+   const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'dispute',sets:rs.sets,winner:rs.winner,note:$('dNote').value.trim(),at:new Date().toISOString()};
+   try{await Store.addConf(c)}catch(e){$('dErr').textContent='Could not send. Check your connection.';return}
+   S.confs.push(c);rate();closeSheet();doneTick();
+   const admins=S.admins.filter(a=>a!==S.uid);
+   notify([...admins.map(to=>({to,kind:'dispute',data:{match:m.id,conf:c.id}})),...regsOf(m).filter(u=>!admins.includes(u)).map(to=>({to,kind:'disputed',data:{match:m.id}}))]);
+   toast(admins.length?'Sent. An admin will check the score. Until then it is left out of the rankings.':'Sent. No admins are set up yet, so ask the club to check it.',4200);render()}});
+}
+/* Admins: set the final score. Everyone in the game and the other admins are told who changed it */
+function reviewSheet(mid){
+ const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;const st=S.ST[m.id]||{},disp=st.disp||[];
+ const rows=[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):['','']);
+ openSheet(`<h2>${disp.length?'Review score':'Edit score'}</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))} · added by ${esc(prof(m.by)?prof(m.by).name:'a member')}</p>
+  <div class="cmp"><div><span class="eyebrow">Added</span><span class="scoreline">${setsStr(m.sets)}</span></div>${disp.map(c=>`<div><span class="eyebrow">${esc(first(prof(c.user))||'A player')} says</span><span class="scoreline prop">${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}<button class="btn link small" data-use="${esc(c.id)}">Use this score</button></div>`).join('')}</div>
+  <div style="margin-top:14px">${scoreGrid(m.sport,rows,'rv',[teamHead('Team 1',m.a,false),teamHead('Team 2',m.b,false)],-1)}</div>
+  <p class="ferr" id="rvErr"></p>
+  <div class="cta">${disp.length?'<button class="btn ghost" id="rvKeep" style="flex:1">Keep the added score</button>':''}<button class="btn brand" id="rvSave" style="flex:1">Save final score</button></div>`,bg=>{
+  bindGrid('rv',rows);
+  qsa('[data-use]',bg).forEach(x=>x.onclick=()=>{const c=disp.find(y=>y.id===x.dataset.use);[0,1,2].forEach(i=>{rows[i]=c.sets[i]?c.sets[i].map(String):['',''];[0,1].forEach(k=>{const el=bg.querySelector(`[data-rv="${i},${k}"]`);if(el)el.value=rows[i][k]})});tick()});
+  const done=async keep=>{const rs=keep?{sets:m.sets,winner:m.winner}:readSetsOf(m.sport,rows);if(rs.err){$('rvErr').textContent=rs.err;return}
+   const nm=Object.assign({},m,{sets:rs.sets,winner:rs.winner,review:{by:S.uid,at:new Date().toISOString(),prev:m.sets,kept:!!keep||setsStr(rs.sets)===setsStr(m.sets)}});
+   try{await Store.updateMatch(nm)}catch(e){$('rvErr').textContent=e.code==='denied'?'Only admins can change scores. Check that your account is an admin in Supabase.':'Could not save. Check your connection.';return}
+   upsert(S.matches,nm);rate();closeSheet();doneTick();
+   notify([...regsOf(nm),...S.admins].filter((x,i,a)=>a.indexOf(x)===i).map(to=>({to,kind:'resolved',data:{match:nm.id,sets:nm.sets,kept:nm.review.kept}})));
+   toast('Score saved. Rankings updated and everyone in the game has been told.',3600);render()};
+  bg.querySelector('#rvSave').onclick=()=>done(false);const k=bg.querySelector('#rvKeep');if(k)k.onclick=()=>done(true)});
 }
 
 /* ---------- Players ---------- */
@@ -891,7 +1184,7 @@ function paintPlayers(){
  const f=view.pf,q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;
  const list=S.profiles.filter(p=>p.setup&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
   .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||a.name.localeCompare(b.name));
- el.innerHTML=list.map(p=>`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}</b><span class="small muted">@${esc(p.username)}</span>
+ el.innerHTML=list.map(p=>`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}</span>
   <div class="tags">${(p.sports||[]).map(sp=>{const r=lvlOf(sp,p.id);return r!=null?`<span class="chip t-${tierOf(sp,r)}">${SPORTS[sp].name} ${fmtL(r,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`).join('')
   ||`<div class="card empty rv"><b>No players match</b>Try fewer filters.</div>`;
  reveal(el);
@@ -899,10 +1192,11 @@ function paintPlayers(){
 
 /* ---------- My profile ---------- */
 function vMe(){
- const p=me(),mine=S.matches.filter(okMatch).filter(m=>[...m.a,...m.b].some(s=>s.uid===S.uid)).sort(byWhen).reverse();
+ const p=me(),mine=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse();
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}</p>
-  <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button></div></div>
+ return `<div class="card phead rv"><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
+  <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
+  ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can see who booked every slot, cancel bookings, close the court, and review or edit any score.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="go" data-v="book">Court schedule</button><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
@@ -911,12 +1205,11 @@ function vMe(){
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
   <div class="sec"><h2>Settings</h2></div>
   <div class="card rv"><div class="setline"><div><b>Account</b><p class="small muted">${esc(S.email||'')} · only you can see this</p></div>${Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change password</button>'}</div>${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
-  <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Log scores, edit your profile and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players and hundreds of games, with you in the rankings. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
+  <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Book courts, add scores, review disputes and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players, games, court bookings and an admin inbox, with you in it. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
   ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:22px" data-act="signOut">Sign out</button>`}`;
 }
 
 /* ---------- Sheets ---------- */
-let sheetOnClose=null;
 function openSheet(html,onReady){
  closeSheet(true);const bg=document.createElement('div');bg.className='sheetbg';bg.id='sheetBg';
  bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html}</div>`;
@@ -953,8 +1246,10 @@ function askMemberLevel(id){
   <label for="gLvl">Level</label>${lvlInput(A.sport,null)}<p class="ferr" id="gErr"></p><button class="btn brand wide" data-act="memberLevel" data-v="${id}">Add ${esc(first(p))}</button>`);
 }
 function playerSheet(id){
- const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>[...m.a,...m.b].some(s=>s.uid===id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}</p></div>
+ const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
+ const inv=id===S.uid?'':p.invites?`<button class="btn ball wide" style="margin-top:14px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:14px">${esc(first(p))} is not taking game invites right now.</p>`;
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p></div>
+  ${inv}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p></div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
@@ -962,7 +1257,7 @@ function playerSheet(id){
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
 }
 function confirmSheet(title,text,okLabel,act,v){
- openSheet(`<h2>${esc(title)}</h2><p class="muted" style="margin:6px 0 18px">${esc(text)}</p><div class="cta"><button class="btn ghost" data-act="closeSheet" style="flex:1">Cancel</button><button class="btn danger" data-act="${act}" data-v="${esc(v||'')}" style="flex:1">${esc(okLabel)}</button></div>`);
+ openSheet(`<h2>${esc(title)}</h2><p class="muted" style="margin:6px 0 18px">${esc(text)}</p><div class="cta"><button class="btn ghost" data-act="closeSheet" style="flex:1">Go back</button><button class="btn danger" data-act="${act}" data-v="${esc(v||'')}" style="flex:1">${esc(okLabel)}</button></div>`);
 }
 
 /* ================= Actions ================= */
@@ -977,7 +1272,7 @@ const ACT={
  wBack(){if(W.i===0){if(W.mode!=='setup'){W=null;showApp()}return}wGo(-1)},
  wCancel(){W=null;showApp()},
  wNext(){const st=wSteps(),s=wStep(st[W.i]);if(!s.valid)return;if(W.i>=st.length-1)return wFinish();wGo(1)},
- wAvatar(v){W.d.avatar={kind:'preset',id:v};tick();paintWiz(false)},
+ wNoPhoto(){W.d.avatar=null;tick();paintWiz(false)},
  wSport(v){W.jp='wSport|'+v;const a=W.d.sports;W.d.sports=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
  wHand(v){W.jp='wHand|'+v;W.d.hand=v;paintWiz(false);wPickThenNext()},
  wInv(v){W.jp='wInv|'+v;W.d.invites=v==='yes';paintWiz(false);wPickThenNext()},
@@ -991,7 +1286,7 @@ const ACT={
  rankAt(v){view.rs=v;const e=S.R[v][S.uid];if(e)view.rt=tierOf(v,e.r);go('rank')},
  player(v){playerSheet(v)},
  closeSheet(){closeSheet()},
- pf(v){const [k,x]=v.split('|'),val=k==='inv'?true:x;view.pf[k]=view.pf[k]===val?(k==='inv'?false:''):val;qsa('.fchip[data-act="pf"]').forEach(b=>{const [kk,xx]=b.dataset.v.split('|');b.setAttribute('aria-pressed',String(view.pf[kk]===(kk==='inv'?true:xx)))});paintPlayers()},
+ pf(v){const [k,x]=v.split('|'),val=k==='inv'?true:x;view.pf[k]=view.pf[k]===val?(k==='inv'?false:''):val;qsa('.fchip[data-act="pf"]').forEach(b=>{const [kk,xx]=b.dataset.v.split('|');b.setAttribute('aria-pressed',String(view.pf[kk]===(kk==='inv'?true:xx)))});tick();paintPlayers()},
  aSport(v){A.sport=v;if(v==='padel')A.format='doubles';A.sets=[['',''],['',''],['','']];['a','b'].forEach(t=>A[t]=A[t].map(s=>s&&s.uid?{uid:s.uid}:null));render()},
  aFormat(v){A.format=v;render()},
  pick(v){openPicker(v)},
@@ -1004,13 +1299,59 @@ const ACT={
  lband(v){const b=SPORTS[A.sport].bands[v];$('gLvl').value=fmtL((b[0]+b[1])/2,1);tick()},
  submitMatch(){submitMatch()},
  delMatch(v){confirmSheet('Delete this score?','Everyone’s levels from this game are recalculated without it.','Delete','delMatchYes',v)},
- async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast('Could not delete. Check your connection.')}S.matches=S.matches.filter(m=>m.id!==v);rate();closeSheet();render();toast('Score deleted')},
+ async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only the player who added it, or an admin, can delete this score.':'Could not delete. Check your connection.')}S.matches=S.matches.filter(m=>m.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();toast('Score deleted')},
  editProfile(){startWiz('edit')},
  retake(v){startWiz('level',[v])},
  pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)tick()},
  demo(){startDemo()},exitDemo(){exitDemo()},
- signOut(){confirmSheet('Sign out?','You can sign back in with your username and password.','Sign out','signOutYes')},
- async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()}
+ signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
+ async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';view.bk=null;authMode='in';showAuth()},
+ /* inbox */
+ ibTab(v){view.ib=v;render()},
+ ibTodo(){view.ib='todo';go('inbox')},
+ async cfOk(id){const g=S.msgs.find(x=>x.id===id),m=g&&S.matches.find(x=>x.id===g.data.match);if(!m)return;
+  const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'ok',at:new Date().toISOString()};
+  try{await Store.addConf(c)}catch(e){return toast('Could not confirm. Check your connection.')}S.confs.push(c);rate();tick();toast('Thanks, score confirmed');render()},
+ cfChange(id){const g=S.msgs.find(x=>x.id===id);if(g)disputeSheet(g.data.match,id)},
+ review(v){reviewSheet(v)},
+ /* bookings */
+ bkCourt(v){const bk=bkState();bk.court=v;bk.sel=null;render()},
+ bkDay(v){const bk=bkState();bk.day=v;bk.sel=null;tick();render()},
+ bkBlock(){const bk=bkState();bk.block=!bk.block;bk.sel=null;render()},
+ bkInvClear(){bkState().invite=[];render()},
+ slot(v){const i=+v,bk=bkState(),c=cellOf(i);
+  if(c.b)return bookingSheet(c.b.id);
+  if(c.past)return toast('That time has passed.');
+  const max=bk.block?NSLOT:MAX_GAME;
+  if(!bk.sel)bk.sel=[i,i];
+  else{const [s,e]=bk.sel;
+   if(i>=s&&i<=e){if(s===e)bk.sel=null;else if(i===s)bk.sel=[s+1,e];else if(i===e)bk.sel=[s,e-1];else bk.sel=[i,i]}
+   else{const ns=Math.min(s,i),ne=Math.max(e,i);bk.sel=ne-ns+1<=max&&rangeFree(ns,ne)?[ns,ne]:[i,i];if(ne-ns+1>max)toast(`Games can be up to ${MAX_GAME/2} hours.`)}}
+  tick();paintSlots()},
+ slotClear(){bkState().sel=null;paintSlots()},
+ bookGo(){bookSheet()},
+ blockGo(){blockSheet()},
+ invAdd(id){const bk=bkState();if(bk.invite.length>=3)return toast('You can invite up to 3 players.');bk.invite.push(id);tick();bookSheet.paint&&bookSheet.paint()},
+ invDel(id){const bk=bkState();bk.invite=bk.invite.filter(x=>x!==id);bookSheet.paint&&bookSheet.paint()},
+ rsn(v){qsa('#rsn .fchip').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});tick()},
+ bookSave(){const bk=bkState(),[s,e]=bk.sel;saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,invited:bk.invite.slice(),going:[],declined:[],note:$('bNote').value.trim(),at:new Date().toISOString()},
+  bk.invite.length?'Court booked. Your invites are on their way.':'Court booked. See you on court!')},
+ blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked. Players see the court as closed.')},
+ bkOpen(v){bookingSheet(v)},
+ async bkAccept(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{going:[...new Set([...(b.going||[]),S.uid])],declined:(b.declined||[]).filter(x=>x!==S.uid)});
+  if(await patchBooking(nb,'You’re in. See you on court!')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:true}}]);closeSheet();tick();render()}},
+ async bkDecline(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{going:(b.going||[]).filter(x=>x!==S.uid),declined:[...new Set([...(b.declined||[]),S.uid])]});
+  if(await patchBooking(nb,'Got it. The host has been told.')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:false}}]);closeSheet();render()}},
+ bkCancel(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;confirmSheet(b.kind==='block'?'Unblock these slots?':'Cancel this booking?',b.kind==='block'?'Players will be able to book this time again.':'Everyone invited will be told.',b.kind==='block'?'Unblock':'Cancel booking','bkCancelYes',v)},
+ async bkCancelYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;try{await Store.delBooking(v)}catch(e){return toast(e.code==='denied'?'Only the host or an admin can cancel this.':'Could not cancel. Check your connection.')}
+  S.bookings=S.bookings.filter(x=>x.id!==v);closeSheet();toast(b.kind==='block'?'Slots unblocked':'Booking cancelled');
+  if(b.kind==='game')notify([b.by,...(b.invited||[])].map(to=>({to,kind:'cancelled',data:{snap:{court:b.court,date:b.date,start:b.start,len:b.len}}})));render()},
+ bkScore(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;closeSheet(true);A=newA();
+  if(S.R[b.court][S.uid])A.sport=b.court;A.date=b.date;A.time=b.start;A.booking=b.id;
+  const others=[b.by,...(b.going||[])].filter((x,i,a)=>x!==S.uid&&a.indexOf(x)===i);A.a=[{uid:S.uid},others[0]?{uid:others[0]}:null];A.b=[others[1]?{uid:others[1]}:null,others[2]?{uid:others[2]}:null];
+  view.tab='add';window.scrollTo(0,0);render()},
+ invitePlayer(id){const p=prof(id),bk=bkState();if(!bk.invite.includes(id))bk.invite=[...bk.invite,id].slice(-3);
+  const shared=(p.sports||[]).find(s=>mySports().includes(s));if(shared)bk.court=shared;bk.sel=null;closeSheet(true);go('book');toast(`Pick a free time and tap Book. ${first(p)} will get your invite.`,3600)}
 };
 document.addEventListener('click',e=>{
  const el=e.target.closest&&e.target.closest('[data-act]');if(!el||el.disabled)return;const f=ACT[el.dataset.act];if(!f)return;
@@ -1024,7 +1365,8 @@ document.addEventListener('keydown',e=>{
 
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
-function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;try{await reload()}catch(e){return}
+function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
+ paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;toast('New message: '+t.textContent,3600)}}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);
  if($('app').hidden||typing||$('sheetBg')||view.tab==='add'){rmPending=true;return}render()},400)}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
