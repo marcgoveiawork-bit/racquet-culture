@@ -195,7 +195,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -213,11 +213,12 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
+ async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};d.admins=d.admins.filter(x=>x!==id);delete d.coaches[id];if(role==='admin')d.admins.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones'];
-const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches'];
+const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'||k==='coaches'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
  async taken(u){const k=u.trim().toLowerCase();return ls.get('rc2_profiles',[]).some(p=>(p.username||'').toLowerCase()===k)},
@@ -248,7 +249,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -272,13 +273,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd,ph]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
+   coaches:Object.fromEntries(co.map(x=>[x.user_id,{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
@@ -298,6 +300,10 @@ const Live={
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
+ async setRole(id,role,coach){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
+  if(role==='admin'){chk(await sb.from('rc_admins').upsert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id))}
+  else{chk(await sb.from('rc_admins').delete().eq('user_id',id));
+   if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))}},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
@@ -414,6 +420,11 @@ function buildDemo(you){
   }
  }
  const yourSport=Object.keys(you._skill)[0]||'padel',buddies=[arjun.id,...playersOf(yourSport).filter(p=>p!==arjun).slice(0,40).sort((a,b)=>Math.abs(sk(a,yourSport,1)-sk(you,yourSport,1))-Math.abs(sk(b,yourSport,1)-sk(you,yourSport,1))).slice(0,5).map(p=>p.id)];
+ /* two coaches: one whose coaching blocks go straight through, one who needs an admin to confirm */
+ const coach1=ps.find(p=>p.sports.includes('padel')&&p.levels.padel.start>4.6&&!['d_caelan','d_surya','d_arjun'].includes(p.id))||ps[0],coach2=ps.find(p=>p.sports.includes('pickleball')&&p!==coach1&&!['d_caelan','d_surya','d_arjun'].includes(p.id))||ps[1];
+ const coaches={[coach1.id]:{sports:coach1.sports.includes('pickleball')?['padel','pickleball']:['padel'],auto:true},[coach2.id]:{sports:['pickleball'],auto:false}};
+ bks.forEach(b=>{if(b.reason==='Coaching')b.by=coach1.id});
+ let cpb=null;for(const st of [4,6,8,10,12]){const x={id:'db_cp',court:'pickleball',date:addDays(T,1),start:st,len:3,kind:'block',status:'pending',by:coach2.id,reason:'Coaching',note:'Beginner pickleball lesson',at:ago(2)};if(addB(x)){cpb=x;break}}
  /* your own games: one you host tomorrow evening (confirmed), one you are invited to, and one you played yesterday */
  const place=(b)=>{for(let s=b.start;s<NSLOT-b.len;s++){const x=Object.assign({},b,{start:s});const i=bks.findIndex(y=>overlaps(y,x)&&y.kind==='game'&&!y.mine);if(i>=0)bks.splice(i,1);if(addB(x))return x}return null};
  const host=place({id:'db_you1',mine:1,court:yourSport,date:addDays(T,1),start:26,len:3,kind:'game',status:'confirmed',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(1,3),declined:[],note:'Evening doubles',at:ago(20)});
@@ -424,6 +435,7 @@ function buildDemo(you){
  if(invB)msgs.push({id:'dg_i',to:you.id,from:invB.by,kind:'invite',data:{booking:invB.id},read:false,at:ago(6)},{id:'dg_br',to:you.id,from:invB.by,kind:'bk_request',data:{booking:invB.id},read:false,at:ago(6)});
  bks.filter(b=>b.status==='pending'&&!b.mine).slice(0,3).forEach((b,k)=>msgs.push({id:'dg_bq'+k,to:you.id,from:b.by,kind:'bk_request',data:{booking:b.id},read:k>0,at:ago(3+k*5)}));
  bks.forEach(b=>delete b.mine);
+ if(cpb)msgs.push({id:'dg_cpb',to:you.id,from:coach2.id,kind:'bk_request',data:{booking:cpb.id},read:false,at:ago(2)});
  const cfg={prices:{base:1000,rules:[{id:'pr_we',from:22,to:34,days:'weekends',court:'all',price:1200}]}};
  /* friends and followers */
  const follows=[],reqs=[],pool2=ps.slice(),shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -465,7 +477,7 @@ function buildDemo(you){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -485,15 +497,20 @@ async function startDemo(role){
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{}});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{}});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,cfg:{},conduct:[],phones:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
 const isAdmin=id=>S.admins.includes(id||S.uid);
+/* Coaches: can block slots for coaching. Admins choose whether those blocks go straight through or need confirming */
+const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
+const roleOf=id=>isAdmin(id)?'admin':isCoach(id)?'coach':'player';
+const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
+const coachLine=id=>isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -532,7 +549,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -1073,7 +1090,7 @@ function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm(
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
-const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':'';
+const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
@@ -1219,9 +1236,12 @@ const bkStatus=b=>b.status||'confirmed';
 const isGame=b=>b.kind==='game';
 const goingOf=b=>[b.by,...(b.going||[])];
 const myBookings=()=>S.bookings.filter(b=>isGame(b)&&bkEnd(b)>new Date()&&(b.by===S.uid||(b.invited||[]).includes(S.uid))&&!(b.declined||[]).includes(S.uid)).sort((x,y)=>(x.date+pad(x.start)).localeCompare(y.date+pad(y.start)));
-const pendingBookings=()=>S.bookings.filter(b=>isGame(b)&&bkStatus(b)==='pending'&&bkEnd(b)>new Date());
+const pendingBookings=()=>S.bookings.filter(b=>(isGame(b)||b.kind==='block')&&bkStatus(b)==='pending'&&bkEnd(b)>new Date());
 const stChip=b=>bkStatus(b)==='pending'?'<span class="chip st-pending">Waiting for the club to confirm</span>':'<span class="chip st-confirmed">Confirmed</span>';
 function bookingRow(b){
+ if(b.kind==='block'){const c=prof(b.by);return `<button class="mrow brow rv" data-act="bkOpen" data-v="${esc(b.id)}"><span class="bdate"><b>${new Date(b.date+'T12:00:00').getDate()}</b>${new Date(b.date+'T12:00:00').toLocaleDateString('en-IN',{month:'short'})}</span>
+  <span class="side"><b>${COURTS[b.court]} · ${esc(b.reason||'Coaching')}</b><span class="small muted">${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}</span><span class="tiny muted">Blocked by ${b.by===S.uid?'you':esc(c?c.name:'a coach')}${isCoach(b.by)?' (coach)':''}</span>${bkStatus(b)==='pending'?'<span class="chip st-pending">Waiting for an admin to confirm</span>':'<span class="chip st-confirmed">Confirmed</span>'}</span>
+  <span class="avs">${avHTML(c||{name:'?'})}</span></button>`}
  const host=prof(b.by),you=b.by===S.uid,inv=(b.invited||[]).includes(S.uid)&&!(b.going||[]).includes(S.uid)&&!you,g=goingOf(b);
  return `<button class="mrow brow rv" data-act="bkOpen" data-v="${esc(b.id)}"><span class="bdate"><b>${new Date(b.date+'T12:00:00').getDate()}</b>${new Date(b.date+'T12:00:00').toLocaleDateString('en-IN',{month:'short'})}</span>
   <span class="side"><b>${COURTS[b.court]}</b><span class="small muted">${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}</span>
@@ -1235,7 +1255,7 @@ function cellOf(i){const bk=bkState(),b=dayBookings(bk.court,bk.day).find(x=>i>=
 const inGame=b=>b.by===S.uid||(b.invited||[]).includes(S.uid);
 function cellHTML(i){
  const bk=bkState(),{b,past,sel}=cellOf(i);let cls='free',sub='Open';
- if(b){if(b.kind==='block'){cls='blocked';sub=b.reason||'Closed'}
+ if(b){if(b.kind==='block'){cls='blocked';sub=b.reason||'Closed';if(bkStatus(b)==='pending'){cls+=' pend';if(isAdmin()||b.by===S.uid)sub+=' · to confirm'}}
   else if(inGame(b)&&!(b.declined||[]).includes(S.uid)){cls='mine';sub=b.by===S.uid?'Your game':'Invited'}
   else{cls='booked';sub=isAdmin()?goingOf(b).map(id=>first(prof(id))||'?').join(', '):'Booked'}
   if(isGame(b)&&bkStatus(b)==='pending'){cls+=' pend';if(isAdmin())sub='To confirm · '+sub}
@@ -1270,7 +1290,7 @@ function vBook(){
   ${seg('bc','Court',Object.keys(COURTS).map(k=>[k,COURTS[k]]),bk.court,'bkCourt')}
   <div class="dstrip" role="group" aria-label="Day">${days.map(d=>{const dt=new Date(d+'T12:00:00');return`<button type="button" class="dchip" aria-pressed="${d===bk.day}" data-act="bkDay" data-v="${d}"><span>${d===today()?'Today':dt.toLocaleDateString('en-IN',{weekday:'short'})}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
   ${bk.invite.length?`<div class="card invnote rv"><span>Inviting ${bk.invite.map(id=>esc(first(prof(id)))).join(', ')}. Pick a free time, then tap Book.</span><button class="btn link small" data-act="bkInvClear">Clear</button></div>`:''}
-  ${adm?`<div class="card rv"><div class="setline"><div><b>Block slots</b><p class="small muted">Close the court for coaching, maintenance or events. Players see it as closed.</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
+  ${adm||isCoach()?`<div class="card rv"><div class="setline"><div><b>${adm?'Block slots':'Block slots for coaching'}</b><p class="small muted">${adm?'Close the court for coaching, maintenance or events. Players see it as closed.':coachOf().auto?'Pick the times you’re coaching. They’re blocked straight away.':'Pick the times you’re coaching. An admin confirms each block, and you get a message when it’s done.'}</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
   <div class="legend"><span><i class="lg-free"></i>Free</span><span><i class="lg-mine"></i>Your games</span><span><i class="lg-booked"></i>Booked</span><span><i class="lg-block"></i>Closed</span><span class="muted">${n} game${n===1?'':'s'} this day</span></div>
   <p class="small muted" style="margin:-4px 0 4px">Tap an open time, then the next ones to make it longer (up to ${MAX_GAME/2} hours). Prices are per 30 minutes and you <b>pay at the court when you arrive</b>. The club confirms each booking and you get a message when it's done. All times are Indian Standard Time.${adm?' As an admin you see who is playing in each slot. Tap a booking to confirm it, see the players or cancel it.':''}</p>
   <div id="slotGrid">${slotsHTML()}</div><div id="bkBar"></div>
@@ -1306,16 +1326,20 @@ function bookSheet(){
 }
 function blockSheet(){
  const bk=bkState(),[s,e]=bk.sel,len=e-s+1;
- openSheet(`<h2>Close the ${COURTS[bk.court].toLowerCase()}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</p>
-  <label>Reason</label><div class="chips" id="rsn">${['Coaching','Maintenance','Private event','Tournament','Booked on Hudle','Closed'].map((x,i)=>`<button type="button" class="fchip${i?'':' on'}" aria-pressed="${!i}" data-act="rsn" data-v="${x}">${x}</button>`).join('')}</div>
+ openSheet(`<h2>${isAdmin()?'Close '+COURTS[bk.court]:'Block '+COURTS[bk.court]+' for coaching'}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</p>
+  ${isAdmin()?'':`<p class="small" style="margin-top:12px">Reason: <b>Coaching</b>${coachOf().auto?'':' · an admin confirms it'}</p>`}
+  ${!isAdmin()?'':`<label>Reason</label><div class="chips" id="rsn">${['Coaching','Maintenance','Private event','Tournament','Booked on Hudle','Closed'].map((x,i)=>`<button type="button" class="fchip${i?'':' on'}" aria-pressed="${!i}" data-act="rsn" data-v="${x}">${x}</button>`).join('')}</div>`}
   <label for="bNote">Note for players <span class="muted">(optional)</span></label><input id="bNote" maxlength="80" placeholder="e.g. Junior coaching clinic">
-  <p class="ferr" id="bErr"></p><button class="btn danger wide" data-act="blockSave">Block these slots</button>`);
+  <p class="ferr" id="bErr"></p><button class="btn danger wide" data-act="blockSave">${isAdmin()||coachOf().auto?'Block these slots':'Ask to block these slots'}</button>`);
 }
 function bookingSheet(id){
  const b=S.bookings.find(x=>x.id===id);if(!b)return toast('That booking was cancelled.');
  const when=`${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}`,future=slotDate(b.date,b.start)>new Date(),started=!future,adm=isAdmin();
  if(b.kind==='block')return openSheet(`<h2>${esc(b.reason||'Closed')}</h2><p class="muted small">${COURTS[b.court]} · ${when}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
-  ${adm?`<p class="small muted" style="margin-top:10px">Blocked by ${esc(prof(b.by)?prof(b.by).name:'an admin')}</p><button class="btn danger wide" style="margin-top:16px" data-act="bkCancel" data-v="${esc(b.id)}">Unblock</button>`:''}
+  ${bkStatus(b)==='pending'?'<div style="margin-top:10px"><span class="chip st-pending">Waiting for an admin to confirm</span></div>':''}
+  ${adm||b.by===S.uid?`<p class="small muted" style="margin-top:10px">Blocked by ${b.by===S.uid?'you':esc(prof(b.by)?prof(b.by).name:'an admin')}${isCoach(b.by)?' (coach)':''}</p>`:''}
+  ${adm&&bkStatus(b)==='pending'&&future?`<div class="cta"><button class="btn brand" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm block</button><button class="btn ghost" data-act="bkReject" data-v="${esc(b.id)}">Decline</button></div>`:''}
+  ${adm||b.by===S.uid?`<button class="btn danger wide" style="margin-top:16px" data-act="bkCancel" data-v="${esc(b.id)}">Unblock</button>`:''}
   <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Close</button>`);
  const host=prof(b.by),seeAll=adm||inGame(b),going=b.going||[],declined=b.declined||[],pend=bkStatus(b)==='pending';
  const status=id=>id===b.by?'<span class="chip ball">Host</span>':going.includes(id)?'<span class="chip st-confirmed">Going</span>':declined.includes(id)?'<span class="chip st-disputed">Can’t make it</span>':'<span class="chip st-pending">Invited</span>';
@@ -1342,6 +1366,7 @@ async function saveBooking(b,okMsg){
   if(e.code==='clash'){try{await reload()}catch(x){}paintSlots();return $('bErr').textContent='Someone has just booked part of this time. Pick another slot.'}
   return $('bErr').textContent='Could not book. Check your connection and try again.'}
  S.bookings.push(b);const bk=bkState();bk.sel=null;bk.invite=[];bk.allFriends=false;closeSheet();doneTick(okMsg);paintSlots();
+ if(b.kind==='block'&&bkStatus(b)==='pending')notify(S.admins.filter(a=>a!==S.uid).map(to=>({to,kind:'bk_request',data:{booking:b.id}})));
  if(isGame(b)){notify((b.invited||[]).map(to=>({to,kind:'invite',data:{booking:b.id}})));
   if(bkStatus(b)==='pending')notify(S.admins.filter(a=>a!==S.uid).map(to=>({to,kind:'bk_request',data:{booking:b.id}})))}
  if(view.tab==='book')render();
@@ -1563,11 +1588,13 @@ function msgView(g){
   case 'invite_reply':return{i:MI.cal,t:`${esc(fn)} ${d.ok?'is in':'can’t make it'}`,p:b?bkLine(b):'Your booking'};
   case 'cancelled':{const s=d.snap||{};return{i:MI.cal,warn:1,t:`${esc(fn)} cancelled a game`,p:s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}`:'A game you were in was cancelled.'}}
   case 'bk_request':{if(!b)return{i:MI.cal,t:'Booking request',p:'This booking has since been cancelled or declined.'};const pend=bkStatus(b)==='pending';
+   if(b.kind==='block')return{i:MI.cal,t:`${esc(fn)} (coach) wants to block ${COURTS[b.court]}`,p:`For coaching: ${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}.${b.note?`<span class="quote">“${esc(b.note)}”</span>`:''}`,
+    a:pend&&isAdmin()?`<button class="btn brand sm" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm</button><button class="btn ghost sm" data-act="bkReject" data-v="${esc(b.id)}">Decline</button>`:'<span class="chip st-confirmed">Confirmed</span>'};
    return{i:MI.cal,t:`${esc(fn)} wants to book ${COURTS[b.court]}`,p:`${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)} · ${rupees(rangePrice(b.court,b.date,b.start,b.len))}, paid at the court.${goingOf(b).length>1?` Playing: ${andList(goingOf(b).map(u=>esc(first(prof(u))||'a member')))}.`:''}`,
     a:pend&&isAdmin()?`<button class="btn brand sm" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm</button><button class="btn ghost sm" data-act="bkReject" data-v="${esc(b.id)}">Decline</button><button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">Details</button>`:'<span class="chip st-confirmed">Confirmed</span>'}}
-  case 'bk_confirmed':{if(!b)return gone;const w=names(b);
+  case 'bk_confirmed':{if(!b)return gone;if(b.kind==='block')return{i:MI.shield,t:'Your coaching block is confirmed',p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}. Players see it as closed for coaching.`};const w=names(b);
    return{i:MI.shield,t:`Your ${SPORTS[b.court].name.toLowerCase()} game is confirmed`,p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}${w?`, with ${w}`:''}. Pay ${rupees(rangePrice(b.court,b.date,b.start,b.len))} at the court when you arrive.`,a:`<button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">See who’s going</button>`}}
-  case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}The court isn’t free at that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
+  case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}An admin couldn’t confirm that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
   case 'community':return{i:MI.mega,t:`${esc(fn)} · Club news`,p:`${esc(d.text||'').replace(/\n/g,'<br>')}`,a:d.link?`<a class="btn ghost sm" href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">${esc(d.lt||'Open link')} ↗</a>`:''};
   case 'admin_msg':{const tp=(ADM_TOPICS.find(x=>x[0]===d.topic)||ADM_TOPICS[3])[1],mine=g.from===S.uid,pl=prof(d.player);
    return{i:MI.chat,t:mine?`You messaged the admins · ${tp}`:`${esc(fn)} messaged the admins · ${tp}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
@@ -1575,6 +1602,7 @@ function msgView(g){
   case 'admin_reply':{const toMe=d.player===S.uid,pl=prof(d.player);
    return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
+  case 'role':return{i:MI.shield,t:d.role==='coach'?'You’re now a coach':d.role==='admin'?'You’re now a club admin':'Your account is now a player account',p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
    const whenTxt=src?`played ${esc(playedWhen(src))}`:bb?`on ${esc(dateLabel(bb.date))}, ${slotRange(bb.start,bb.len)}`:d.date?`on ${esc(dateLabel(d.date))}`:'';
@@ -1710,7 +1738,7 @@ function paintPlayers(){
 function vMe(){
  const p=me(),mg=view.mg||'all',all_=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse(),mine=mg==='all'?all_:all_.filter(m=>m.sport===mg);
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${joinedLine(p)}${reliaHTML(p.id)}
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${coachLine(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -1882,17 +1910,30 @@ function askMemberLevel(id){
 const GWORD={male:'men',female:'women'};
 function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="muted">Not ranked yet: no games played</span>';
  return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
+/* Admins only: change what an account can do */
+function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id);
+ return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span>
+  <div style="margin-top:10px">${seg('role','Account type',[['player','Player'],['coach','Coach'],['admin','Admin']],r,'roleSet')}</div>
+  <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} can confirm bookings, set prices, block slots and review scores.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
+  ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
+   <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
+async function applyRole(id,role,coach,quiet){
+ try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?'Only admins can change accounts.':'Could not save. Check your connection.');return false}
+ S.admins=S.admins.filter(x=>x!==id);delete S.coaches[id];if(role==='admin')S.admins.push(id);if(role==='coach')S.coaches[id]=coach;
+ if(!quiet)notify([{to:id,kind:'role',data:{role,title:role==='coach'?coachTitle(id):'',auto:!!(coach&&coach.auto)}}]);
+ playerSheet(id);return true}
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}${reliaHTML(p.id)}
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${coachLine(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>${(p.invites||isFriend(id))?`<button class="btn ball wide" style="margin-top:10px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:12px">${esc(first(p))} is not taking game invites right now.</p>`}`}
   ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd>${id!==S.uid&&canSeePhone(id)?`<dt>Phone</dt><dd>${phoneLink(id)}</dd>`:''}<dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
+  ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
-  <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));
+  <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));syncGliders();
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
  playerSheet.open=id;
 }
@@ -1990,7 +2031,7 @@ const ACT={
  /* bookings */
  bkCourt(v){const bk=bkState();bk.court=v;bk.sel=null;render()},
  bkDay(v){const bk=bkState();bk.day=v;bk.sel=null;tick();render()},
- bkBlock(){const bk=bkState();bk.block=!bk.block;bk.sel=null;render()},
+ bkBlock(){if(!canBlock())return;const bk=bkState();bk.block=!bk.block;bk.sel=null;render()},
  bkInvClear(){bkState().invite=[];render()},
  slot(v){const i=+v,bk=bkState(),c=cellOf(i);
   if(c.b)return bookingSheet(c.b.id);
@@ -2011,10 +2052,10 @@ const ACT={
  bookSave(){const bk=bkState(),[s,e]=bk.sel,inv=[...new Set([...bk.invite,...(bk.allFriends?friendIds():[])])];
   saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,venue:VENUES[0].id,price:rangePrice(bk.court,bk.day,s,e-s+1),status:isAdmin()?'confirmed':'pending',confirmedBy:isAdmin()?S.uid:undefined,invited:inv,going:[],declined:[],cap:3,note:$('bNote').value.trim(),at:new Date().toISOString()},
   isAdmin()?'Court booked':(inv.length?'Requested · invites sent':'Booking requested'))},
- blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked')},
+ blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:isAdmin()?(on?on.dataset.v:'Closed'):'Coaching',status:isAdmin()||(coachOf()||{}).auto?'confirmed':'pending',note:$('bNote').value.trim(),at:new Date().toISOString()},isAdmin()||(coachOf()||{}).auto?'Slots blocked':'Sent to the admins')},
  bkOpen(v){bookingSheet(v)},
  async bkConfirm(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{status:'confirmed',confirmedBy:S.uid,confirmedAt:new Date().toISOString()});
-  if(await patchBooking(nb)){notify(goingOf(nb).map(to=>({to,kind:'bk_confirmed',data:{booking:b.id}})));closeSheet();doneTick('Booking confirmed');toast('Now block this time on Hudle so it can’t be booked twice.',4200);render()}},
+  if(await patchBooking(nb)){notify(goingOf(nb).map(to=>({to,kind:'bk_confirmed',data:{booking:b.id}})));closeSheet();doneTick(b.kind==='block'?'Block confirmed':'Booking confirmed');toast('Now block this time on Hudle so it can’t be booked twice.',4200);render()}},
  bkReject(v){confirmSheet('Decline this booking?','The slot opens up again and the host is told it couldn’t be confirmed.','Decline booking','bkRejectYes',v)},
  async bkRejectYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;try{await Store.delBooking(v)}catch(e){return toast('Could not decline. Check your connection.')}
   S.bookings=S.bookings.filter(x=>x.id!==v);closeSheet();toast('Booking declined');
@@ -2045,6 +2086,12 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
+ async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||v===roleOf(id))return;const p=prof(id);
+  const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null;
+  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':'Now a player');toast(`${first(p)} has been told.`)}},
+ async coachSport(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(x=>x!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
+  if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true))tick()},
+ async coachAuto(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
  phEdit(){const r=myPhone(),cc=r?r.phone.split(' ')[0]:'+91',num=r?r.phone.split(' ').slice(1).join(''):'';
   openSheet(`<h2>${r?'Change your phone number':'Add your phone number'}</h2><p class="muted small">${esc(lbl(PH_WHO,r?r.vis:'admins'))} can see it. You can change who sees it in Settings.</p>
    <label for="phN">Phone number</label><div class="phrow">${ccSelect('phCC',CCS.some(x=>x[0]===cc)?cc:'+91')}<input id="phN" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="18" value="${esc(num)}" placeholder="98765 43210"></div>
