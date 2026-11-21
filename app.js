@@ -13,11 +13,27 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.par
 
 /* ---------- Preferences ---------- */
 const sysCalm=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let prefs=Object.assign({calm:sysCalm,haptics:true},ls.get('rc_prefs',{}));
+let prefs=Object.assign({calm:sysCalm,haptics:true,sound:true,popups:true,theme:'dark'},ls.get('rc_prefs',{}));
 const calm=()=>!!prefs.calm;
-function applyPrefs(){document.documentElement.classList.toggle('calm',calm())}
+const sysLight=matchMedia('(prefers-color-scheme: light)');
+const themeNow=()=>prefs.theme==='device'?(sysLight.matches?'light':'dark'):prefs.theme==='light'?'light':'dark';
+function applyPrefs(){const r=document.documentElement;r.classList.toggle('calm',calm());r.dataset.theme=themeNow();
+ const m=document.querySelector('meta[name="theme-color"]');if(m)m.content=themeNow()==='light'?'#f6f3fd':'#0d0918'}
+sysLight.addEventListener&&sysLight.addEventListener('change',()=>{if(prefs.theme==='device'){applyPrefs();if(typeof render==='function'&&S.uid&&!$('app').hidden)render()}});
 function setPref(k,v){prefs[k]=v;ls.set('rc_prefs',prefs);applyPrefs()}
 const tick=()=>{try{if(prefs.haptics&&navigator.vibrate)navigator.vibrate(10)}catch(e){}};
+const buzz=p=>{try{if(prefs.haptics&&navigator.vibrate)navigator.vibrate(p)}catch(e){}};
+/* Sounds are made on the fly (no audio files): a soft pop for confirmations, a two-note chime for new messages */
+let actx=null;
+function sfx(kind){
+ if(!prefs.sound)return;
+ try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();
+  const t=actx.currentTime,notes={pop:[[660,0,.16],[990,.07,.18]],ding:[[880,0,.5],[1318,.13,.6]],tick:[[1500,0,.03]],soft:[[520,0,.14]]}[kind]||[[700,0,.15]];
+  notes.forEach(([f,dt,dur])=>{const o=actx.createOscillator(),g=actx.createGain();o.type=kind==='tick'?'triangle':'sine';o.frequency.setValueAtTime(f,t+dt);
+   if(kind==='pop')o.frequency.exponentialRampToValueAtTime(f*1.35,t+dt+.08);
+   g.gain.setValueAtTime(.0001,t+dt);g.gain.exponentialRampToValueAtTime(kind==='tick'?.03:.16,t+dt+.012);g.gain.exponentialRampToValueAtTime(.0001,t+dt+dur);
+   o.connect(g);g.connect(actx.destination);o.start(t+dt);o.stop(t+dt+dur+.03)})}catch(e){}
+}
 applyPrefs();
 
 /* Icon animations. Each is defined twice (a_ and b_) so an icon can play again on hover right after its opening animation. */
@@ -267,11 +283,12 @@ const D_LN=['Naik','Kamat','DSouza','Fernandes','Prabhu','Sawant','Shetty','Pai'
 function buildDemo(you){
  const r=rng(2026),pick=a=>a[Math.floor(r()*a.length)],gauss=()=>{let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
  const now=Date.now(),DAYS=120,T=today(),ago=h=>new Date(now-h*36e5).toISOString();
- const used=new Set([you.username.toLowerCase(),'caelan','surya']),names=new Set(['Caelan DaCosta','Surya N']),ps=[];
+ const used=new Set([you.username.toLowerCase(),'caelan','surya','arjun']),names=new Set(['Caelan DaCosta','Surya N','Arjun Kamat']),ps=[];
  const lv=(sp,v)=>({start:v,band:tierOf(sp,v),at:new Date(now-DAYS*864e5).toISOString()});
  const caelan={id:'d_caelan',username:'caelan',name:'Caelan DaCosta',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['early','evening'],side:'left',levels:{padel:lv('padel',5.2),pickleball:lv('pickleball',4.1)},_skill:{padel:5.3,pickleball:4.2},_grow:{padel:.05,pickleball:.05}};
+ const arjun={id:'d_arjun',username:'arjun',name:'Arjun Kamat',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening','night'],side:'right',friends:'request',levels:{padel:lv('padel',3.4),pickleball:lv('pickleball',3.2)},_skill:{padel:3.45,pickleball:3.2},_grow:{padel:.12,pickleball:.08}};
  const surya={id:'d_surya',username:'surya',name:'Surya N',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'left',invites:true,times:['morning','night'],side:'right',levels:{padel:lv('padel',4.7),pickleball:lv('pickleball',3.9)},_skill:{padel:4.8,pickleball:4.0},_grow:{padel:.1,pickleball:.08}};
- while(ps.length<98){
+ while(ps.length<97){
   const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;names.add(name);
   let un=(fn+'.'+ln.slice(0,4)).toLowerCase(),k=2;while(used.has(un))un=(fn+'.'+ln.slice(0,4)).toLowerCase()+(k++);used.add(un);
   const x=r(),sports=x<.5?['padel','pickleball']:x<.85?['padel']:['pickleball'],levels={},skill={},grow={};
@@ -281,7 +298,7 @@ function buildDemo(you){
   ps.push({id:'d_'+ps.length,username:un,name,setup:true,demo:true,avatar:null,sports,
    hand:r()<.82?'right':r()<.6?'left':'none',invites:r()<.65,times,side:pick(['left','right','either','either']),levels,_skill:skill,_grow:grow});
  }
- ps.push(caelan,surya);
+ ps.push(caelan,surya,arjun);
  const all=[you,...ps];
  if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
  const sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
@@ -314,15 +331,27 @@ function buildDemo(you){
   if(st==null){m.drop=1;return}m.time=st;m.len=len;m.court=1;used.push([st,st+len])});
  for(let i=ms.length-1;i>=0;i--)if(ms[i].drop)ms.splice(i,1);
  ms.sort(byWhen);
+ /* Arjun is your usual partner in your recent games, so his inbox has things to do when you switch to him */
+ ms.filter(m=>[...m.a,...m.b].some(x=>x.uid===you.id)&&m.format==='doubles').slice(-6).forEach(m=>{const t=m.a.some(x=>x.uid===you.id)?m.a:m.b;
+  if([...m.a,...m.b].some(x=>x.uid===arjun.id))return;const i=t.findIndex(x=>x.uid!==you.id);if(i>=0)t[i]={uid:arjun.id,level:+fmtL(arjun._skill[m.sport])}});
  /* confirmations: older games are confirmed by everyone, the newest are still waiting */
  const confs=[],msgs=[],cut=addDays(T,-4),regs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
  ms.forEach(m=>regs(m).filter(u=>u!==m.by&&u!==you.id).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
  const recent=ms.filter(m=>m.date>=addDays(T,-6)),mineRecent=recent.filter(m=>regs(m).includes(you.id)),others=recent.filter(m=>!regs(m).includes(you.id));
+ /* your latest game with Arjun: you added it, so he is asked to confirm it */
+ const withA=ms.filter(m=>regs(m).includes(you.id)&&regs(m).includes(arjun.id)),aLast=withA[withA.length-1],aPrev=withA[withA.length-2];
+ if(aLast){aLast.by=you.id;for(let i=confs.length-1;i>=0;i--)if(confs[i].match===aLast.id&&confs[i].user===arjun.id)confs.splice(i,1);
+  msgs.push({id:'dg_ac',to:arjun.id,from:you.id,kind:'confirm',data:{match:aLast.id},read:false,at:ago(3)})}
+ /* an earlier one: Arjun says the score was wrong, so it waits in your admin inbox */
+ if(aPrev){const o=regs(aPrev).find(u=>u!==you.id&&u!==arjun.id);if(o)aPrev.by=o;for(let i=confs.length-1;i>=0;i--)if(confs[i].match===aPrev.id)confs.splice(i,1);
+  const prop=aPrev.sets.map(x=>x.slice()),j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];if(prop.length===2)prop.push(aPrev.sport==='padel'?(aPrev.winner==='a'?[4,6]:[6,4]):(aPrev.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(x=>x[0]>x[1]).length,c={id:'dc_arj',match:aPrev.id,user:arjun.id,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We definitely took the last set. Can an admin check?',at:ago(2)};confs.push(c);
+  [you.id,caelan.id,surya.id].forEach((to,i)=>msgs.push({id:'dg_ad'+i,to,from:arjun.id,kind:'dispute',data:{match:aPrev.id,conf:c.id},read:false,at:c.at}))}
  /* games you played that someone else logged: waiting for your confirmation */
- mineRecent.slice(-2).forEach((m,i)=>{const o=regs(m).find(u=>u!==you.id);if(!o)return;m.by=o;
+ mineRecent.filter(m=>m!==aLast&&m!==aPrev).slice(-2).forEach((m,i)=>{const o=regs(m).find(u=>u!==you.id&&u!==arjun.id)||regs(m).find(u=>u!==you.id);if(!o)return;m.by=o;
   msgs.push({id:'dg_c'+i,to:you.id,from:o,kind:'confirm',data:{match:m.id},read:false,at:ago(5+i*20)})});
  /* disputed scores waiting for an admin */
- others.filter(m=>m.format==='doubles'&&m.b.every(s=>s.uid)).slice(-3).forEach((m,i)=>{
+ others.filter(m=>m.format==='doubles'&&m.b.every(s=>s.uid)&&!regs(m).includes(arjun.id)).slice(-2).forEach((m,i)=>{
   const loser=(m.winner==='a'?m.b:m.a).find(s=>s.uid&&s.uid!==m.by);if(!loser)return;
   const prop=m.sets.map(s=>s.slice());const j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];
   if(prop.length===2)prop.push(m.sport==='padel'?(m.winner==='a'?[4,6]:[6,4]):(m.winner==='a'?[7,11]:[11,7]));
@@ -348,13 +377,14 @@ function buildDemo(you){
   }
  }
  /* your own games: one you host tomorrow evening, one you are invited to, and one you played yesterday */
- const yourSport=Object.keys(you._skill)[0]||'padel',buddies=playersOf(yourSport).slice(0,40).sort((a,b)=>Math.abs(sk(a,yourSport,1)-sk(you,yourSport,1))-Math.abs(sk(b,yourSport,1)-sk(you,yourSport,1))).slice(0,6).map(p=>p.id);
+ const yourSport=Object.keys(you._skill)[0]||'padel',buddies=[arjun.id,...playersOf(yourSport).filter(p=>p!==arjun).slice(0,40).sort((a,b)=>Math.abs(sk(a,yourSport,1)-sk(you,yourSport,1))-Math.abs(sk(b,yourSport,1)-sk(you,yourSport,1))).slice(0,5).map(p=>p.id)];
  const place=(b)=>{for(let s=b.start;s<NSLOT-b.len;s++){const x=Object.assign({},b,{start:s});const i=bks.findIndex(y=>overlaps(y,x)&&y.kind==='game'&&!y.mine);if(i>=0)bks.splice(i,1);if(addB(x))return x}return null};
- const host=place({id:'db_you1',mine:1,court:yourSport,date:addDays(T,1),start:26,len:3,kind:'game',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(0,2),declined:[],note:'Evening doubles',at:ago(20)});
+ const host=place({id:'db_you1',mine:1,court:yourSport,date:addDays(T,1),start:26,len:3,kind:'game',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(1,3),declined:[],note:'Evening doubles',at:ago(20)});
  const invB=place({id:'db_you2',mine:1,court:yourSport,date:addDays(T,2),start:25,len:2,kind:'game',by:buddies[3],invited:[you.id,buddies[4],buddies[5]],going:[buddies[4]],declined:[],note:'Need a fourth!',at:ago(6)});
  place({id:'db_you3',mine:1,court:yourSport,date:addDays(T,-1),start:24,len:3,kind:'game',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(0,3),declined:[],note:'',at:ago(70)});
+ if(host)msgs.push({id:'dg_ai',to:arjun.id,from:you.id,kind:'invite',data:{booking:host.id},read:false,at:ago(20)});
  if(invB)msgs.push({id:'dg_i',to:you.id,from:invB.by,kind:'invite',data:{booking:invB.id},read:false,at:ago(6)});
- if(host)msgs.push({id:'dg_ir',to:you.id,from:buddies[1],kind:'invite_reply',data:{booking:host.id,ok:true},read:true,at:ago(14)});
+ if(host)msgs.push({id:'dg_ir',to:you.id,from:buddies[2],kind:'invite_reply',data:{booking:host.id,ok:true},read:true,at:ago(14)});
  bks.forEach(b=>delete b.mine);
  /* friends and followers */
  const follows=[],reqs=[],pool2=ps.slice(),shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
@@ -372,12 +402,21 @@ function buildDemo(you){
  /* kudos from people you played with */
  const yourGames=ms.filter(m=>regs(m).includes(you.id)).slice(-4);
  [['kudos',0],['gg',1],['luck',2],['fire',3]].forEach(([k,i])=>{const m=yourGames[i];if(!m)return;const from=regs(m).find(u=>u!==you.id);if(from)msgs.push({id:'dg_k'+i,to:you.id,from,kind:'kudos',data:{match:m.id,k},read:i>1,at:ago(2+i*30)})});
+ /* Arjun: your friend, with a little life in his inbox */
+ if(!reqs.some(q=>q.status==='accepted'&&[q.from,q.to].includes(arjun.id)&&[q.from,q.to].includes(you.id)))reqs.push({id:'dq_arj',from:arjun.id,to:you.id,status:'accepted',at:ago(400),resp:ago(390)});
+ [caelan,surya].forEach((p,i)=>reqs.push({id:'dq_a'+i,from:p.id,to:arjun.id,status:'accepted',at:ago(300),resp:ago(290)}));
+ const aIn=pool2.slice(40).find(x=>!['d_arjun','d_caelan','d_surya'].includes(x.id));if(aIn){reqs.push({id:'dq_ain',from:aIn.id,to:arjun.id,status:'pending',at:ago(9)});msgs.push({id:'dg_afr',to:arjun.id,from:aIn.id,kind:'friend_req',data:{req:'dq_ain'},read:false,at:ago(9)})}
+ if(withA[0])msgs.push({id:'dg_ak',to:arjun.id,from:caelan.id,kind:'kudos',data:{match:withA[0].id,k:'fire'},read:false,at:ago(30)});
+ follows.push({follower:you.id,followee:arjun.id,at:ago(300)},{follower:arjun.id,followee:you.id,at:ago(300)});
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
- return{profiles:all.map(clean),matches:ms,bookings:bks,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
+/* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
+async function demoSwitch(){const d=Demo.d;if(!d)return;S.uid=S.uid===d.alt?d.you:d.alt;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,bk:null,ib:'all'});
+ window.scrollTo(0,0);render();celebrate(S.uid===d.alt?'You are now Arjun':'Back to you (admin)')}
 async function startDemo(){
- const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'you',name:'You (demo)',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
+ const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid};closeSheet(true);
  Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,bk:null});
  splash('Demo mode','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
@@ -478,8 +517,14 @@ function rankOf(sp,id){const e=S.R[sp][id];if(!e||!e.n)return null;const t=tierO
 /* ---------- Small pieces of polish ---------- */
 function toast(msg,ms=2600){const el=document.createElement('div');el.className='toast';el.textContent=msg;$('toasts').appendChild(el);
  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),400)},ms)}
-function doneTick(){const el=document.createElement('div');el.className='done';el.setAttribute('aria-hidden','true');
- el.innerHTML='<svg viewBox="0 0 76 76"><circle cx="38" cy="38" r="36"/><path d="M23 39l10 10 20-22"/></svg>';document.body.appendChild(el);tick();setTimeout(()=>el.remove(),1500)}
+function doneTick(text){celebrate(text||'Done')}
+function celebrate(text){
+ sfx('pop');buzz([14,60,24]);
+ if(!prefs.popups){toast(text);return}
+ qsa('.cele').forEach(x=>x.remove());const el=document.createElement('div');el.className='cele';el.setAttribute('role','status');
+ el.innerHTML=`<div class="cball" aria-hidden="true"><svg viewBox="0 0 80 80"><defs><radialGradient id="cbg" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#f6ffa8"/><stop offset=".55" stop-color="#d9f24c"/><stop offset="1" stop-color="#9fbd1f"/></radialGradient></defs><g class="spinb"><circle cx="40" cy="40" r="34" fill="url(#cbg)"/><path d="M13 21c11 11 11 27 0 38M67 21C56 32 56 48 67 59" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" opacity=".92"/></g><circle class="cdot" cx="40" cy="40" r="17"/><path class="ctk" d="M31.5 40.5l6 6 11.5-12.5"/></svg></div><p>${esc(text)}</p>`;
+ document.body.appendChild(el);setTimeout(()=>el.remove(),calm()?1300:2300);
+}
 const greet=()=>{const h=new Date().getHours();return h<5?'Late night':h<12?'Good morning':h<17?'Good afternoon':'Good evening'};
 const first=p=>(p&&p.name||'').trim().split(/\s+/)[0]||p&&p.username||'';
 function splash(big,small){
@@ -576,10 +621,10 @@ function reveal(root=document){
  io=io||new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -5% 0px'});
  let k=0;els.forEach(e=>{const r=e.getBoundingClientRect();e.style.setProperty('--d',(r.top<innerHeight?Math.min(k++,9)*60:0)+'ms');io.observe(e)});
 }
-const NEAR_SEL='#main .card,#main .rrow,#main .mrow,#main .pod,#main .slot',WIZ_SEL='#wiz .opt,#wiz .avpick button';
+const NEAR_SEL='#main .setrow,#main .card:not(:has(.setrow)),#main .rrow,#main .mrow,#main .pod,#main .slot',WIZ_SEL='#wiz .opt,#wiz .avpick button';
 let scRaf=0,nearEl=null,nearT=0;
 function onScroll(){
- scRaf=0;const maxS=document.documentElement.scrollHeight-innerHeight,prog=maxS>0?clamp(scrollY/maxS,0,1):0;
+ scRaf=0;if(!calm())qsa('.gearbtn .g svg,.sethead .bgear svg').forEach(x=>x.style.transform=`rotate(${Math.round(scrollY*.6)}deg)`);const maxS=document.documentElement.scrollHeight-innerHeight,prog=maxS>0?clamp(scrollY/maxS,0,1):0;
  $('sprog').style.transform=`scaleX(${$('app').hidden&&$('wiz').hidden?0:prog})`;
  const sel=!$('app').hidden?NEAR_SEL:!$('wiz').hidden?WIZ_SEL:null;
  if(matchMedia('(hover:hover)').matches||calm()||!sel)return;
@@ -732,7 +777,7 @@ async function enter(fresh){
  try{S.email=await Store.email()}catch(e){}
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
  if(fresh)splash(first(p),greet());
- showApp();
+ showApp();maybeAskNotif();
 }
 /* Someone else took the username between sign-up and the first sign-in: choose another */
 function pickUsername(p){
@@ -751,7 +796,7 @@ function showReset(){
   <p class="ferr" id="rErr"></p><button class="btn brand wide" id="rSave">Save password</button>`,bg=>{
   bg.querySelector('#rT').onclick=()=>{const i=$('rPass'),sh=i.type==='password';i.type=sh?'text':'password';$('rT').textContent=sh?'Hide':'Show'};
   bg.querySelector('#rSave').onclick=async()=>{const pw=$('rPass').value;if(pw.length<6){$('rErr').textContent='Use at least 6 characters.';return}
-   try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick();toast('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
+   try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
    catch(e){$('rErr').textContent='Could not update the password. Open the reset link again, or try once more.'}}});
 }
 function showApp(){$('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=false;render();}
@@ -772,6 +817,17 @@ const ICON={
  moon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>',
  any:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
  upload:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>',
+ gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+ logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>',
+ bell:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+ speaker:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>',
+ phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2M3 9v6M21 9v6"/></svg>',
+ spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg>',
+ wave:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M3 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0"/></svg>',
+ key:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l3 3M15 8l2 2"/></svg>',
+ device:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
+ refresh:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+ back2:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
  search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
  bars:n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 19v-3" ${n<1?'opacity=".3"':''}/><path d="M12 19v-8" ${n<2?'opacity=".3"':''}/><path d="M18 19V5" ${n<3?'opacity=".3"':''}/></svg>`
 };
@@ -875,25 +931,27 @@ async function wFinish(){
  try{await Store.saveProfile(np)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}return toast('Could not save. Check your connection and try again.')}
  const i=S.profiles.findIndex(x=>x.id===np.id);S.profiles[i]=np;rate();
  const wasSetup=W.mode==='setup';W=null;
- if(wasSetup){splash(first(np),'Welcome to Racquet Culture');view.tab='home'}else{doneTick();toast('Profile updated')}
+ if(wasSetup){splash(first(np),'Welcome to Racquet Culture');view.tab='home'}else{doneTick('Profile updated')}
  showApp();
 }
 
 /* ================= App views ================= */
-const VIEWS={home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
+const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
 function render(){
  if(!me())return showAuth();
  after=()=>{};const t=view.tab,html=(VIEWS[t]||VIEWS.home)();
  $('main').innerHTML=`<div class="view">${html}</div>`;
  $('meBtn').innerHTML=avHTML(me());paintBadge();
- qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});
- $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> 100 made-up players. You are an admin here. Nothing is saved.</span><button class="btn ball sm" data-act="exitDemo">Exit demo</button></div>`
+ paintDock(t);
+ $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> ${Demo.d&&S.uid===Demo.d.alt?'You are <b>Arjun</b>, an ordinary player.':'You are an <b>admin</b>.'} Nothing is saved.</span><span class="dbtns"><button class="btn ghost sm" data-act="demoSwitch">${Demo.d&&S.uid===Demo.d.alt?'Back to admin':'Switch to Arjun'}</button><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`
   :S.needSql?`<div class="banner"><b>Almost ready.</b> Court bookings, the inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
 }
 let after=()=>{};
+function paintDock(t){qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});syncGliders()}
 function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
+ if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
 const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':'';
@@ -921,7 +979,7 @@ function levelCard(sp,id){
   <div class="lv num">${fmtL(e.r)}${e.n?`<small class="delta ${dcls(e.last)}">${fmtD(e.last)}</small>`:''}</div>
   <p class="small muted">${rk?`#${rk.pos} of ${rk.of} in ${TIER_NAME[t]} · `:''}${e.n?`${e.w} won, ${e.l} lost`:'Play a match to get ranked'}</p>${spark(e.hist,sp)}</div>`;
 }
-function slotName(s){if(!s)return'';if(s.uid){const p=prof(s.uid);return p?first(p)+(p.name&&p.name.trim().includes(' ')?' '+p.name.trim().split(/\s+/).pop()[0]+'.':''):'Former member'}return(s.name||'Guest')+' (guest)'}
+function slotName(s){if(!s)return'';if(s.uid){const p=prof(s.uid);if(!p)return'Former member';const w=(p.name||'').trim().split(/\s+/).filter(x=>/^[\p{L}]/u.test(x));return first(p)+(w.length>1?' '+w[w.length-1][0]+'.':'')}return(s.name||'Guest')+' (guest)'}
 function slotAv(s){if(s&&s.uid){const p=prof(s.uid);if(p)return avHTML(p)}return avHTML({name:s&&s.name||'G'})}
 const ST_LABEL={pending:'Awaiting confirmation',disputed:'Under review',reviewed:'Score set by an admin',confirmed:'Confirmed'};
 function matchRow(m,opts={}){
@@ -974,7 +1032,7 @@ function vRank(){
  const MET=['gold','silver','bronze'],myPos=ranked.findIndex(x=>x.id===S.uid);
  const goal=myPos<0?'':myPos<3?`<p class="goal">You're on the ${['gold','silver','bronze'][myPos]} step. Hold on to it.</p>`:`<p class="goal">You're #${myPos+1}. <b>${fmtL(Math.max(.01,pod[2].e.r-ranked[myPos].e.r))}</b> more to reach the podium.</p>`;
  const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} ${MET[i]} rv" data-act="player" data-v="${x.id}"><span class="shine" aria-hidden="true"></span>${i===0?'<span class="crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8.5l4.6 3.8L12 5l4.4 7.3L21 8.5 19.2 19H4.8z"/><circle cx="3" cy="8" r="1.6"/><circle cx="12" cy="4.4" r="1.6"/><circle cx="21" cy="8" r="1.6"/></svg></span>':''}<span class="medal">${i+1}</span><span class="ring">${avHTML(x.p)}</span><span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span><span class="ptag">${['Gold','Silver','Bronze'][i]}</span></button>`}).join('')}</div>${goal}`:'';
- return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div></div>
+ return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div><button class="refresh" data-act="rankRefresh" aria-label="Refresh rankings" title="Refresh">${ICON.refresh}</button></div>
   <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}</div>
   <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises. Scores under review are left out until an admin checks them.</p>
@@ -1072,11 +1130,11 @@ async function saveBooking(b,okMsg){
  try{await Store.addBooking(b)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}
   if(e.code==='clash'){try{await reload()}catch(x){}paintSlots();return $('bErr').textContent='Someone has just booked part of this time. Pick another slot.'}
   return $('bErr').textContent='Could not book. Check your connection and try again.'}
- S.bookings.push(b);const bk=bkState();bk.sel=null;bk.invite=[];bk.allFriends=false;closeSheet();doneTick();toast(okMsg,3200);paintSlots();
+ S.bookings.push(b);const bk=bkState();bk.sel=null;bk.invite=[];bk.allFriends=false;closeSheet();doneTick(okMsg);paintSlots();
  if(b.kind==='game')notify((b.invited||[]).map(to=>({to,kind:'invite',data:{booking:b.id}})));
  if(view.tab==='book')render();
 }
-async function patchBooking(b,msg){try{await Store.updateBooking(b)}catch(e){toast('Could not update the booking. Check your connection.');return false}upsert(S.bookings,b);if(msg)toast(msg);return true}
+async function patchBooking(b,msg=null){try{await Store.updateBooking(b)}catch(e){toast('Could not update the booking. Check your connection.');return false}upsert(S.bookings,b);if(msg)toast(msg);return true}
 
 /* ---------- Add a score ---------- */
 let A=null;
@@ -1194,7 +1252,7 @@ async function submitMatch(){
  const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});if(A.booking)rec.booking=A.booking;
  const btn=document.querySelector('[data-act="submitMatch"]');btn.disabled=true;btn.textContent='Saving…';
  try{await Store.addMatch(rec)}catch(e){btn.disabled=false;btn.textContent='Save score';return err('Could not save the score. Check your connection and try again.')}
- S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick();
+ S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
  notify(ids.filter(u=>u!==S.uid).map(to=>({to,kind:'confirm',data:{match:rec.id}})));
  toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}. The other players are asked to confirm.`,4200);
  view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>kudosSheet(rec.id,true),900)},500);
@@ -1267,7 +1325,7 @@ function disputeSheet(mid,msgId){
    if(setsStr(rs.sets)===setsStr(m.sets)){$('dErr').textContent='That is the same as the score already added. Change it, or confirm it instead.';return}
    const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'dispute',sets:rs.sets,winner:rs.winner,note:$('dNote').value.trim(),at:new Date().toISOString()};
    try{await Store.addConf(c)}catch(e){$('dErr').textContent='Could not send. Check your connection.';return}
-   S.confs.push(c);rate();closeSheet();doneTick();
+   S.confs.push(c);rate();closeSheet();doneTick('Sent to the admins');
    const admins=S.admins.filter(a=>a!==S.uid);
    notify([...admins.map(to=>({to,kind:'dispute',data:{match:m.id,conf:c.id}})),...regsOf(m).filter(u=>!admins.includes(u)).map(to=>({to,kind:'disputed',data:{match:m.id}}))]);
    toast(admins.length?'Sent. An admin will check the score. Until then it is left out of the rankings.':'Sent. No admins are set up yet, so ask the club to check it.',4200);render()}});
@@ -1286,7 +1344,7 @@ function reviewSheet(mid){
   const done=async keep=>{const rs=keep?{sets:m.sets,winner:m.winner}:readSetsOf(m.sport,rows);if(rs.err){$('rvErr').textContent=rs.err;return}
    const nm=Object.assign({},m,{sets:rs.sets,winner:rs.winner,review:{by:S.uid,at:new Date().toISOString(),prev:m.sets,kept:!!keep||setsStr(rs.sets)===setsStr(m.sets)}});
    try{await Store.updateMatch(nm)}catch(e){$('rvErr').textContent=e.code==='denied'?'Only admins can change scores. Check that your account is an admin in Supabase.':'Could not save. Check your connection.';return}
-   upsert(S.matches,nm);rate();closeSheet();doneTick();
+   upsert(S.matches,nm);rate();closeSheet();doneTick('Score updated');
    notify([...regsOf(nm),...S.admins].filter((x,i,a)=>a.indexOf(x)===i).map(to=>({to,kind:'resolved',data:{match:nm.id,sets:nm.sets,kept:nm.review.kept}})));
    toast('Score saved. Rankings updated and everyone in the game has been told.',3600);render()};
   bg.querySelector('#rvSave').onclick=()=>done(false);const k=bg.querySelector('#rvKeep');if(k)k.onclick=()=>done(true)});
@@ -1326,7 +1384,7 @@ function paintPlayers(){
 function vMe(){
  const p=me(),mine=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse();
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can see who booked every slot, cancel bookings, close the court, and review or edit any score.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="go" data-v="book">Court schedule</button><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -1336,12 +1394,50 @@ function vMe(){
   <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
-  <div class="sec"><h2>Settings</h2></div>
-  <div class="card rv"><div class="setline"><div><b>Account</b><p class="small muted">${esc(S.email||'')} · only you can see this</p></div>${Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change password</button>'}</div><div class="setline"><div><b>Friend requests</b><p class="small muted">${me().friends==='open'?'Open: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.'}</p></div></div>
-  ${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}<div style="height:6px"></div>
-  ${sw('calm','Reduce motion','Fewer animations and no sliding effects.')}${sw('haptics','Vibration','A light tap when you slide or confirm (phones that support it).')}</div>
-  <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Book courts, add scores, review disputes and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players, games, court bookings and an admin inbox, with you in it. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
-  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:22px" data-act="signOut">Sign out</button>`}`;
+  <button class="card setlink hov rv" data-act="go" data-v="settings"><span class="sico" data-a="spin">${ICON.gear}</span><span><b>Settings</b><span class="small muted">Theme, notifications, sounds, pop-ups, friend requests and your account</span></span><span class="go">›</span></button>
+  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:14px" data-act="signOut">Sign out</button>`}`;
+}
+
+/* ---------- Settings ---------- */
+const NOTIF_OK=()=>'Notification' in window;
+function vSettings(){
+ const row=(icon,a,t,sub,ctl,id)=>`<div class="setrow" ${id?`id="${id}"`:''}><span class="sico" data-a="${a}">${icon}</span><div class="grow"><b>${t}</b><span class="small muted">${sub}</span></div>${ctl||''}</div>`;
+ const sw=(k)=>`<button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${k}"></button>`;
+ const np=NOTIF_OK()?Notification.permission:'unsupported';
+ const nctl=np==='granted'?'<span class="chip st-confirmed">On</span>':np==='denied'?'<span class="chip st-disputed">Blocked</span>':np==='unsupported'?'<span class="chip">Not available</span>':'<button class="btn brand sm" data-act="notifAsk">Turn on</button>';
+ const nsub=np==='granted'?'You’ll be told about invites, scores to confirm and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about invites, scores to confirm and kudos.';
+ const th=prefs.theme||'dark';
+ return `<div class="hd"><div><button class="btn link small" data-act="go" data-v="me" style="padding-left:0">‹ Profile</button><h1 class="sethead"><span class="bgear">${ICON.gear}</span>Settings</h1></div></div>
+ <p class="eyebrow period">Appearance</p>
+ <div class="card rv">${row(themeNow()==='light'?ICON.sun:ICON.moon,themeNow()==='light'?'spin':'rock','Theme',th==='device'?'Follows your phone or computer':th==='light'?'Light':'Dark, the club look')}
+  <div class="seg full themeseg" data-key="theme" role="radiogroup" aria-label="Theme" style="margin-top:12px">${[['device','Device',ICON.device,'pop'],['light','Light',ICON.sun,'spin'],['dark','Dark',ICON.moon,'rock']].map(([v,n,ic,a])=>`<button type="button" role="radio" aria-checked="${th===v}" data-act="theme" data-v="${v}"><span class="ti" data-a="${a}">${ic}</span>${n}</button>`).join('')}</div></div>
+ <p class="eyebrow period">Notifications and feedback</p>
+ <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, an invite is sent and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
+ <p class="eyebrow period">Friends</p>
+ <div class="card rv">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
+  <div style="margin-top:12px">${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}</div></div>
+ <p class="eyebrow period">Account</p>
+ <div class="card rv">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
+ <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Book courts, add scores, review disputes and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players, games, court bookings and an admin inbox, with you in it. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
+ ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}`;
+}
+/* Ask once per device, a few seconds after signing in */
+function maybeAskNotif(){
+ if(!NOTIF_OK()||Notification.permission!=='default'||ls.get('rc_nask_'+S.uid,0))return;
+ setTimeout(()=>{if($('sheetBg')||$('app').hidden)return;ls.set('rc_nask_'+S.uid,1);
+  openSheet(`<div style="text-align:center"><span class="askbell">${ICON.bell}</span><h2 style="margin-top:14px">Turn on notifications?</h2><p class="muted" style="margin:8px 0 18px">Know straight away when someone invites you to play, asks you to confirm a score or sends you kudos.</p></div>
+   <button class="btn brand wide" data-act="notifAsk">Allow notifications</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Not now</button>`)},2600);
+}
+function sysNotify(title,body){try{if(NOTIF_OK()&&Notification.permission==='granted'&&document.hidden)new Notification(title,{body,icon:'logo-sm.png',tag:'rc'})}catch(e){}}
+
+/* ---------- Loading screen (rankings) ---------- */
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const loaderHTML=t=>`<div class="loader"><span class="lball" aria-hidden="true"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="30" fill="#d9f24c"/><path d="M17 22c10 10 10 26 0 36M63 22C53 32 53 48 63 58" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/></svg></span><span class="lshadow" aria-hidden="true"></span><p>${esc(t)}</p>
+ <div class="skel">${'<i></i>'.repeat(5)}</div></div>`;
+async function loadRank(force){
+ view.tab='rank';paintDock('rank');window.scrollTo(0,0);$('main').innerHTML=loaderHTML(force?'Refreshing rankings…':'Loading rankings…');
+ const t0=Date.now();if(force||Store.mode==='live'){try{await reload()}catch(e){toast('Could not refresh. Check your connection.')}}
+ await wait(Math.max(0,(calm()?250:850)-(Date.now()-t0)));if(view.tab==='rank'){render();if(force)doneTick('Rankings up to date')}
 }
 
 /* ---------- Sheets ---------- */
@@ -1407,7 +1503,7 @@ function kudosSheet(mid,justSaved){
   qsa('[data-k]',bg).forEach(b=>b.onclick=async()=>{const k=b.dataset.k,list=[...to].filter(u=>!sent[mid+'|'+u+'|'+k]);
    if(!to.size)return toast('Pick at least one player.');if(!list.length)return toast('Already sent.');
    await notify(list.map(u=>({to:u,kind:'kudos',data:{match:mid,k}})));list.forEach(u=>sent[mid+'|'+u+'|'+k]=1);ls.set('rc_kudos_'+S.uid,sent);
-   burst(b,REACT.find(x=>x[0]===k)[1]);b.classList.add('sent');tick();toast(`Sent ${REACT.find(x=>x[0]===k)[1]} to ${andList(list.map(u=>first(prof(u))))}`)})});
+   burst(b,REACT.find(x=>x[0]===k)[1]);b.classList.add('sent');doneTick(`Kudos sent ${REACT.find(x=>x[0]===k)[1]}`);toast(`Sent to ${andList(list.map(u=>first(prof(u))))}`)})});
 }
 /* A little shower of the chosen emoji */
 function burst(el,e){if(calm())return;const r=el.getBoundingClientRect();for(let i=0;i<9;i++){const x=document.createElement('span');x.className='floatE';x.textContent=e;
@@ -1459,7 +1555,8 @@ const ACT={
  async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only the player who added it, or an admin, can delete this score.':'Could not delete. Check your connection.')}S.matches=S.matches.filter(m=>m.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();toast('Score deleted')},
  editProfile(){startWiz('edit')},
  retake(v){startWiz('level',[v])},
- pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)tick()},
+ pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)buzz([12,40,12]);if(v==='sound'&&prefs.sound)sfx('pop');if(v==='popups'&&prefs.popups)celebrate('Pop-ups on');
+  const r=$('r-'+v);if(r){r.classList.add('play');setTimeout(()=>r.classList.remove('play'),1000)}},
  demo(){startDemo()},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
  async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';view.bk=null;authMode='in';showAuth()},
@@ -1468,7 +1565,7 @@ const ACT={
  ibTodo(){view.ib='todo';go('inbox')},
  async cfOk(id){const g=S.msgs.find(x=>x.id===id),m=g&&S.matches.find(x=>x.id===g.data.match);if(!m)return;
   const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'ok',at:new Date().toISOString()};
-  try{await Store.addConf(c)}catch(e){return toast('Could not confirm. Check your connection.')}S.confs.push(c);rate();tick();toast('Thanks, score confirmed');render()},
+  try{await Store.addConf(c)}catch(e){return toast('Could not confirm. Check your connection.')}S.confs.push(c);rate();doneTick('Score confirmed');render()},
  cfChange(id){const g=S.msgs.find(x=>x.id===id);if(g)disputeSheet(g.data.match,id)},
  review(v){reviewSheet(v)},
  /* bookings */
@@ -1492,11 +1589,11 @@ const ACT={
  invDel(id){const bk=bkState();bk.invite=bk.invite.filter(x=>x!==id);bookSheet.paint&&bookSheet.paint()},
  rsn(v){qsa('#rsn .fchip').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});tick()},
  bookSave(){const bk=bkState(),[s,e]=bk.sel,inv=[...new Set([...bk.invite,...(bk.allFriends?friendIds():[])])];saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,invited:inv,going:[],declined:[],cap:3,note:$('bNote').value.trim(),at:new Date().toISOString()},
-  (bk.invite.length||bk.allFriends)?'Court booked. Your invites are on their way.':'Court booked. See you on court!')},
- blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked. Players see the court as closed.')},
+  (bk.invite.length||bk.allFriends)?'Court booked · invites sent':'Court booked')},
+ blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked')},
  bkOpen(v){bookingSheet(v)},
  async bkAccept(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;if((b.going||[]).length>=(b.cap||3)&&!(b.going||[]).includes(S.uid))return toast('This game is already full. The first 3 players said yes.');const nb=Object.assign({},b,{going:[...new Set([...(b.going||[]),S.uid])],declined:(b.declined||[]).filter(x=>x!==S.uid)});
-  if(await patchBooking(nb,'You’re in. See you on court!')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:true}}]);closeSheet();tick();render()}},
+  if(await patchBooking(nb)){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:true}}]);closeSheet();doneTick('You’re in!');render()}},
  async bkDecline(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{going:(b.going||[]).filter(x=>x!==S.uid),declined:[...new Set([...(b.declined||[]),S.uid])]});
   if(await patchBooking(nb,'Got it. The host has been told.')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:false}}]);closeSheet();render()}},
  bkCancel(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;confirmSheet(b.kind==='block'?'Unblock these slots?':'Cancel this booking?',b.kind==='block'?'Players will be able to book this time again.':'Everyone invited will be told.',b.kind==='block'?'Unblock':'Cancel booking','bkCancelYes',v)},
@@ -1508,6 +1605,13 @@ const ACT={
   const others=[b.by,...(b.going||[])].filter((x,i,a)=>x!==S.uid&&a.indexOf(x)===i);A.a=[{uid:S.uid},others[0]?{uid:others[0]}:null];A.b=[others[1]?{uid:others[1]}:null,others[2]?{uid:others[2]}:null];
   view.tab='add';window.scrollTo(0,0);render()},
  pvTab(v){view.pv=v;render()},
+ theme(v){setPref('theme',v);sfx('soft');tick();render()},
+ popPreview(){celebrate('This is a pop-up')},
+ async notifAsk(){if(!NOTIF_OK())return toast('This browser can’t show notifications.');closeSheet(true);
+  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about invites, scores and kudos here.',icon:'logo-sm.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
+  if(view.tab==='settings')render()},
+ rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
+ demoSwitch(){demoSwitch()},
  pvGo(v){view.pv=v;go('players')},
 
  aDate(v){A.date=v;if(A.time!=null&&(slotDate(v,A.time)>new Date()))A.time=null,A.len=0;tick();render()},
@@ -1518,16 +1622,16 @@ const ACT={
  async addFriend(id){const p=prof(id),r=relWith(id);if(r.st==='incoming')return ACT.reqAccept(r.r.id);if(r.st!=='none')return;
   const open=p.friends==='open',now=new Date().toISOString(),q={id:'q_'+rid(),from:S.uid,to:id,status:open?'accepted':'pending',at:now,resp:open?now:null};
   try{await Store.addReq(q)}catch(e){return toast(e.code==='cooldown'?'You can send a new request 5 days after a rejection.':'Could not send the request. Check your connection.')}
-  S.reqs.push(q);notify([{to:id,kind:open?'friend_new':'friend_req',data:{req:q.id}}]);tick();toast(open?`You and ${first(p)} are now friends`:`Friend request sent to ${first(p)}`);refreshSocial(id)},
+  S.reqs.push(q);notify([{to:id,kind:open?'friend_new':'friend_req',data:{req:q.id}}]);doneTick(open?'Friend added':'Friend request sent');refreshSocial(id)},
  async reqAccept(rid_){const r=S.reqs.find(x=>x.id===rid_);if(!r)return;const n=Object.assign({},r,{status:'accepted',resp:new Date().toISOString()});
-  try{await Store.updateReq(n)}catch(e){return toast('Could not accept. Check your connection.')}upsert(S.reqs,n);notify([{to:r.from,kind:'friend_ok',data:{req:r.id}}]);doneTick();toast(`You and ${first(prof(r.from))} are now friends`);refreshSocial(r.from)},
+  try{await Store.updateReq(n)}catch(e){return toast('Could not accept. Check your connection.')}upsert(S.reqs,n);notify([{to:r.from,kind:'friend_ok',data:{req:r.id}}]);doneTick('You’re now friends');refreshSocial(r.from)},
  async reqReject(rid_){const r=S.reqs.find(x=>x.id===rid_);if(!r)return;const n=Object.assign({},r,{status:'rejected',resp:new Date().toISOString()});
   try{await Store.updateReq(n)}catch(e){return toast('Could not update. Check your connection.')}upsert(S.reqs,n);toast('Request rejected. They can ask again in 5 days.');refreshSocial(r.from)},
  async reqCancel(rid_){const r=S.reqs.find(x=>x.id===rid_);if(!r)return;try{await Store.delReq(r.id)}catch(e){return toast('Could not cancel. Check your connection.')}S.reqs=S.reqs.filter(x=>x.id!==r.id);toast('Request cancelled');refreshSocial(r.to)},
  unfriend(id){confirmSheet('Remove friend?',`You and ${first(prof(id))} will no longer be friends. You can add each other again later.`,'Remove friend','unfriendYes',id)},
  async unfriendYes(id){const rs=S.reqs.filter(r=>r.status==='accepted'&&((r.from===S.uid&&r.to===id)||(r.from===id&&r.to===S.uid)));
   try{for(const r of rs)await Store.delReq(r.id)}catch(e){return toast('Could not update. Check your connection.')}S.reqs=S.reqs.filter(r=>!rs.includes(r));closeSheet(true);toast('Friend removed');refreshSocial(id)},
- async follow(id){if(following(id))return;try{await Store.follow(id)}catch(e){return toast('Could not follow. Check your connection.')}S.follows.push({follower:S.uid,followee:id,at:new Date().toISOString()});notify([{to:id,kind:'follow',data:{}}]);tick();toast(`Following ${first(prof(id))}`);refreshSocial(id)},
+ async follow(id){if(following(id))return;try{await Store.follow(id)}catch(e){return toast('Could not follow. Check your connection.')}S.follows.push({follower:S.uid,followee:id,at:new Date().toISOString()});notify([{to:id,kind:'follow',data:{}}]);doneTick(`Following ${first(prof(id))}`);refreshSocial(id)},
  async unfollow(id){try{await Store.unfollow(id)}catch(e){return toast('Could not unfollow. Check your connection.')}S.follows=S.follows.filter(f=>!(f.follower===S.uid&&f.followee===id));toast(`Unfollowed ${first(prof(id))}`);refreshSocial(id)},
  async frMode(v){const p=Object.assign({},me(),{friends:v});try{await Store.saveProfile(p)}catch(e){return toast('Could not save. Check your connection.')}upsert(S.profiles,p);tick();toast(v==='open'?'Open account: anyone can add you as a friend':'Friend requests now need your approval');render()},
  invitePlayer(id){const p=prof(id),bk=bkState();if(!bk.invite.includes(id))bk.invite=[...bk.invite,id].slice(-3);
@@ -1546,7 +1650,7 @@ document.addEventListener('keydown',e=>{
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
 function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
- paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;toast('New message: '+t.textContent,3600)}}
+ paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;sfx('ding');buzz([20,80,20]);toast('New message: '+t.textContent,3600);sysNotify('Racquet Culture',t.textContent)}}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);
  if($('app').hidden||typing||$('sheetBg')||view.tab==='add'){rmPending=true;return}render()},400)}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
