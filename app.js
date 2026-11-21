@@ -8,7 +8,11 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const avg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
 const rid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const pad=n=>String(n).padStart(2,'0');
-const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+/* The club runs on Indian Standard Time (UTC+5:30, no daylight saving), whatever time zone the phone is set to */
+const IST=330*60000;
+const istParts=(t=Date.now())=>{const d=new Date(+t+IST);return{y:d.getUTCFullYear(),m:d.getUTCMonth()+1,d:d.getUTCDate(),h:d.getUTCHours(),mi:d.getUTCMinutes()}};
+const isoIST=(t=Date.now())=>{const p=istParts(t);return p.y+'-'+pad(p.m)+'-'+pad(p.d)};
+const today=()=>isoIST();
 const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){toast('This device is out of storage space.')}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
 /* ---------- Preferences ---------- */
@@ -152,14 +156,28 @@ function readPhoto(file){return new Promise((res,rej)=>{
 /* ---------- Court times: 30-minute slots from 6:00 am to midnight ---------- */
 const OPEN_H=6,CLOSE_H=24,NSLOT=(CLOSE_H-OPEN_H)*2,MAX_GAME=6/* longest player booking: 3 hours */;
 const COURTS={padel:'Padel · Court 1',pickleball:'Pickleball · Court 1'};
-const COURT_NOS={padel:[1],pickleball:[1]}; /* add numbers here when a second court opens */
+const COURT_NOS={padel:[1],pickleball:[1]};
+/* Prices per 30-minute slot, in rupees. Peak runs from PEAK_FROM (slot 22 = 5:00 pm) to closing. To be confirmed with Caelan. */
+const PRICE={standard:900,peak:1200},PEAK_FROM=22;
+const slotPrice=i=>i>=PEAK_FROM?PRICE.peak:PRICE.standard;
+const rupees=n=>'\u20b9'+Number(n).toLocaleString('en-IN');
+const rangePrice=(s,len)=>{let t=0;for(let i=s;i<s+len;i++)t+=slotPrice(i);return t};
+/* Club locations. Add more here as Racquet Culture grows. */
+const VENUES=[{id:'chicalim',name:'Racquet Culture',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
+ url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'}];
+const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
+function mapCard(v){
+ return `<div class="card mapcard rv"><div class="maptop"><span class="pinico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg></span><span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span></div>
+  <div class="mapbox"><iframe title="Map of ${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${v.lat},${v.lng}&t=k&z=17&output=embed"></iframe>
+  <a class="mapopen" href="${esc(v.url)}" target="_blank" rel="noopener" aria-label="Open ${esc(v.name)} in Google Maps"></a></div>
+  <a class="btn brand wide" href="${esc(v.url)}" target="_blank" rel="noopener" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Open in Google Maps</span></a></div>`} /* add numbers here when a second court opens */
 const durLabel=n=>{const h=Math.floor(n/2),m=n%2*30;return (h?h+' h':'')+(h&&m?' ':'')+(m?m+' min':'')};
 const slotLabel=i=>{const m=OPEN_H*60+i*30,h=Math.floor(m/60)%24,mm=m%60;return `${h%12||12}:${pad(mm)} ${h<12?'am':'pm'}`};
 const slotRange=(s,len)=>`${slotLabel(s)} – ${slotLabel(s+len)}`;
-const slotDate=(date,i)=>{const d=new Date(date+'T00:00:00');d.setMinutes(OPEN_H*60+i*30);return d};
+const slotDate=(date,i)=>{const [y,m,d]=date.split('-').map(Number);return new Date(Date.UTC(y,m-1,d)+(OPEN_H*60+i*30)*60000-IST)};
 const isoDay=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoDay(d)};
-const nowSlot=()=>{const d=new Date();return Math.floor((d.getHours()*60+d.getMinutes()-OPEN_H*60)/30)};
+const nowSlot=()=>{const p=istParts();return Math.floor((p.h*60+p.mi-OPEN_H*60)/30)};
 const bkEnd=b=>slotDate(b.date,b.start+b.len);
 const overlaps=(a,b)=>a.court===b.court&&a.date===b.date&&a.start<b.start+b.len&&b.start<a.start+a.len;
 const upsert=(arr,x)=>{const i=arr.findIndex(y=>y.id===x.id);if(i>=0)arr[i]=x;else arr.push(x)};
@@ -320,7 +338,7 @@ function buildDemo(you){
   const slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
   const b=B_.map(slot);if(!singles&&r()<.08){const g=B_[1];b[1]={name:pick(D_FN),level:Math.round(clampL(sp,sk(g,sp,t))*10)/10}}
   const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5),time=clamp(Math.floor(r()*NSLOT),0,NSLOT-3);
-  ms.push({id:'dm_'+k,demo:true,sport:sp,format:singles?'singles':'doubles',date:isoDay(d),time,a:A_.map(slot),b,sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+  ms.push({id:'dm_'+k,demo:true,sport:sp,format:singles?'singles':'doubles',date:isoIST(d),time,a:A_.map(slot),b,sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
  }
  const occ={},T0=today(),ns=nowSlot();
  ms.forEach(m=>{const len=m.sport==='padel'?(r()<.6?3:2):2;
@@ -525,15 +543,15 @@ function celebrate(text){
  el.innerHTML=`<div class="cball" aria-hidden="true"><svg viewBox="0 0 80 80"><defs><radialGradient id="cbg" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#f6ffa8"/><stop offset=".55" stop-color="#d9f24c"/><stop offset="1" stop-color="#9fbd1f"/></radialGradient></defs><g class="spinb"><circle cx="40" cy="40" r="34" fill="url(#cbg)"/><path d="M13 21c11 11 11 27 0 38M67 21C56 32 56 48 67 59" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" opacity=".92"/></g><circle class="cdot" cx="40" cy="40" r="17"/><path class="ctk" d="M31.5 40.5l6 6 11.5-12.5"/></svg></div><p>${esc(text)}</p>`;
  document.body.appendChild(el);setTimeout(()=>el.remove(),calm()?1300:2300);
 }
-const greet=()=>{const h=new Date().getHours();return h<5?'Late night':h<12?'Good morning':h<17?'Good afternoon':'Good evening'};
+const greet=()=>{const h=istParts().h;return h<5?'Late night':h<12?'Good morning':h<17?'Good afternoon':'Good evening'};
 const first=p=>(p&&p.name||'').trim().split(/\s+/)[0]||p&&p.username||'';
 function splash(big,small){
  qsa('.splash').forEach(x=>x.remove());const el=document.createElement('div');el.className='splash';el.setAttribute('aria-hidden','true');
  el.innerHTML=`<div><img src="logo.png" alt=""><p class="s1">${esc(small)}</p><p class="s2">${esc(big)}</p></div>`;
  document.body.appendChild(el);setTimeout(()=>el.remove(),calm()?700:2000);
 }
-function dateLabel(iso){if(!iso)return'';const t=today(),d=new Date(iso+'T12:00:00'),y=new Date(Date.now()-864e5);
- if(iso===t)return'Today';if(iso===y.getFullYear()+'-'+pad(y.getMonth()+1)+'-'+pad(y.getDate()))return'Yesterday';
+function dateLabel(iso){if(!iso)return'';const t=today(),d=new Date(iso+'T12:00:00');
+ if(iso===t)return'Today';if(iso===addDays(t,-1))return'Yesterday';
  return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
 
 /* ---------- Sliding pill ("glider"): remembers where it was and glides to the new choice after each redraw ---------- */
@@ -957,7 +975,7 @@ const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KE
 const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
-function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoDay(new Date(iso)))}
+function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
 const setsStr=sets=>(sets||[]).map(s=>s[0]+'–'+s[1]).join(', ');
 function teamNames(slots){const xs=(slots||[]).filter(Boolean);if(!xs.length)return'';return xs.map(s=>s.uid===S.uid?'You':slotName(s)).join(' & ')}
 const matchLine=m=>`${esc(teamNames(m.a))} <span class="muted">vs</span> ${esc(teamNames(m.b))}`;
@@ -1017,6 +1035,8 @@ function vHome(){
   <div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="sec"><h2>Your recent games</h2></div>
   <div class="list">${mine.slice(0,4).map(m=>matchRow(m)).join('')||`<div class="card empty rv"><b>No games yet</b>Played today? Add the score and your level starts to move.</div>`}</div>
+  <div class="sec"><h2>Our locations</h2><span class="small muted">${VENUES.length}</span></div>
+  ${VENUES.map(mapCard).join('')}
   <div class="sec"><h2>Around the club</h2></div>
   <div class="list">${ms.filter(m=>!mine.includes(m)).slice(0,6).map(m=>matchRow(m,{for:'-'})).join('')||`<div class="card empty rv"><b>Quiet on court</b>Scores from everyone in the club will appear here.</div>`}</div>`;
 }
@@ -1048,39 +1068,44 @@ function cellOf(i){const bk=bkState(),b=dayBookings(bk.court,bk.day).find(x=>i>=
  const sel=bk.sel&&i>=bk.sel[0]&&i<=bk.sel[1];return{b,past,sel}}
 const inGame=b=>b.by===S.uid||(b.invited||[]).includes(S.uid);
 function cellHTML(i){
- const {b,past,sel}=cellOf(i);let cls='free',sub='Free';
+ const {b,past,sel}=cellOf(i);let cls='free',sub='Open';
  if(b){if(b.kind==='block'){cls='blocked';sub=b.reason||'Closed'}
   else if(inGame(b)&&!(b.declined||[]).includes(S.uid)){cls='mine';sub=b.by===S.uid?'Your game':'Invited'}
   else{cls='booked';sub=isAdmin()?first(prof(b.by))||'Booked':'Booked'}
   if(i!==b.start)cls+=' cont'}
  else if(sel){cls='sel';sub=view.bk.block?'Block':'Selected'}
  if(past&&!b)cls+=' past';
- return `<button type="button" class="sl ${cls}" data-act="slot" data-v="${i}" ${past&&!b?'aria-disabled="true"':''}><b>${slotLabel(i).replace(' ',' ')}</b><span>${esc(sub)}</span></button>`;
+ return `<button type="button" class="sl ${cls}" data-act="slot" data-v="${i}" ${past&&!b?'aria-disabled="true"':''}><b>${slotLabel(i)}</b><span>${esc(sub)}</span>${b?'':`<em class="${i>=PEAK_FROM?'peak':''}">${rupees(slotPrice(i))}${i>=PEAK_FROM?' · peak':''}</em>`}</button>`;
 }
 function slotsHTML(){
  const parts=[['Morning',0,12],['Afternoon',12,22],['Evening',22,NSLOT]];
  return parts.map(([n,a,z])=>`<p class="eyebrow period">${n}</p><div class="slots">${Array.from({length:z-a},(_,k)=>cellHTML(a+k)).join('')}</div>`).join('');
 }
 function bkBarHTML(){const bk=bkState();if(!bk.sel)return'';const [s,e]=bk.sel,len=e-s+1;
- return `<div style="height:96px" aria-hidden="true"></div><div class="bkbar"><div class="grow"><b>${COURTS[bk.court]}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${len*30} min</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':'Book'}</button></div>`}
+ return `<div style="height:96px" aria-hidden="true"></div><div class="bkbar"><div class="grow"><b class="price">${bk.block?'Close '+durLabel(len):rupees(rangePrice(s,len))+' · '+durLabel(len)}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':'Book'}</button></div>`}
 function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();const bar=$('bkBar');if(bar)bar.innerHTML=bkBarHTML()}
 function vBook(){
  const bk=bkState(),days=Array.from({length:14},(_,k)=>addDays(today(),k));
  if(S.needSql)return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div><div class="card empty rv"><b>Bookings are almost ready</b>A club admin needs to run the latest setup.sql in Supabase to switch them on.</div>`;
  const n=dayBookings(bk.court,bk.day).filter(b=>b.kind==='game').length;
  return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>${isAdmin()?'Court schedule':'Book a court'}</h1></div></div>
+  <p class="eyebrow period" style="margin-top:4px">Location</p>
+  <div class="chips">${VENUES.map(v=>`<button type="button" class="fchip venue${v.id===(bk.venue||VENUES[0].id)?' on':''}" aria-pressed="${v.id===(bk.venue||VENUES[0].id)}" data-act="bkVenue" data-v="${v.id}">📍 ${esc(v.name)} · ${esc(v.area)}</button>`).join('')}</div>
+  <div id="venueMap" style="margin-top:12px">${mapCard(venueOf(bk.venue))}</div>
+  <p class="eyebrow period">Court</p>
   ${seg('bc','Court',Object.keys(COURTS).map(k=>[k,COURTS[k]]),bk.court,'bkCourt')}
   <div class="dstrip" role="group" aria-label="Day">${days.map(d=>{const dt=new Date(d+'T12:00:00');return`<button type="button" class="dchip" aria-pressed="${d===bk.day}" data-act="bkDay" data-v="${d}"><span>${d===today()?'Today':dt.toLocaleDateString('en-IN',{weekday:'short'})}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
   ${bk.invite.length?`<div class="card invnote rv"><span>Inviting ${bk.invite.map(id=>esc(first(prof(id)))).join(', ')}. Pick a free time, then tap Book.</span><button class="btn link small" data-act="bkInvClear">Clear</button></div>`:''}
   ${isAdmin()?`<div class="card rv"><div class="setline"><div><b>Block slots</b><p class="small muted">Close the court for coaching, maintenance or events. Players see it as closed.</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
   <div class="legend"><span><i class="lg-free"></i>Free</span><span><i class="lg-mine"></i>Your games</span><span><i class="lg-booked"></i>Booked</span><span><i class="lg-block"></i>Closed</span><span class="muted">${n} game${n===1?'':'s'} this day</span></div>
-  <p class="small muted" style="margin:-4px 0 4px">Tap a free time, then tap the next ones to make it longer (up to ${MAX_GAME/2} hours).${isAdmin()?' As an admin you see who booked each slot. Tap a booking to see the players or cancel it.':''}</p>
+  <p class="small muted" style="margin:-4px 0 4px">Tap an open time, then the next ones to make it longer (up to ${MAX_GAME/2} hours). ${rupees(PRICE.standard)} per half hour, ${rupees(PRICE.peak)} at peak (from ${slotLabel(PEAK_FROM)}). All times are Indian Standard Time.${isAdmin()?' As an admin you see who booked each slot. Tap a booking to see the players or cancel it.':''}</p>
   <div id="slotGrid">${slotsHTML()}</div><div id="bkBar">${bkBarHTML()}</div>`;
 }
 function rangeFree(a,z){for(let i=a;i<=z;i++){const c=cellOf(i);if(c.b||c.past)return false}return true}
 function bookSheet(){
  const bk=bkState(),[s,e]=bk.sel,len=e-s+1,sp=bk.court,fr=friendIds();
- openSheet(`<h2>Book ${COURTS[bk.court]}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${durLabel(len)}</p>
+ openSheet(`<h2>Book ${COURTS[bk.court]}</h2><p class="muted small">${esc(venueOf(bk.venue).name)}, ${esc(venueOf(bk.venue).area)} · ${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${durLabel(len)}</p>
+  <div class="pricebox"><span>Court price</span><b>${rupees(rangePrice(s,len))}</b></div>
   <label>Invite players <span class="muted">(optional)</span></label>
   <div class="invmode">${fr.length?`<button type="button" class="fchip${bk.allFriends?' on':''}" aria-pressed="${!!bk.allFriends}" data-act="invAll">Invite all my friends · ${fr.length}</button>`:'<span class="small muted">Add friends on the Players page to invite them all at once.</span>'}</div>
   <p class="tiny muted" style="margin:8px 0 0">${bk.allFriends?'All your friends get the invite. The first 3 to say yes get the spots.':'Or pick up to 3 players, friends or anyone open to invites.'}</p>
@@ -1119,7 +1144,7 @@ function bookingSheet(id){
  if(going.includes(S.uid)&&future)acts.push(`<button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it any more</button>`);
  if(started&&(b.by===S.uid||going.includes(S.uid)))acts.push(`<button class="btn ball" data-act="bkScore" data-v="${esc(b.id)}">Add the score</button>`);
  if(future&&(b.by===S.uid||adm))acts.push(`<button class="btn danger" data-act="bkCancel" data-v="${esc(b.id)}">Cancel booking</button>`);
- openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${when}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
+ openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${esc(venueOf(b.venue).name)}, ${esc(venueOf(b.venue).area)} · ${when} · ${rupees(b.price||rangePrice(b.start,b.len))}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
   ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b></span>${status(id)}</div>`}).join('')}</div>`
    :`<p class="small muted" style="margin-top:12px">This time is booked by ${esc(host?first(host):'a member')}.</p>`}
   ${acts.length?`<div class="cta">${acts.join('')}</div>`:''}<button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">Close</button>`);
@@ -1569,6 +1594,7 @@ const ACT={
  cfChange(id){const g=S.msgs.find(x=>x.id===id);if(g)disputeSheet(g.data.match,id)},
  review(v){reviewSheet(v)},
  /* bookings */
+ bkVenue(v){const bk=bkState();bk.venue=v;bk.sel=null;render()},
  bkCourt(v){const bk=bkState();bk.court=v;bk.sel=null;render()},
  bkDay(v){const bk=bkState();bk.day=v;bk.sel=null;tick();render()},
  bkBlock(){const bk=bkState();bk.block=!bk.block;bk.sel=null;render()},
@@ -1588,7 +1614,7 @@ const ACT={
  invAdd(id){const bk=bkState();if(bk.invite.length>=3)return toast('You can invite up to 3 players.');bk.invite.push(id);tick();bookSheet.paint&&bookSheet.paint()},
  invDel(id){const bk=bkState();bk.invite=bk.invite.filter(x=>x!==id);bookSheet.paint&&bookSheet.paint()},
  rsn(v){qsa('#rsn .fchip').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});tick()},
- bookSave(){const bk=bkState(),[s,e]=bk.sel,inv=[...new Set([...bk.invite,...(bk.allFriends?friendIds():[])])];saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,invited:inv,going:[],declined:[],cap:3,note:$('bNote').value.trim(),at:new Date().toISOString()},
+ bookSave(){const bk=bkState(),[s,e]=bk.sel,venue=bk.venue||VENUES[0].id,inv=[...new Set([...bk.invite,...(bk.allFriends?friendIds():[])])];saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,venue,price:rangePrice(s,e-s+1),invited:inv,going:[],declined:[],cap:3,note:$('bNote').value.trim(),at:new Date().toISOString()},
   (bk.invite.length||bk.allFriends)?'Court booked · invites sent':'Court booked')},
  blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked')},
  bkOpen(v){bookingSheet(v)},
