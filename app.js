@@ -780,7 +780,7 @@ async function enter(fresh){
 /* Someone else took the username between sign-up and the first sign-in: choose another */
 function pickUsername(p){
  showAuth();
- openSheet(`<h2>Choose a new username</h2><p class="muted small">Someone took <b>${esc(p.username)}</b> while your account was being set up.</p>
+ openSheet(`<h2 data-noback>Choose a new username</h2><p class="muted small">Someone took <b>${esc(p.username)}</b> while your account was being set up.</p>
   <label for="nUser">Username</label><input id="nUser" maxlength="100" autocapitalize="none" spellcheck="false" value="">
   <p class="ferr" id="nErr"></p><button class="btn brand wide" id="nSave">Continue</button>`,bg=>{
   bg.querySelector('#nSave').onclick=async()=>{const u=$('nUser').value.trim(),bad=userProblem(u);if(bad){$('nErr').textContent=bad;return}
@@ -789,7 +789,7 @@ function pickUsername(p){
 }
 /* Arrived from a password reset email, or changing the password from Profile */
 function showReset(){
- openSheet(`<h2>Set a new password</h2><p class="muted small">At least 6 characters.</p>
+ openSheet(`<h2 data-noback>Set a new password</h2><p class="muted small">At least 6 characters.</p>
   <label for="rPass">New password</label><div class="pw"><input id="rPass" type="password" autocomplete="new-password" minlength="6"><button type="button" class="pwtoggle" id="rT">Show</button></div>
   <p class="ferr" id="rErr"></p><button class="btn brand wide" id="rSave">Save password</button>`,bg=>{
   bg.querySelector('#rT').onclick=()=>{const i=$('rPass'),sh=i.type==='password';i.type=sh?'text':'password';$('rT').textContent=sh?'Hide':'Show'};
@@ -1319,11 +1319,13 @@ async function loadRank(force){
 }
 
 /* ---------- Sheets ---------- */
+/* Every pop-up gets a Back button at the top (except the two that must be finished: new username and new password) */
+const SHEET_BACK=`<div class="sheetback"><button type="button" class="backbtn" data-act="closeSheet" aria-label="Back"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Back</button></div>`;
 function openSheet(html,onReady){
  closeSheet(true);const bg=document.createElement('div');bg.className='sheetbg';bg.id='sheetBg';
- bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html}</div>`;
+ bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html.includes('data-noback')?'':SHEET_BACK}${html}</div>`;
  bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});$('sheetRoot').appendChild(bg);if(onReady)onReady(bg);
- const f=bg.querySelector('input,button:not(.grab)');if(f&&matchMedia('(hover:hover)').matches)setTimeout(()=>f.focus(),60);
+ const f=bg.querySelector('input,button:not(.grab):not(.backbtn)');if(f&&matchMedia('(hover:hover)').matches)setTimeout(()=>f.focus(),60);
 }
 function closeSheet(now){const bg=$('sheetBg');if(!bg)return;if(now||calm()){bg.remove();return}bg.classList.add('out');setTimeout(()=>bg.remove(),300)}
 function lvlInput(sp,val){const S_=SPORTS[sp];
@@ -1356,7 +1358,7 @@ function askMemberLevel(id){
 }
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div class="sheetback"><button type="button" class="backbtn" data-act="closeSheet" aria-label="Back"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Back</button></div><div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
