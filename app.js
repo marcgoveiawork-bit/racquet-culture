@@ -195,7 +195,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -213,10 +213,11 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
+ async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct'];
-const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones'];
+const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
  async taken(u){const k=u.trim().toLowerCase();return ls.get('rc2_profiles',[]).some(p=>(p.username||'').toLowerCase()===k)},
@@ -247,12 +248,12 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
- async signUp(name,username,email,pw){
-  const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,username},emailRedirectTo:here()}});
+ async signUp(name,username,email,pw,phone){
+  const {data,error}=await sb.auth.signUp({email,password:pw,options:{data:{name,username,phone:phone||undefined},emailRedirectTo:here()}});
   if(error){const m=error.message||'';if(/already|registered|exists/i.test(m))throw errc('emailtaken');if(/rate|too many|security purposes/i.test(m))throw errc('rate');if(/password/i.test(m))throw errc('weak',m);if(/email/i.test(m))throw errc('bademail');throw error}
   if(data.user&&Array.isArray(data.user.identities)&&!data.user.identities.length)throw errc('emailtaken');
   if(!data.session)throw errc('confirm');
@@ -271,13 +272,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
+   phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
@@ -296,6 +298,7 @@ const Live={
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
+ async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
 };
@@ -455,12 +458,14 @@ function buildDemo(you){
  {const q={thread:'dth_2',topic:'booking',text:'Can I pay by UPI at the court?',player:arjun.id},r2={thread:'dth_2',topic:'booking',text:'Yes, UPI and cash are both fine at the desk. See you there!',player:arjun.id};
   msgs.push({id:'dg_aq',to:arjun.id,from:arjun.id,kind:'admin_msg',data:q,read:true,at:ago(28)},{id:'dg_aqy',to:you.id,from:arjun.id,kind:'admin_msg',data:q,read:true,at:ago(28)},
    {id:'dg_ar',to:arjun.id,from:caelan.id,kind:'admin_reply',data:r2,read:false,at:ago(26)},{id:'dg_ary',to:you.id,from:caelan.id,kind:'admin_reply',data:r2,read:true,at:ago(26)})}
+ /* phone numbers: most only for admins, some for friends or everyone */
+ const phones={};all.forEach((p,k)=>{let n='9';for(let i=0;i<9;i++)n+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+n,vis:k%5===0?'all':k%3===0?'friends':'admins'}});
  /* reliability: a few confirmed late and no-show reports, and one new report waiting for an admin */
  const conduct=[];pool2.slice(12,17).forEach((p,k)=>{const sp=p.sports[0];conduct.push({id:'dc_'+k,user:p.id,kind:k%3===2?'noshow':'late',sport:sp,report:'drp_'+k,by:caelan.id,at:ago(24*(3+k*4))})});
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -480,11 +485,11 @@ async function startDemo(role){
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[]});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{}});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,cfg:{},conduct:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},conduct:[],phones:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
@@ -497,6 +502,14 @@ const followerN=id=>new Set(S.follows.filter(f=>f.followee===id&&prof(f.follower
 const followingN=id=>new Set(S.follows.filter(f=>f.follower===id&&prof(f.followee)&&(prof(f.followee).setup)).map(f=>f.followee)).size;
 const friendIds=()=>[...new Set(S.reqs.filter(r=>r.status==='accepted').map(r=>r.from===S.uid?r.to:r.from))].filter(id=>id!==S.uid&&prof(id));
 const isFriend=id=>friendIds().includes(id);
+/* Phone numbers: private by default (only admins), or friends, or everyone in the club */
+const CCS=[['+91','India'],['+971','UAE'],['+44','UK'],['+1','USA / Canada'],['+61','Australia'],['+65','Singapore'],['+974','Qatar'],['+966','Saudi Arabia'],['+968','Oman'],['+965','Kuwait'],['+973','Bahrain'],['+351','Portugal'],['+49','Germany'],['+33','France'],['+353','Ireland'],['+31','Netherlands'],['+27','South Africa'],['+64','New Zealand']];
+const PH_VIS=[['admins','Only admins'],['friends','Friends too'],['all','Everyone']],PH_WHO=[['admins','Only admins'],['friends','Admins and your friends'],['all','Everyone in the club']];
+const ccSelect=(id,cur)=>`<select id="${id}" class="ccsel" aria-label="Country code">${CCS.map(([c,n])=>`<option value="${c}"${c===cur?' selected':''}>${c} ${n}</option>`).join('')}</select>`;
+const phoneOf=(cc,raw)=>{const d=String(raw||'').replace(/\D/g,'').replace(/^0+/,'');return d.length>=6&&d.length<=14?cc+' '+d:null};
+const myPhone=()=>S.phones[S.uid]||null;
+const canSeePhone=id=>{const r=S.phones[id];if(!r||!r.phone)return false;return id===S.uid||isAdmin()||r.vis==='all'||(r.vis==='friends'&&isFriend(id))};
+const phoneLink=id=>canSeePhone(id)?`<a class="phlink" href="tel:${esc(S.phones[id].phone.replace(/\s/g,''))}">${esc(S.phones[id].phone)}</a>`:'';
 function relWith(id){
  const rs=S.reqs.filter(r=>(r.from===S.uid&&r.to===id)||(r.from===id&&r.to===S.uid)).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
  const acc=rs.find(r=>r.status==='accepted');if(acc)return{st:'friends',r:acc};
@@ -519,7 +532,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -741,7 +754,10 @@ function paintAuth(dir){
    ${up?`<label for="aName">Your name</label><input id="aName" name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rhea Fernandes">`:''}
    <label for="aEmail">Email</label>
    <input id="aEmail" name="email" type="email" inputmode="email" autocomplete="${up?'email':'username'}" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com">
-   ${up?`<label for="aUser">Username</label>
+   ${up?`<label for="aPhone">Phone number</label>
+   <div class="phrow">${ccSelect('aCC','+91')}<input id="aPhone" name="tel" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="18" placeholder="98765 43210"></div>
+   <div class="fieldnote"><span>🔒 Only Padel court admins can see your phone number. You can change this in Settings.</span></div>
+   <label for="aUser">Username</label>
    <input id="aUser" name="nickname" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="How other players will see you">
    <div class="fieldnote"><span id="uNote"></span><span id="uCount" class="num">0/100</span></div>`:''}
    <label for="aPass">${up?'Create a password':'Password'}</label>
@@ -795,12 +811,13 @@ async function doSignUp(){
  const n=$('aName').value.trim(),em=$('aEmail').value.trim(),u=$('aUser').value.trim(),p=$('aPass').value;
  if(!n)return aerr('Enter your name.');
  if(!EMAIL_RE.test(em))return aerr('Enter a valid email address.');
+ const ph=phoneOf($('aCC').value,$('aPhone').value);if(!ph)return aerr('Enter your phone number, so the club can reach you about bookings.');
  const bad=userProblem(u);if(bad)return aerr(bad);
  if(p.length<6)return aerr('Your password needs at least 6 characters.');
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Something went wrong. Refresh the page and try again.');
  busy(true,'Creating your account…');
- try{if(await Store.taken(u))throw errc('taken');S.uid=await Store.signUp(n,u,em,p)}
+ try{if(await Store.taken(u))throw errc('taken');ls.set('rc_phone_new',{phone:ph,email:em.toLowerCase()});S.uid=await Store.signUp(n,u,em,p,ph)}
  catch(e){busy(false);
   if(e.code==='taken'){const el=$('uNote');if(el){el.className='bad';el.textContent='This username is already taken. Try another one.'}$('aUser').focus();return aerr('This username is already taken. Try another one.')}
   if(e.code==='emailtaken')return aerr('There is already an account with this email. Sign in instead.');
@@ -854,6 +871,11 @@ function vFinish(){
 }
 
 /* ================= Entering the app ================= */
+/* A phone number given at sign-up is saved once the account is ready (after email confirmation too) */
+async function syncPhone(){if(Store.mode==='demo'||myPhone())return;let ph=null;const pend=ls.get('rc_phone_new',null);
+ if(Store.mode==='live'){try{const {data}=await sb.auth.getUser();const u=data.user;ph=u&&u.user_metadata&&u.user_metadata.phone||null;if(!ph&&pend&&u&&pend.email===(u.email||'').toLowerCase())ph=pend.phone}catch(e){}}
+ else if(pend)ph=pend.phone;
+ if(!ph)return;const r={phone:ph,vis:'admins'};try{await Store.savePhone(r);S.phones[S.uid]=r;ls.set('rc_phone_new',null)}catch(e){}}
 async function enter(fresh){
  try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}
  let p=me();
@@ -861,6 +883,7 @@ async function enter(fresh){
   if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};
    try{await Store.saveProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505')return pickUsername(p);throw e}}}catch(e){p=null}}
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
+ await syncPhone();
  /* the theme a player last chose follows them to every device; new players start in light */
  if(p.theme&&p.theme!==prefs.theme)setPref('theme',p.theme);else if(!p.theme&&!p.setup&&prefs.theme!=='light')setPref('theme','light');
  try{S.email=await Store.email()}catch(e){}
@@ -1303,9 +1326,9 @@ function bookingSheet(id){
  if(future&&(b.by===S.uid||adm))acts.push(`<button class="btn danger" data-act="bkCancel" data-v="${esc(b.id)}">Cancel booking</button>`);
  openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${esc(VENUES[0].name)} · ${when} · ${rupees(b.price||rangePrice(b.court,b.date,b.start,b.len))}, paid at the court</p>
   <div style="margin-top:10px">${stChip(b)}${!pend&&b.confirmedBy&&adm?` <span class="tiny muted">by ${esc(first(prof(b.confirmedBy))||'an admin')}</span>`:''}</div>
-  ${adm&&pend?`<p class="small muted" style="margin-top:8px">After confirming, block ${slotRange(b.start,b.len)} on ${esc(dateLabel(b.date))} on Hudle so no one else books it there.</p>`:''}
+  ${adm&&pend?`<p class="small muted" style="margin-top:8px">After confirming, block ${slotRange(b.start,b.len)} ${(dl=>dl==='Today'||dl==='Tomorrow'?dl.toLowerCase():'on '+esc(dl))(dateLabel(b.date))} on Hudle so no one else books it there.</p>`:''}
   ${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
-  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b></span>${status(id)}</div>`}).join('')}</div>`
+  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b>${adm&&id!==S.uid&&canSeePhone(id)?`<span>${phoneLink(id)}</span>`:''}</span>${status(id)}</div>`}).join('')}</div>`
    :`<p class="small muted" style="margin-top:12px">This time is booked by ${esc(host?first(host):'a member')}.</p>`}
   ${acts.length?`<div class="cta">${acts.join('')}</div>`:''}<button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">Close</button>`);
 }
@@ -1691,7 +1714,7 @@ function vMe(){
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
-  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd></dl></div>
+  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd><dt>Phone</dt><dd>${myPhone()?`${esc(myPhone().phone)} <span class="muted small">· ${esc(lbl(PH_WHO,myPhone().vis||'admins'))} can see it</span>`:'Not added. Add it in Settings.'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div style="margin-bottom:12px">${seg('mg','Show games',[['all',`All · ${all_.length}`],...SP_KEYS.map(k=>[k,`${SPORTS[k].name} · ${all_.filter(m=>m.sport===k).length}`])],mg,'mgTab')}</div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>${mg==='all'?'No games yet':'No '+SPORTS[mg].name.toLowerCase()+' games yet'}</b>Your scores and points will show here.</div>`}</div>
@@ -1790,7 +1813,9 @@ function vSettings(){
  <div class="card rv" style="margin-top:12px">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
   <div style="margin-top:12px">${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}</div></div>
  <p class="eyebrow period">Account</p>
- <div class="card rv">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
+ <div class="card rv">${row(ICON.phone,'shake','Phone number',myPhone()?esc(myPhone().phone):'Not added yet. Admins use it to reach you about bookings.',`<button class="btn ghost sm" data-act="phEdit">${myPhone()?'Change':'Add'}</button>`,'r-phone')}
+  ${myPhone()?`<p class="small muted" style="margin:12px 0 8px">Who can see your number?</p>${seg('phv','Who can see your number',PH_VIS,myPhone().vis||'admins','phVis')}`:''}</div>
+ <div class="card rv" style="margin-top:12px">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
  <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Add scores, review disputes and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players, games and an admin inbox, with you in it. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}`;
 }
@@ -1862,7 +1887,7 @@ function playerSheet(id){
   ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
-  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
+  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd>${id!==S.uid&&canSeePhone(id)?`<dt>Phone</dt><dd>${phoneLink(id)}</dd>`:''}<dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
@@ -2017,6 +2042,13 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
+ phEdit(){const r=myPhone(),cc=r?r.phone.split(' ')[0]:'+91',num=r?r.phone.split(' ').slice(1).join(''):'';
+  openSheet(`<h2>${r?'Change your phone number':'Add your phone number'}</h2><p class="muted small">${esc(lbl(PH_WHO,r?r.vis:'admins'))} can see it. You can change who sees it in Settings.</p>
+   <label for="phN">Phone number</label><div class="phrow">${ccSelect('phCC',CCS.some(x=>x[0]===cc)?cc:'+91')}<input id="phN" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="18" value="${esc(num)}" placeholder="98765 43210"></div>
+   <p class="ferr" id="phErr"></p><button class="btn brand wide" id="phSave">Save</button>`,bg=>{bg.querySelector('#phSave').onclick=async()=>{const ph=phoneOf($('phCC').value,$('phN').value);if(!ph)return $('phErr').textContent='That number doesn’t look right. Check it and try again.';
+    const nr={phone:ph,vis:r?r.vis:'admins'};try{await Store.savePhone(nr)}catch(e){return $('phErr').textContent=e.code==='nosql'?'Phone numbers need the latest SQL in Supabase first. Ask a club admin.':'Could not save. Check your connection.'}
+    S.phones[S.uid]=nr;closeSheet();doneTick('Phone number saved');render()}})},
+ async phVis(v){const r=myPhone();if(!r)return;const nr=Object.assign({},r,{vis:v});try{await Store.savePhone(nr)}catch(e){return toast('Could not save. Check your connection.')}S.phones[S.uid]=nr;tick();toast(v==='admins'?'Only admins can see your number now.':v==='friends'?'Admins and your friends can see your number now.':'Everyone in the club can see your number now.');render()},
  admMsgOpen(){admMsgSheet(null)},
  admReply(v){const g=S.msgs.find(x=>x.id===v);if(!g)return;const d=g.data||{};admMsgSheet({thread:d.thread,topic:d.topic,player:isAdmin()?d.player:null,quote:d.text})},
  reportOpen(v){closeSheet(true);setTimeout(()=>reportSheet(v),60)},

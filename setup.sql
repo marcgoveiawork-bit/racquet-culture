@@ -316,6 +316,29 @@ create policy "rc msg insert" on public.rc_messages for insert to authenticated 
   and length(coalesce(data->>'text','')) <= case when public.rc_is_admin() then 600 else 160 end
 );
 
+-- Phone numbers live in their own private table, never in the public profile.
+-- Who can read a number: the player, club admins, and (if the player allows it) their friends or everyone.
+create table if not exists public.rc_private (
+  user_id     uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  phone       text check (phone ~ '^\+[0-9]{1,4} [0-9]{6,14}$'),
+  vis         text not null default 'admins' check (vis in ('admins','friends','all')),
+  updated_at  timestamptz not null default now()
+);
+alter table public.rc_private enable row level security;
+drop policy if exists "rc private read"   on public.rc_private;
+drop policy if exists "rc private insert" on public.rc_private;
+drop policy if exists "rc private update" on public.rc_private;
+create policy "rc private read" on public.rc_private for select to authenticated using (
+  user_id = auth.uid()
+  or public.rc_is_admin()
+  or vis = 'all'
+  or (vis = 'friends' and exists (select 1 from public.rc_friend_requests r where r.status = 'accepted'
+        and ((r.from_user = auth.uid() and r.to_user = rc_private.user_id) or (r.to_user = auth.uid() and r.from_user = rc_private.user_id))))
+);
+create policy "rc private insert" on public.rc_private for insert to authenticated with check (user_id = auth.uid());
+create policy "rc private update" on public.rc_private for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+grant select, insert, update on public.rc_private to authenticated;
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
