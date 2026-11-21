@@ -403,6 +403,10 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 .sheet{width:100%;max-width:560px;max-height:88vh;overflow:auto;background:linear-gradient(180deg,#1f173a,#160f2b);border:1px solid var(--line2);border-bottom:0;border-radius:26px 26px 0 0;padding:10px 20px calc(22px + var(--safe-b));box-shadow:0 -20px 60px rgba(0,0,0,.5);animation:sheetUp .55s var(--ease) both}
 .sheet .grab{width:42px;height:5px;border-radius:5px;background:rgba(var(--wr),.2);margin:4px auto 14px}
 .sheet h2{margin-bottom:4px}
+.sheetback{position:sticky;top:6px;z-index:5;height:0;margin:-4px 0 0}
+.backbtn{display:inline-flex;align-items:center;gap:4px;height:38px;padding:0 14px 0 9px;border-radius:999px;border:1px solid var(--line2);background:rgba(31,23,58,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:var(--ink);font:600 14px/1 var(--body);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.backbtn:active{transform:scale(.96)}
+[data-theme="light"] .backbtn{background:rgba(255,255,255,.88)}
 .sheetbg.out{animation:fadeOut .3s ease forwards}.sheetbg.out .sheet{animation:sheetDown .3s ease forwards}
 @media (min-width:700px){.sheetbg{align-items:center}.sheet{border-radius:26px;border-bottom:1px solid var(--line2);animation-name:popUp}.sheetbg.out .sheet{animation-name:popDown}}
 @keyframes fadeIn{from{opacity:0}}@keyframes fadeOut{to{opacity:0}}
@@ -721,7 +725,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=21" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=23" alt=""></button>
     <div class="tright"><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -739,8 +743,8 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=21"></script>
+<script src="config.js?v=23"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
