@@ -425,3 +425,19 @@ do $$ begin alter publication supabase_realtime add table public.rc_developers; 
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
 -- To remove an admin:
 -- delete from public.rc_admins where user_id = (select id from public.rc_profiles where lower(username) = lower('USERNAME'));
+
+-- Demo access: the developer chooses who can open demo mode (new updates before they go live).
+create table if not exists public.rc_demo_access (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  created_by  uuid default auth.uid() references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now()
+);
+alter table public.rc_demo_access enable row level security;
+drop policy if exists "rc demo read"   on public.rc_demo_access;
+drop policy if exists "rc demo insert" on public.rc_demo_access;
+drop policy if exists "rc demo delete" on public.rc_demo_access;
+create policy "rc demo read"   on public.rc_demo_access for select to authenticated using (user_id = auth.uid() or public.rc_is_dev());
+create policy "rc demo insert" on public.rc_demo_access for insert to authenticated with check (public.rc_is_dev());
+create policy "rc demo delete" on public.rc_demo_access for delete to authenticated using (public.rc_is_dev());
+grant select, insert, delete on public.rc_demo_access to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_demo_access; exception when duplicate_object then null; end $$;
