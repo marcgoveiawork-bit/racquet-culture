@@ -448,6 +448,13 @@ function buildDemo(you){
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
   const gap=P._skill[m.sport]-P.levels[m.sport].start,x=r()+gap*.8,vote=x>.85?'higher':x<.2?'lower':'right';votes.push({id:'dv_'+k+'_'+t,voter,target:t,sport:m.sport,match:m.id,vote,at:m.at})})});
+ /* club news, and messages with the admins */
+ const news=[{text:'Floodlights on court 1 are fixed, so evening padel is back on. See you on court!',link:'',lt:''},{text:'Club social and mixed doubles Americano this Saturday from 5 pm. Bring a friend, all levels welcome.',link:'https://www.instagram.com/',lt:'See the photos from last time'}];
+ news.forEach((n,k)=>[you.id,arjun.id].forEach(t=>msgs.push({id:'dg_cm'+k+t,to:t,from:k?caelan.id:surya.id,kind:'community',data:n,read:k===0,at:ago(30+k*-22)})));
+ const asker=pool2[20];if(asker){const data={thread:'dth_1',topic:'court',text:'The net on pickleball court 1 looks a bit low on one side.',player:asker.id};[you.id,caelan.id,surya.id].forEach(t=>msgs.push({id:'dg_am'+t,to:t,from:asker.id,kind:'admin_msg',data,read:false,at:ago(3)}))}
+ {const q={thread:'dth_2',topic:'booking',text:'Can I pay by UPI at the court?',player:arjun.id},r2={thread:'dth_2',topic:'booking',text:'Yes, UPI and cash are both fine at the desk. See you there!',player:arjun.id};
+  msgs.push({id:'dg_aq',to:arjun.id,from:arjun.id,kind:'admin_msg',data:q,read:true,at:ago(28)},{id:'dg_aqy',to:you.id,from:arjun.id,kind:'admin_msg',data:q,read:true,at:ago(28)},
+   {id:'dg_ar',to:arjun.id,from:caelan.id,kind:'admin_reply',data:r2,read:false,at:ago(26)},{id:'dg_ary',to:you.id,from:caelan.id,kind:'admin_reply',data:r2,read:true,at:ago(26)})}
  /* reliability: a few confirmed late and no-show reports, and one new report waiting for an admin */
  const conduct=[];pool2.slice(12,17).forEach((p,k)=>{const sp=p.sports[0];conduct.push({id:'dc_'+k,user:p.id,kind:k%3===2?'noshow':'late',sport:sp,report:'drp_'+k,by:caelan.id,at:ago(24*(3+k*4))})});
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
@@ -1496,6 +1503,7 @@ function needsAction(g){const d=g.data||{};
  if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
  if(g.kind==='friend_req'){const r=S.reqs.find(x=>x.id===d.req);return !!r&&r.status==='pending'}
  if(g.kind==='invite'){const b=S.bookings.find(x=>x.id===d.booking);return !!b&&slotDate(b.date,b.start)>new Date()&&!(b.going||[]).includes(S.uid)&&!(b.declined||[]).includes(S.uid)}
+ if(g.kind==='admin_msg'){const th=d.thread;return isAdmin()&&g.from!==S.uid&&!S.msgs.some(x=>x.kind==='admin_reply'&&(x.data||{}).thread===th&&x.at>g.at)}
  if(g.kind==='report')return isAdmin()&&!S.conduct.some(c=>c.report===d.rep);
  if(g.kind==='bk_request'){const b=S.bookings.find(x=>x.id===d.booking);return isAdmin()&&!!b&&bkStatus(b)==='pending'&&bkEnd(b)>new Date()}
  return false}
@@ -1504,6 +1512,8 @@ const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
  shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
  user:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M19 8v6M16 11h6"/></svg>',
  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+ mega:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4a1 1 0 0 0 1 1h2l5 4V5L6 9H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>',
+ chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></svg>',
  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'};
 function msgView(g){
  const d=g.data||{},from=prof(g.from),fn=from?first(from):'Someone',m=d.match&&S.matches.find(x=>x.id===d.match),b=d.booking&&S.bookings.find(x=>x.id===d.booking);
@@ -1532,6 +1542,13 @@ function msgView(g){
   case 'bk_confirmed':{if(!b)return gone;const w=names(b);
    return{i:MI.shield,t:`Your ${SPORTS[b.court].name.toLowerCase()} game is confirmed`,p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}${w?`, with ${w}`:''}. Pay ${rupees(rangePrice(b.court,b.date,b.start,b.len))} at the court when you arrive.`,a:`<button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">See who’s going</button>`}}
   case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}The court isn’t free at that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
+  case 'community':return{i:MI.mega,t:`${esc(fn)} · Club news`,p:`${esc(d.text||'').replace(/\n/g,'<br>')}`,a:d.link?`<a class="btn ghost sm" href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">${esc(d.lt||'Open link')} ↗</a>`:''};
+  case 'admin_msg':{const tp=(ADM_TOPICS.find(x=>x[0]===d.topic)||ADM_TOPICS[3])[1],mine=g.from===S.uid,pl=prof(d.player);
+   return{i:MI.chat,t:mine?`You messaged the admins · ${tp}`:`${esc(fn)} messaged the admins · ${tp}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
+    a:isAdmin()&&!mine?`<button class="btn brand sm" data-act="admReply" data-v="${g.id}">Reply</button>${pl?`<button class="btn link small" data-act="player" data-v="${esc(d.player)}">Profile</button>`:''}`:''}}
+  case 'admin_reply':{const toMe=d.player===S.uid,pl=prof(d.player);
+   return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
+    a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
    const whenTxt=src?`played ${esc(playedWhen(src))}`:bb?`on ${esc(dateLabel(bb.date))}, ${slotRange(bb.start,bb.len)}`:d.date?`on ${esc(dateLabel(d.date))}`:'';
@@ -1553,14 +1570,58 @@ function msgView(g){
  }
  return{i:MI.check,t:'Message',p:''};
 }
+const ADMIN_KINDS=['admin_msg','admin_reply','dispute','disputed','resolved','report','report_done','conduct'];
+const ibCat=g=>g.kind==='community'?'community':ADMIN_KINDS.includes(g.kind)?'admin':'other';
+const ADM_TOPICS=[['court','Court or facilities problem'],['player','Report a player'],['booking','Booking or payment'],['other','Something else']];
+const P_MAX=160,A_MAX=600,C_MAX=500;
 function vInbox(){
- const all=S.msgs,todo=all.filter(needsAction),f=view.ib==='todo'?'todo':'all',list=f==='todo'?todo:all;
+ const all=S.msgs,todo=all.filter(needsAction),f=['todo','community','admin'].includes(view.ib)?view.ib:'all';
+ const list=f==='todo'?todo:f==='all'?all:all.filter(g=>ibCat(g)===f),cnt=k=>all.filter(g=>ibCat(g)===k&&!g.read).length;
  after=()=>{const un=S.msgs.filter(g=>!g.read);if(!un.length)return;setTimeout(()=>{un.forEach(g=>{g.read=true;Store.updateMsg(g).catch(()=>{})});paintBadge()},1500)};
+ const top=f==='community'?(isAdmin()?`<div class="card ibtool rv"><div><b>Post to the community</b><p class="small muted">Every player gets it in their inbox. Add a link if you like.</p></div><button class="btn brand sm" data-act="commOpen">Write a post</button></div>`:'')
+  :f==='admin'?(isAdmin()?'':`<div class="card ibtool rv"><div><b>Message the club admins</b><p class="small muted">A court problem, a player, a booking question. They reply here.</p></div><button class="btn brand sm" data-act="admMsgOpen">New message</button></div>`):'';
+ const empty={todo:['All done','Nothing needs you right now.'],community:['No posts yet','News and updates from the club appear here.'],admin:['No messages yet',isAdmin()?'Messages from players, score disputes and reports appear here.':'Your messages with the club admins, and score reviews, appear here.'],all:['No messages yet','Scores to confirm, invites, bookings and club news arrive here.']}[f];
  return `<div class="hd"><div><p class="eyebrow">Messages</p><h1>Inbox</h1></div></div>
-  ${seg('ib','Show',[['all','All'],['todo',`To do${todo.length?' · '+todo.length:''}`]],f,'ibTab')}
-  ${homeCard()}
+  ${seg('ib','Show',[['all','All'],['community',`Community${cnt('community')?' · '+cnt('community'):''}`],['admin',`Admin${cnt('admin')?' · '+cnt('admin'):''}`],['todo',`To do${todo.length?' · '+todo.length:''}`]],f,'ibTab')}
+  ${f==='all'?homeCard():''}${top}
   ${`<div class="list" style="margin-top:14px">${list.map(g=>{const v=msgView(g);return`<div class="card msg rv${g.read?'':' unread'}${v.warn?' warn':''}"><span class="mi">${v.i}</span><div class="mb"><b class="mt">${v.t}</b><p>${v.p}</p><span class="tiny muted">${esc(timeAgo(g.at))}</span>${v.a?`<div class="cta">${v.a}</div>`:''}</div></div>`}).join('')
-   ||`<div class="card empty rv"><b>${f==='todo'?'All done':'No messages yet'}</b>${f==='todo'?'Nothing needs you right now.':'Scores to confirm, friend requests and updates from admins arrive here.'}</div>`}</div>`}`;
+   ||`<div class="card empty rv"><b>${empty[0]}</b>${empty[1]}</div>`}</div>`}`;
+}
+/* A text box with a live character count */
+const countBox=(id,max,ph,val='')=>`<div class="tbox"><textarea id="${id}" maxlength="${max}" rows="${max>200?5:3}" placeholder="${esc(ph)}">${esc(val)}</textarea><span class="tiny muted tcount" id="${id}N">${val.length}/${max}</span></div>`;
+const bindCount=(bg,id,max)=>{const t=bg.querySelector('#'+id),n=bg.querySelector('#'+id+'N');t.oninput=()=>{n.textContent=t.value.length+'/'+max;n.classList.toggle('near',t.value.length>max*.9)}};
+const safeLink=u=>{u=(u||'').trim();if(!u)return'';if(!/^https?:\/\//i.test(u))u='https://'+u;try{const x=new URL(u);return /^https?:$/.test(x.protocol)&&x.hostname.includes('.')?x.href:null}catch(e){return null}};
+/* Admins: a post every player gets */
+function commSheet(){if(!isAdmin())return;
+ openSheet(`<h2>Post to the community</h2><p class="muted small">Every player in the club gets this in their inbox, from you.</p>
+  <label for="cText">Message</label>${countBox('cText',C_MAX,'e.g. Courts close at 9 pm on Friday for the club social. Come along!')}
+  <label for="cLink">Link <span class="muted">(optional)</span></label><input id="cLink" type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="e.g. instagram.com/racquetculture">
+  <label for="cLinkT">Link text <span class="muted">(optional)</span></label><input id="cLinkT" maxlength="40" placeholder="e.g. See the photos">
+  <p class="ferr" id="cErr"></p><button class="btn brand wide" id="cSend">Send to everyone</button>`,bg=>{bindCount(bg,'cText',C_MAX);
+  bg.querySelector('#cSend').onclick=async()=>{const text=$('cText').value.trim(),link=safeLink($('cLink').value);if(!text)return $('cErr').textContent='Write a message first.';if(link===null)return $('cErr').textContent='That link doesn’t look right. Check it and try again.';
+   const data={text,link:link||'',lt:$('cLinkT').value.trim()},to=S.profiles.filter(p=>p.setup).map(p=>p.id);
+   const btn=bg.querySelector('#cSend');btn.disabled=true;btn.textContent='Sending…';
+   try{for(let i=0;i<to.length;i+=200)await Store.send(to.slice(i,i+200).map(t=>({to:t,kind:'community',data})))}catch(e){btn.disabled=false;btn.textContent='Try again';return $('cErr').textContent='Could not send. Check your connection.'}
+   await reload();closeSheet();doneTick('Posted');toast(`Sent to ${to.length} player${to.length===1?'':'s'}.`);view.ib='community';render()}});
+}
+/* Players: a short message to the admins. Admins: a longer reply to a player */
+function admMsgSheet(reply){const adm=isAdmin()&&reply&&reply.player,max=adm?A_MAX:P_MAX;const st={topic:reply?reply.topic:null};
+ openSheet(`<h2>${adm?`Reply to ${esc(first(prof(reply.player))||'the player')}`:reply?'Reply to the admins':'Message the club admins'}</h2>
+  <p class="muted small">${adm?'They get your reply in their inbox. The other admins see it too.':'All the club admins get this. Keep it to a sentence or two.'}</p>
+  ${reply&&reply.quote?`<span class="quote">“${esc(reply.quote)}”</span>`:''}
+  ${reply?'':`<label>What’s it about?</label><div class="chips" id="amT">${ADM_TOPICS.map(([k,n])=>`<button type="button" class="fchip" aria-pressed="false" data-amt="${k}">${n}</button>`).join('')}</div>`}
+  <label for="amText">Message</label>${countBox('amText',max,adm?'Write your reply':'e.g. The net on court 1 is sagging on one side.')}
+  <p class="ferr" id="amErr"></p><button class="btn brand wide" id="amSend">${adm?'Send reply':'Send to the admins'}</button>`,bg=>{bindCount(bg,'amText',max);
+  qsa('[data-amt]',bg).forEach(b=>b.onclick=()=>{st.topic=b.dataset.amt;qsa('[data-amt]',bg).forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',String(on))});tick();
+   if(st.topic==='player'){const m=S.matches.filter(x=>regsOf(x).includes(S.uid)).sort(byWhen).pop();if(m&&regsOf(m).length>1)$('amErr').innerHTML=`Late or a no-show? <button class="btn link small" data-act="reportOpen" data-v="m|${esc(m.id)}">Report it from your last game</button>`}else $('amErr').textContent=''});
+  bg.querySelector('#amSend').onclick=async()=>{const text=$('amText').value.trim();if(!text)return $('amErr').textContent='Write a message first.';if(!reply&&!st.topic)return $('amErr').textContent='Pick what it’s about.';
+   const thread=reply?reply.thread:'th_'+rid(),topic=st.topic||'other',now=[];
+   if(adm){const data={thread,topic,text,player:reply.player};S.admins.forEach(a=>now.push({to:a,kind:'admin_reply',data}));now.push({to:reply.player,kind:'admin_reply',data})}
+   else{const data={thread,topic,text,player:S.uid};S.admins.filter(a=>a!==S.uid).forEach(a=>now.push({to:a,kind:'admin_msg',data}));now.push({to:S.uid,kind:'admin_msg',data})}
+   if(!S.admins.length)return $('amErr').textContent='No admins are set up yet.';
+   const btn=bg.querySelector('#amSend');btn.disabled=true;
+   try{await Store.send(now)}catch(e){btn.disabled=false;return $('amErr').textContent='Could not send. Check your connection.'}
+   await reload();closeSheet();doneTick(adm?'Reply sent':'Sent to the admins');view.ib='admin';render()}});
 }
 /* A player says the score is wrong: they enter what they think it was, and admins and the other players hear about it */
 function disputeSheet(mid,msgId){
@@ -1955,6 +2016,9 @@ const ACT={
   if(r.days==='date')r.date=P.days==='today'?today():P.date;if(r.days==='dow')r.dow=P.dow.slice().sort();
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
+ commOpen(){commSheet()},
+ admMsgOpen(){admMsgSheet(null)},
+ admReply(v){const g=S.msgs.find(x=>x.id===v);if(!g)return;const d=g.data||{};admMsgSheet({thread:d.thread,topic:d.topic,player:isAdmin()?d.player:null,quote:d.text})},
  reportOpen(v){closeSheet(true);setTimeout(()=>reportSheet(v),60)},
  async repOk(v){await repDecide(v,true)},
  async repNo(v){await repDecide(v,false)},
