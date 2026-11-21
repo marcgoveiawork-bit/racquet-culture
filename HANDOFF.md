@@ -82,7 +82,7 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - Roles (V1.3): Developer (platinum, rc_developers) > Owner (gold, rc_owners + rc_admins) > Admin (silver, rc_admins) > Coach (bronze, rc_coaches) > Player. The Developer sets anyone up to Owner; Owners set up to Admin; Admins switch Player/Coach. Demo views go up to the person's own role.
 
 ## V1.4demo: My Padel, several clubs (preview only, 21 Nov 2026)
-- The app is now called **My Padel** (title, home-screen name). The home-screen icon is a placeholder in `preview/brand/` (icon-192, icon-512, apple-touch-icon). Marc will supply a logo: replace those files, same names and sizes.
+- The app is now called **My Padel** (title, home-screen name). The home-screen icon is Marc's My Padel logo in `preview/brand/` (icon-192, icon-512, apple-touch-icon). To change it, replace those files, same names and sizes.
 - **Clubs** live in `VENUES` in `app.js`: Racquet Culture (`rc`, in-app slot booking) and Sunday Racquet & Social Club (`sunday`, Siolim; 3 padel + 1 pickleball court; `book.kind:'link'` to District). To add a club: an entry in `VENUES`, a logo in `preview/venues/`, and a `:root[data-venue="id"]` colour block in `index.html` (copy Sunday's).
 - The logo in the top bar is a swipeable club switcher. The current club is `VID` (saved as `rc_venue`, or `?venue=` in the URL). It colours the app via `data-venue` on `<html>`.
 - Matches, bookings, conduct reports and most messages carry `venue` (missing or `chicalim` = `rc`). `reload()` keeps only the current club's, so levels and rankings are per club. Friend and follow messages show everywhere.
