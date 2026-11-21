@@ -251,6 +251,39 @@ create policy "rc level votes insert" on public.rc_level_votes for insert to aut
     and (m.data::text like '%' || auth.uid()::text || '%') and (m.data::text like '%' || target::text || '%')));
 grant select, insert on public.rc_level_votes to authenticated;
 
+-- Club settings (for now: court slot prices). Everyone signed in can read them, only admins can change them.
+create table if not exists public.rc_settings (
+  key         text primary key,
+  data        jsonb not null default '{}'::jsonb,
+  updated_at  timestamptz not null default now(),
+  updated_by  uuid default auth.uid() references auth.users(id) on delete set null
+);
+alter table public.rc_settings enable row level security;
+drop policy if exists "rc settings read"   on public.rc_settings;
+drop policy if exists "rc settings insert" on public.rc_settings;
+drop policy if exists "rc settings update" on public.rc_settings;
+create policy "rc settings read"   on public.rc_settings for select to authenticated using (true);
+create policy "rc settings insert" on public.rc_settings for insert to authenticated with check (public.rc_is_admin());
+create policy "rc settings update" on public.rc_settings for update to authenticated using (public.rc_is_admin()) with check (public.rc_is_admin());
+grant select, insert, update on public.rc_settings to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_settings; exception when duplicate_object then null; end $$;
+
+-- Bookings made by players always start as "pending" until an admin confirms them.
+-- Only admins can confirm: anyone else's change keeps the booking's current status.
+create or replace function public.rc_booking_status() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if public.rc_is_admin() then return new; end if;
+  if tg_op = 'INSERT' then
+    if new.kind = 'game' then new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', '"pending"'); end if;
+  else
+    new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', coalesce(old.data->'status','"confirmed"'::jsonb));
+    if old.data ? 'confirmedBy' then new.data := jsonb_set(new.data, '{confirmedBy}', old.data->'confirmedBy'); end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists rc_booking_status on public.rc_bookings;
+create trigger rc_booking_status before insert or update on public.rc_bookings for each row execute function public.rc_booking_status();
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;

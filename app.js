@@ -195,7 +195,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice()}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -211,10 +211,11 @@ function memStore(mode,get,put){return{mode,
  async addReq(r){const d=get();d.reqs=d.reqs||[];d.reqs.push(r);put(d)},
  async updateReq(r){const d=get();upsert(d.reqs,r);put(d)},
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
- async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)}
+ async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
+ async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes'];
-const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg'];
+const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
  async taken(u){const k=u.trim().toLowerCase();return ls.get('rc2_profiles',[]).some(p=>(p.username||'').toLowerCase()===k)},
@@ -245,7 +246,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_confirmations','rc_messages','rc_follows','rc_friend_requests'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -269,13 +270,13 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
-   votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at}))};
+   votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data]))};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
@@ -292,6 +293,7 @@ const Live={
  async addReq(r){const {error}=await sb.from('rc_friend_requests').insert({id:r.id,to_user:r.to,status:r.status,responded_at:r.resp||null});if(error){if(error.code==='42501')throw errc('cooldown');throw error}},
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
 };
 let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
@@ -393,7 +395,30 @@ function buildDemo(you){
  if(fixed){const prev=fixed.sets.map(s=>s.slice());fixed.sets=fixed.sets.map(s=>s[0]>s[1]?[s[0],Math.max(0,s[1]-1)]:[Math.max(0,s[0]-1),s[1]]);
   fixed.review={by:caelan.id,at:ago(30),prev};msgs.push({id:'dg_r',to:you.id,from:caelan.id,kind:'resolved',data:{match:fixed.id,sets:fixed.sets},read:true,at:ago(30)})}
  const playersOf=c=>ps.filter(p=>p.sports.includes(c));
+ /* court bookings: a few days back and a week ahead, busier in the evenings. A few new requests wait for an admin to confirm */
+ const bks=[],addB=b=>{if(!bks.some(x=>overlaps(x,b))){bks.push(b);return true}return false};
+ for(let dd=-3;dd<=7;dd++){const date=addDays(T,dd);
+  if(dd%3===0)addB({id:'db_c'+dd,court:'padel',date,start:0,len:3,kind:'block',by:caelan.id,reason:'Coaching',note:'Morning coaching clinic'});
+  if(dd===2)addB({id:'db_m',court:'pickleball',date,start:16,len:4,kind:'block',by:surya.id,reason:'Maintenance',note:'Repainting the court lines'});
+  for(const court of Object.keys(COURTS))for(let i=0;i<14;i++){
+   const len=r()<.6?2:3,start=r()<.6?clamp(22+Math.floor(r()*12),0,NSLOT-len):Math.floor(r()*(NSLOT-len));
+   const pool=playersOf(court),host=pick(pool),inv=[];while(inv.length<3){const p=pick(pool);if(p!==host&&!inv.includes(p.id))inv.push(p.id)}
+   const going=inv.filter(()=>r()<.8);
+   addB({id:'db_'+court[0]+dd+'_'+i,court,date,start,len,kind:'game',status:dd>=0&&r()<.12?'pending':'confirmed',by:host.id,invited:inv,going,declined:inv.filter(x=>!going.includes(x)&&r()<.5),note:r()<.3?pick(['Friendly doubles','Practice match','Ladder game','Mixed doubles']):'',at:ago(48)});
+  }
+ }
  const yourSport=Object.keys(you._skill)[0]||'padel',buddies=[arjun.id,...playersOf(yourSport).filter(p=>p!==arjun).slice(0,40).sort((a,b)=>Math.abs(sk(a,yourSport,1)-sk(you,yourSport,1))-Math.abs(sk(b,yourSport,1)-sk(you,yourSport,1))).slice(0,5).map(p=>p.id)];
+ /* your own games: one you host tomorrow evening (confirmed), one you are invited to, and one you played yesterday */
+ const place=(b)=>{for(let s=b.start;s<NSLOT-b.len;s++){const x=Object.assign({},b,{start:s});const i=bks.findIndex(y=>overlaps(y,x)&&y.kind==='game'&&!y.mine);if(i>=0)bks.splice(i,1);if(addB(x))return x}return null};
+ const host=place({id:'db_you1',mine:1,court:yourSport,date:addDays(T,1),start:26,len:3,kind:'game',status:'confirmed',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(1,3),declined:[],note:'Evening doubles',at:ago(20)});
+ const invB=place({id:'db_you2',mine:1,court:yourSport,date:addDays(T,2),start:25,len:2,kind:'game',status:'pending',by:buddies[3],invited:[you.id,buddies[4],buddies[5]],going:[buddies[4]],declined:[],note:'Need a fourth!',at:ago(6)});
+ place({id:'db_you3',mine:1,court:yourSport,date:addDays(T,-1),start:24,len:3,kind:'game',status:'confirmed',by:you.id,invited:buddies.slice(0,3),going:buddies.slice(0,3),declined:[],note:'',at:ago(70)});
+ if(host){msgs.push({id:'dg_ai',to:arjun.id,from:you.id,kind:'invite',data:{booking:host.id},read:false,at:ago(20)},{id:'dg_ic',to:you.id,from:caelan.id,kind:'bk_confirmed',data:{booking:host.id},read:false,at:ago(18)});
+  msgs.push({id:'dg_ir',to:you.id,from:buddies[2],kind:'invite_reply',data:{booking:host.id,ok:true},read:true,at:ago(14)})}
+ if(invB)msgs.push({id:'dg_i',to:you.id,from:invB.by,kind:'invite',data:{booking:invB.id},read:false,at:ago(6)},{id:'dg_br',to:you.id,from:invB.by,kind:'bk_request',data:{booking:invB.id},read:false,at:ago(6)});
+ bks.filter(b=>b.status==='pending'&&!b.mine).slice(0,3).forEach((b,k)=>msgs.push({id:'dg_bq'+k,to:you.id,from:b.by,kind:'bk_request',data:{booking:b.id},read:k>0,at:ago(3+k*5)}));
+ bks.forEach(b=>delete b.mine);
+ const cfg={prices:{base:1000,rules:[{id:'pr_we',from:22,to:34,days:'weekends',court:'all',price:1200}]}};
  /* friends and followers */
  const follows=[],reqs=[],pool2=ps.slice(),shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
  for(let k=0;k<420;k++){const a=pick(all),b=pick(all);if(a!==b&&a!==you&&b!==you&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*60))})}
@@ -420,7 +445,7 @@ function buildDemo(you){
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
   const gap=P._skill[m.sport]-P.levels[m.sport].start,x=r()+gap*.8,vote=x>.85?'higher':x<.2?'lower':'right';votes.push({id:'dv_'+k+'_'+t,voter,target:t,sport:m.sport,match:m.id,vote,at:m.at})})});
- return{profiles:all.map(clean),matches:ms,bookings:[],confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -444,7 +469,7 @@ async function exitDemo(){
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
@@ -479,9 +504,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-/* Courts are booked on Hudle now: old in-app bookings and their invite messages stay in the database but are not shown */
-const OLD_BOOKING_MSGS=['invite','invite_reply','cancelled'];
-async function reload(){const d=await Store.load();Object.assign(S,{profiles:d.profiles||[],matches:d.matches||[],bookings:[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],msgs:(d.msgs||[]).filter(g=>!OLD_BOOKING_MSGS.includes(g.kind)).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -891,7 +914,7 @@ function startWiz(mode,only){
 function wSteps(){
  const d=W.d,st=[];
  if(W.mode==='gender')return['gender','save'];
- if(W.mode!=='level')st.push('avatar','gender','sports','hand','times','side');
+ if(W.mode!=='level')st.push('avatar','gender','sports','hand','invites','times','side');
  const lv=W.mode==='level'?W.only:W.mode==='setup'?(d.sports.length?d.sports:SP_KEYS):d.sports.filter(sp=>!(d.levels[sp]&&isFinite(+d.levels[sp].start)));
  lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};const b=d.q[sp].band;st.push('band:'+sp);
   const n=b?QS[sp][b].length:5;for(let i=0;i<n;i++)st.push('q:'+sp+':'+i);st.push('result:'+sp)});
@@ -946,7 +969,7 @@ function wStep(key){
   return{eyebrow:'All set',title:`You're on court, ${first(p)}.`,sub:'Your profile is ready. Log your first score to enter the rankings.',valid:true,next:'Enter the club',
    body:`<div class="avbig">${avHTML(Object.assign({},p,{avatar:d.avatar}),132)}</div>
    <div class="chips" style="justify-content:center;margin-top:16px">${d.sports.map(sp=>{const v=levelFrom(sp,d.q[sp].band,d.q[sp].ans);return`<span class="chip t-${tierOf(sp,v)}">${SPORTS[sp].name} ${fmtL(v,1)}</span>`}).join('')}
-   <span class="chip">${esc(lbl(HANDS,d.hand))}</span><span class="chip">${esc(lbl(SIDES,d.side))}</span></div>`}}
+   <span class="chip">${esc(lbl(HANDS,d.hand))}</span><span class="chip">${esc(lbl(SIDES,d.side))}</span><span class="chip">${d.invites?'Open to game invites':'Game invites off'}</span></div>`}}
  if(kind==='save')return{eyebrow:'Nearly done',title:'Save your changes?',sub:'Your profile updates for everyone straight away.',valid:true,next:'Save',body:''};
  return{title:'',body:'',valid:true};
 }
@@ -1050,19 +1073,21 @@ function vHome(){
  const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>regsOf(m).includes(S.uid));
  const players=S.profiles.filter(x=>x.setup).length,wk=S.matches.filter(okMatch).filter(m=>m.date>=addDays(today(),-6)).length;
  const todo=S.msgs.filter(needsAction),disputes=S.matches.filter(m=>(S.ST[m.id]||{}).st==='disputed').length;
+ const up=myBookings(),toConfirm=pendingBookings().length,todayB=S.bookings.filter(b=>b.date===today()&&isGame(b)&&bkStatus(b)==='confirmed').length;
  return `<div class="card hero rv"><p class="eyebrow">${esc(greet())}</p><h1>${esc(first(p))}, ready to play?</h1>
   <p class="muted" style="margin-top:6px">${players} player${players===1?'':'s'} in the club · ${wk} game${wk===1?'':'s'} played this week.</p>
-  <div class="cta">${hudleBtn()}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${moveUpCard()}
+  <div class="cta"><button class="btn ball" data-act="go" data-v="book">Book a court</button><button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${moveUpCard()}
   ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
-   <div class="astats"><button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
-  ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm and reviews in your inbox</span></span><span class="go">›</span></button>`:''}
+   <div class="astats"><button data-act="go" data-v="book"><b class="num">${toConfirm}</b><span>booking${toConfirm===1?'':'s'} to confirm</span></button><button data-act="go" data-v="book"><b class="num">${todayB}</b><span>game${todayB===1?'':'s'} today</span></button><button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
+  ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm, invites and bookings in your inbox</span></span><span class="go">›</span></button>`:''}
+  <div class="sec"><h2>Your next games</h2><button class="btn link small" data-act="go" data-v="book">Book</button></div>
+  <div class="list">${up.slice(0,3).map(bookingRow).join('')||`<div class="card empty rv"><b>Nothing booked</b>Find a free slot, invite players and pay at the court when you arrive.</div>`}</div>
   <div class="sec"><h2>Your levels</h2><button class="btn link small" data-act="go" data-v="rank">Rankings</button></div>
   <div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="sec"><h2>Your recent games</h2></div>
   <div class="list">${mine.slice(0,4).map(m=>matchRow(m)).join('')||`<div class="card empty rv"><b>No games yet</b>Played today? Add the score and your level starts to move.</div>`}</div>
   <div class="sec"><h2>Our locations</h2><span class="small muted">${VENUES.length}</span></div>
   ${VENUES.map(mapCard).join('')}
-  <div class="card hudlecard rv"><div><b>Book a court on Hudle</b><p class="small muted">Courts are booked and paid for on Hudle. Pick a time there, then add your score here after the game.</p></div>${hudleBtn('btn ball wide')}</div>
   <div class="sec"><h2>Around the club</h2></div>
   <div class="list">${ms.filter(m=>!mine.includes(m)).slice(0,6).map(m=>matchRow(m,{for:'-'})).join('')||`<div class="card empty rv"><b>Quiet on court</b>Scores from everyone in the club will appear here.</div>`}</div>`;
 }
@@ -1127,24 +1152,175 @@ function nudges(){
  return out.slice(0,4);
 }
 let factT=null;
+/* ---------- Court bookings ----------
+   Players book here and pay at the court. An admin confirms each booking (and blocks the same time on Hudle by hand
+   while Hudle is still in use), then everyone in the game is told. Prices are per 30-minute slot and admins set them. */
+const DEF_PRICE=1000;
+const priceCfg=()=>Object.assign({base:DEF_PRICE,rules:[]},(S.cfg&&S.cfg.prices)||{});
+const DOW_WEEKEND=[0,6];
+function ruleHits(r,court,date,i){
+ if(r.court&&r.court!=='all'&&r.court!==court)return false;if(i<r.from||i>=r.to)return false;
+ const dow=new Date(date+'T12:00:00').getDay();
+ if(r.days==='weekdays')return !DOW_WEEKEND.includes(dow);if(r.days==='weekends')return DOW_WEEKEND.includes(dow);
+ if(r.days==='date')return r.date===date;if(r.days==='dow')return (r.dow||[]).includes(dow);return true}
+function slotPrice(court,date,i){const c=priceCfg();let p=+c.base||DEF_PRICE;(c.rules||[]).forEach(r=>{if(ruleHits(r,court,date,i))p=+r.price});return p}
+const rangePrice=(court,date,s,len)=>{let t=0;for(let i=s;i<s+len;i++)t+=slotPrice(court,date,i);return t};
+const DAYS_TXT={all:'Every day',weekdays:'Weekdays (Mon–Fri)',weekends:'Weekends (Sat–Sun)'};
+const DOW_N=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const ruleText=r=>`${r.days==='date'?dateLabel(r.date):r.days==='dow'?(r.dow||[]).map(d=>DOW_N[d]).join(', '):DAYS_TXT[r.days]||'Every day'} · ${slotRange(r.from,r.to-r.from)} · ${r.court&&r.court!=='all'?SPORTS[r.court].name:'Both courts'}`;
+const bkStatus=b=>b.status||'confirmed';
+const isGame=b=>b.kind==='game';
+const goingOf=b=>[b.by,...(b.going||[])];
+const myBookings=()=>S.bookings.filter(b=>isGame(b)&&bkEnd(b)>new Date()&&(b.by===S.uid||(b.invited||[]).includes(S.uid))&&!(b.declined||[]).includes(S.uid)).sort((x,y)=>(x.date+pad(x.start)).localeCompare(y.date+pad(y.start)));
+const pendingBookings=()=>S.bookings.filter(b=>isGame(b)&&bkStatus(b)==='pending'&&bkEnd(b)>new Date());
+const stChip=b=>bkStatus(b)==='pending'?'<span class="chip st-pending">Waiting for the club to confirm</span>':'<span class="chip st-confirmed">Confirmed</span>';
+function bookingRow(b){
+ const host=prof(b.by),you=b.by===S.uid,inv=(b.invited||[]).includes(S.uid)&&!(b.going||[]).includes(S.uid)&&!you,g=goingOf(b);
+ return `<button class="mrow brow rv" data-act="bkOpen" data-v="${esc(b.id)}"><span class="bdate"><b>${new Date(b.date+'T12:00:00').getDate()}</b>${new Date(b.date+'T12:00:00').toLocaleDateString('en-IN',{month:'short'})}</span>
+  <span class="side"><b>${COURTS[b.court]}</b><span class="small muted">${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}</span>
+  <span class="tiny ${inv?'invt':'muted'}">${inv?'You are invited by '+esc(first(host)):(you?'You are hosting':'Hosted by '+esc(host?first(host):'a member'))+' · '+g.map(id=>id===S.uid?'You':esc(first(prof(id))||'?')).join(', ')}</span>${stChip(b)}</span>
+  <span class="avs">${g.slice(0,4).map(id=>avHTML(prof(id)||{name:'?'})).join('')}</span></button>`;
+}
+function bkState(){if(!view.bk)view.bk={court:mySports()[0]||'padel',day:today(),sel:null,block:false,invite:[]};return view.bk}
+const dayBookings=(court,day)=>S.bookings.filter(b=>b.court===court&&b.date===day);
+function cellOf(i){const bk=bkState(),b=dayBookings(bk.court,bk.day).find(x=>i>=x.start&&i<x.start+x.len),past=slotDate(bk.day,i)<=new Date();
+ const sel=bk.sel&&i>=bk.sel[0]&&i<=bk.sel[1];return{b,past,sel}}
+const inGame=b=>b.by===S.uid||(b.invited||[]).includes(S.uid);
+function cellHTML(i){
+ const bk=bkState(),{b,past,sel}=cellOf(i);let cls='free',sub='Open';
+ if(b){if(b.kind==='block'){cls='blocked';sub=b.reason||'Closed'}
+  else if(inGame(b)&&!(b.declined||[]).includes(S.uid)){cls='mine';sub=b.by===S.uid?'Your game':'Invited'}
+  else{cls='booked';sub=isAdmin()?goingOf(b).map(id=>first(prof(id))||'?').join(', '):'Booked'}
+  if(isGame(b)&&bkStatus(b)==='pending'){cls+=' pend';if(isAdmin())sub='To confirm · '+sub}
+  if(i!==b.start)cls+=' cont'}
+ else if(sel){cls='sel';sub=bk.block?'Block':'Selected'}
+ if(past&&!b)cls+=' past';
+ return `<button type="button" class="sl ${cls}" data-act="slot" data-v="${i}" ${past&&!b?'aria-disabled="true"':''}><b>${slotLabel(i)}</b><span>${esc(sub)}</span>${b?'':`<em>${rupees(slotPrice(bk.court,bk.day,i))}</em>`}</button>`;
+}
+function slotsHTML(){
+ const parts=[['Morning',0,12],['Afternoon',12,22],['Evening',22,NSLOT]];
+ return parts.map(([n,a,z])=>`<p class="eyebrow period">${n}</p><div class="slots">${Array.from({length:z-a},(_,k)=>cellHTML(a+k)).join('')}</div>`).join('');
+}
+function bkBarHTML(){const bk=bkState();if(!bk.sel)return'';const [s,e]=bk.sel,len=e-s+1;
+ return `<div style="height:96px" aria-hidden="true"></div><div class="bkbar"><div class="grow"><b class="price">${bk.block?'Close '+durLabel(len):rupees(rangePrice(bk.court,bk.day,s,len))+' · '+durLabel(len)}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':'Book'}</button></div>`}
+function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();const bar=$('bkBar');if(bar)bar.innerHTML=bkBarHTML()}
 function vBook(){
- const v=VENUES[0];
+ const bk=bkState(),days=Array.from({length:14},(_,k)=>addDays(today(),k)),v=VENUES[0],up=myBookings(),adm=isAdmin(),pend=pendingBookings();
  after=()=>{clearInterval(factT);let i=0;const n=FACTS.length;
   const show=k=>{const el=$('factCar');if(!el){clearInterval(factT);return}i=(k+n)%n;qsa('#factCar .fact').forEach((f,j)=>f.classList.toggle('on',j===i));qsa('#factDots button').forEach((d,j)=>d.setAttribute('aria-current',String(j===i)))};
   show(0);if(!calm())factT=setInterval(()=>show(i+1),5500);
-  const car=$('factCar');if(car){let x0=null;car.ontouchstart=e=>{x0=e.touches[0].clientX};car.ontouchend=e=>{if(x0==null)return;const dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>40){show(i+(dx<0?1:-1));clearInterval(factT);if(!calm())factT=setInterval(()=>show(i+1),5500)}x0=null}}
   vBook.show=k=>{show(k);clearInterval(factT);if(!calm())factT=setInterval(()=>show(i+1),5500)};
  };
- const ns=nudges();
- return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div>
-  <div class="card bookhero rv"><img class="bh-ico" src="hudle.png" alt="" width="56" height="56"><div><b>Book with us through Hudle</b><p class="small muted">Pick your time and pay on Hudle, the app we use for court bookings. ${esc(v.courts)} at ${esc(v.name)}, ${esc(v.area)}.</p></div>
-   ${hudleBtn('btn ball wide')}</div>
+ if(S.needSql)return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div><div class="card empty rv"><b>Bookings are almost ready</b>A club admin needs to run the latest setup.sql in Supabase to switch them on.</div>`;
+ const n=dayBookings(bk.court,bk.day).filter(isGame).length,ns=nudges();
+ return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>${adm?'Court schedule':'Book a court'}</h1></div>${adm?`<button class="btn ghost sm" data-act="priceOpen">₹ Slot prices</button>`:''}</div>
+  ${adm&&pend.length?`<div class="card admincard rv"><b>${pend.length} booking${pend.length===1?'':'s'} to confirm</b><p class="small muted" style="margin:4px 0 10px">Confirm each one here, then block the same time on Hudle so it can't be booked twice.</p><div class="list">${pend.slice(0,6).map(bookingRow).join('')}</div></div>`:''}
+  ${up.length?`<div class="sec"><h2>My games</h2><span class="small muted">${up.length}</span></div><div class="list">${up.map(bookingRow).join('')}</div>`:''}
+  <p class="eyebrow period">Court</p>
+  ${seg('bc','Court',Object.keys(COURTS).map(k=>[k,COURTS[k]]),bk.court,'bkCourt')}
+  <div class="dstrip" role="group" aria-label="Day">${days.map(d=>{const dt=new Date(d+'T12:00:00');return`<button type="button" class="dchip" aria-pressed="${d===bk.day}" data-act="bkDay" data-v="${d}"><span>${d===today()?'Today':dt.toLocaleDateString('en-IN',{weekday:'short'})}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
+  ${bk.invite.length?`<div class="card invnote rv"><span>Inviting ${bk.invite.map(id=>esc(first(prof(id)))).join(', ')}. Pick a free time, then tap Book.</span><button class="btn link small" data-act="bkInvClear">Clear</button></div>`:''}
+  ${adm?`<div class="card rv"><div class="setline"><div><b>Block slots</b><p class="small muted">Close the court for coaching, maintenance or events. Players see it as closed.</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
+  <div class="legend"><span><i class="lg-free"></i>Free</span><span><i class="lg-mine"></i>Your games</span><span><i class="lg-booked"></i>Booked</span><span><i class="lg-block"></i>Closed</span><span class="muted">${n} game${n===1?'':'s'} this day</span></div>
+  <p class="small muted" style="margin:-4px 0 4px">Tap an open time, then the next ones to make it longer (up to ${MAX_GAME/2} hours). Prices are per 30 minutes and you <b>pay at the court when you arrive</b>. The club confirms each booking and you get a message when it's done. All times are Indian Standard Time.${adm?' As an admin you see who is playing in each slot. Tap a booking to confirm it, see the players or cancel it.':''}</p>
+  <div id="slotGrid">${slotsHTML()}</div><div id="bkBar">${bkBarHTML()}</div>
   ${ns.length?`<div class="sec"><h2>For you</h2></div><div class="list">${ns.map(([i,t,p])=>`<div class="card nudge rv"><span class="ng-i" aria-hidden="true">${i}</span><div><b>${esc(t)}</b><p class="small muted">${esc(p)}</p></div></div>`).join('')}</div>`:''}
   <div class="sec"><h2>Why play padel?</h2></div>
   <div class="card factcar rv" id="factCar" aria-live="polite">${FACTS.map(([i,t,p],k)=>`<div class="fact${k===0?' on':''}"><span class="fc-i" aria-hidden="true">${i}</span><b>${esc(t)}</b><p class="muted">${esc(p)}</p></div>`).join('')}
    <div class="fdots" id="factDots">${FACTS.map((_,k)=>`<button type="button" data-act="factGo" data-v="${k}" aria-label="Fact ${k+1}" aria-current="${k===0}"></button>`).join('')}</div></div>
   <div class="sec"><h2>Where to find us</h2></div>
   ${mapCard(v)}`;
+}
+function rangeFree(a,z){for(let i=a;i<=z;i++){const c=cellOf(i);if(c.b||c.past)return false}return true}
+function bookSheet(){
+ const bk=bkState(),[s,e]=bk.sel,len=e-s+1,sp=bk.court,fr=friendIds();
+ openSheet(`<h2>Book ${COURTS[bk.court]}</h2><p class="muted small">${esc(VENUES[0].name)}, ${esc(VENUES[0].area)} · ${esc(dateLabel(bk.day))} · ${slotRange(s,len)} · ${durLabel(len)}</p>
+  <div class="pricebox"><span>Court price<br><span class="tiny muted">Pay at the court when you arrive</span></span><b>${rupees(rangePrice(bk.court,bk.day,s,len))}</b></div>
+  <label>Invite players <span class="muted">(optional)</span></label>
+  <div class="invmode">${fr.length?`<button type="button" class="fchip${bk.allFriends?' on':''}" aria-pressed="${!!bk.allFriends}" data-act="invAll">Invite all my friends · ${fr.length}</button>`:'<span class="small muted">Add friends on the Players page to invite them all at once.</span>'}</div>
+  <p class="tiny muted" style="margin:8px 0 0">${bk.allFriends?'All your friends get the invite. The first 3 to say yes get the spots.':'Or pick up to 3 players: your friends or anyone open to game invites.'}</p>
+  <div class="chips" id="invChips" style="margin-top:10px"></div>
+  <div class="search" style="margin-top:10px">${ICON.search}<input id="invQ" type="search" placeholder="Search friends and players" aria-label="Search players"></div>
+  <div class="pickl" id="invR" style="max-height:30vh"></div>
+  <label for="bNote">Note <span class="muted">(optional)</span></label><input id="bNote" maxlength="80" placeholder="e.g. Friendly doubles, all levels welcome">
+  <p class="tiny muted" style="margin-top:10px">The club confirms your booking. You and everyone who joins get a message once it's confirmed.</p>
+  <p class="ferr" id="bErr"></p><button class="btn brand wide" data-act="bookSave">Request booking</button>`,bg=>{bg.querySelector('#invQ').oninput=paintInv;paintInv()});
+ function paintInv(){
+  const q=($('invQ').value||'').trim().toLowerCase(),my=lvlOf(sp,S.uid)??3;
+  $('invChips').innerHTML=bk.invite.map(id=>`<button type="button" class="fchip on" data-act="invDel" data-v="${id}">${esc(first(prof(id)))} ✕</button>`).join('')||'<span class="small muted">No one picked yet. You can also just book the court.</span>';
+  const list=S.profiles.filter(p=>p.setup&&p.id!==S.uid&&(p.invites||isFriend(p.id))&&!bk.invite.includes(p.id)&&(!q||(p.name+' '+p.username).toLowerCase().includes(q)))
+   .sort((a,b)=>(isFriend(b.id)-isFriend(a.id))||Math.abs((lvlOf(sp,a.id)??9)-my)-Math.abs((lvlOf(sp,b.id)??9)-my)).slice(0,25);
+  $('invR').innerHTML=list.map(p=>{const r=lvlOf(sp,p.id);return`<button type="button" data-act="invAdd" data-v="${p.id}">${avHTML(p)}<span class="nm"><b>${esc(p.name)}${isFriend(p.id)?' <span class="chip st-confirmed" style="font-size:10px;padding:1px 7px">Friend</span>':''}</b><span>@${esc(p.username)}${(p.times||[]).length?' · '+(p.times||[]).map(t=>lbl(TIMES,t)).join(', '):''}</span></span>${r!=null?`<span class="chip t-${tierOf(sp,r)} num">${fmtL(r,1)}</span>`:''}</button>`}).join('')||'<p class="small muted" style="padding:8px 4px">No players found. Only friends and players open to game invites show here.</p>';
+ }
+ bookSheet.paint=paintInv;
+}
+function blockSheet(){
+ const bk=bkState(),[s,e]=bk.sel,len=e-s+1;
+ openSheet(`<h2>Close the ${COURTS[bk.court].toLowerCase()}</h2><p class="muted small">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</p>
+  <label>Reason</label><div class="chips" id="rsn">${['Coaching','Maintenance','Private event','Tournament','Booked on Hudle','Closed'].map((x,i)=>`<button type="button" class="fchip${i?'':' on'}" aria-pressed="${!i}" data-act="rsn" data-v="${x}">${x}</button>`).join('')}</div>
+  <label for="bNote">Note for players <span class="muted">(optional)</span></label><input id="bNote" maxlength="80" placeholder="e.g. Junior coaching clinic">
+  <p class="ferr" id="bErr"></p><button class="btn danger wide" data-act="blockSave">Block these slots</button>`);
+}
+function bookingSheet(id){
+ const b=S.bookings.find(x=>x.id===id);if(!b)return toast('That booking was cancelled.');
+ const when=`${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}`,future=slotDate(b.date,b.start)>new Date(),started=!future,adm=isAdmin();
+ if(b.kind==='block')return openSheet(`<h2>${esc(b.reason||'Closed')}</h2><p class="muted small">${COURTS[b.court]} · ${when}</p>${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
+  ${adm?`<p class="small muted" style="margin-top:10px">Blocked by ${esc(prof(b.by)?prof(b.by).name:'an admin')}</p><button class="btn danger wide" style="margin-top:16px" data-act="bkCancel" data-v="${esc(b.id)}">Unblock</button>`:''}
+  <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Close</button>`);
+ const host=prof(b.by),seeAll=adm||inGame(b),going=b.going||[],declined=b.declined||[],pend=bkStatus(b)==='pending';
+ const status=id=>id===b.by?'<span class="chip ball">Host</span>':going.includes(id)?'<span class="chip st-confirmed">Going</span>':declined.includes(id)?'<span class="chip st-disputed">Can’t make it</span>':'<span class="chip st-pending">Invited</span>';
+ const pending=(b.invited||[]).includes(S.uid)&&!going.includes(S.uid)&&!declined.includes(S.uid);
+ const acts=[];
+ if(adm&&pend&&future)acts.push(`<button class="btn brand" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm booking</button><button class="btn ghost" data-act="bkReject" data-v="${esc(b.id)}">Decline</button>`);
+ if(pending&&future)acts.push(`<button class="btn brand" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button>`);
+ if(going.includes(S.uid)&&future)acts.push(`<button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it any more</button>`);
+ if(started&&(b.by===S.uid||going.includes(S.uid)))acts.push(`<button class="btn ball" data-act="bkScore" data-v="${esc(b.id)}">Add the score</button>`);
+ if(future&&(b.by===S.uid||adm))acts.push(`<button class="btn danger" data-act="bkCancel" data-v="${esc(b.id)}">Cancel booking</button>`);
+ openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${esc(VENUES[0].name)} · ${when} · ${rupees(b.price||rangePrice(b.court,b.date,b.start,b.len))}, paid at the court</p>
+  <div style="margin-top:10px">${stChip(b)}${!pend&&b.confirmedBy&&adm?` <span class="tiny muted">by ${esc(first(prof(b.confirmedBy))||'an admin')}</span>`:''}</div>
+  ${adm&&pend?`<p class="small muted" style="margin-top:8px">After confirming, block ${slotRange(b.start,b.len)} on ${esc(dateLabel(b.date))} on Hudle so no one else books it there.</p>`:''}
+  ${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
+  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b></span>${status(id)}</div>`}).join('')}</div>`
+   :`<p class="small muted" style="margin-top:12px">This time is booked by ${esc(host?first(host):'a member')}.</p>`}
+  ${acts.length?`<div class="cta">${acts.join('')}</div>`:''}<button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">Close</button>`);
+}
+async function saveBooking(b,okMsg){
+ const btn=document.querySelector('#sheetBg .btn.wide:not(.ghost)');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+ const live=slotDate(b.date,b.start)>new Date();if(!live){if(btn){btn.disabled=false}return $('bErr').textContent='That time has already started. Pick a later one.'}
+ try{await Store.addBooking(b)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}
+  if(e.code==='clash'){try{await reload()}catch(x){}paintSlots();return $('bErr').textContent='Someone has just booked part of this time. Pick another slot.'}
+  return $('bErr').textContent='Could not book. Check your connection and try again.'}
+ S.bookings.push(b);const bk=bkState();bk.sel=null;bk.invite=[];bk.allFriends=false;closeSheet();doneTick(okMsg);paintSlots();
+ if(isGame(b)){notify((b.invited||[]).map(to=>({to,kind:'invite',data:{booking:b.id}})));
+  if(bkStatus(b)==='pending')notify(S.admins.filter(a=>a!==S.uid).map(to=>({to,kind:'bk_request',data:{booking:b.id}})))}
+ if(view.tab==='book')render();
+}
+async function patchBooking(b,msg=null){try{await Store.updateBooking(b)}catch(e){toast('Could not update the booking. Check your connection.');return false}upsert(S.bookings,b);if(msg)toast(msg);return true}
+const bkSummary=b=>`${COURTS[b.court]}, ${playedWhen({date:b.date,time:b.start,len:b.len})}`;
+/* ---------- Slot prices (admins) ---------- */
+function priceSheet(){
+ const c=priceCfg(),opt=(sel,end)=>Array.from({length:NSLOT},(_,k)=>end?k+1:k).map(k=>`<option value="${k}"${k===sel?' selected':''}>${slotLabel(k)}</option>`).join('');
+ const P=priceSheet.d=priceSheet.d||{price:1200,from:22,to:34,days:'all',date:today(),dow:[],court:'all'};
+ openSheet(`<h2>Slot prices</h2><p class="muted small">Prices are per 30-minute slot. The base price is used unless a rule below matches. When rules overlap, the one lower down wins.</p>
+  <label for="pBase">Base price (₹ per slot)</label><div class="prline"><input id="pBase" type="number" inputmode="numeric" min="0" step="50" value="${+c.base||DEF_PRICE}"><button class="btn brand sm" data-act="priceBase">Save</button></div>
+  <div class="sec"><h3>Price rules</h3><span class="small muted">${(c.rules||[]).length}</span></div>
+  <div class="list">${(c.rules||[]).map(r=>`<div class="card prule"><div><b>${rupees(r.price)}</b><p class="small muted">${esc(ruleText(r))}</p></div><button class="btn link small" data-act="priceDel" data-v="${esc(r.id)}">Remove</button></div>`).join('')||'<p class="small muted">No rules yet. Every slot costs the base price.</p>'}</div>
+  <div class="card padd"><b>Add a price</b>
+   <label>Quick times</label><div class="chips">${[['Mornings',0,6,'6–9 am'],['Evenings',22,34,'5–11 pm'],['Late night',32,NSLOT,'10 pm–12 am'],['All day',0,NSLOT,'6 am–12 am']].map(([n,a,z,t])=>`<button type="button" class="fchip" data-act="priceQuick" data-v="${a}|${z}">${n} · ${t}</button>`).join('')}</div>
+   <div class="grid2" style="gap:10px;margin-top:8px"><div><label for="pFrom">From</label><select id="pFrom">${opt(P.from)}</select></div><div><label for="pTo">To</label><select id="pTo">${opt(P.to,1)}</select></div></div>
+   <label>Days</label><div class="chips" id="pDays">${[['all','Every day'],['weekdays','Weekdays'],['weekends','Weekends'],['today','Today only'],['date','Pick a date'],['dow','Pick days']].map(([k,n])=>`<button type="button" class="fchip${P.days===k?' on':''}" aria-pressed="${P.days===k}" data-act="priceDays" data-v="${k}">${n}</button>`).join('')}</div>
+   <div id="pDate" ${P.days==='date'?'':'hidden'}><input type="date" id="pDateIn" value="${P.date}" min="${today()}" style="margin-top:8px"></div>
+   <div id="pDow" class="chips" style="margin-top:8px" ${P.days==='dow'?'':'hidden'}>${DOW_N.map((n,k)=>`<button type="button" class="fchip${P.dow.includes(k)?' on':''}" aria-pressed="${P.dow.includes(k)}" data-act="priceDow" data-v="${k}">${n}</button>`).join('')}</div>
+   <label>Court</label><div class="chips">${[['all','Both courts'],...SP_KEYS.map(k=>[k,SPORTS[k].name])].map(([k,n])=>`<button type="button" class="fchip${P.court===k?' on':''}" aria-pressed="${P.court===k}" data-act="priceCourt" data-v="${k}">${n}</button>`).join('')}</div>
+   <label for="pPrice">Price (₹ per slot)</label><input id="pPrice" type="number" inputmode="numeric" min="0" step="50" value="${P.price}">
+   <p class="ferr" id="pErr"></p><button class="btn brand wide" data-act="priceAdd">Add this price</button></div>`,bg=>{
+   const sync=()=>{P.from=+$('pFrom').value;P.to=+$('pTo').value;P.price=+$('pPrice').value;const di=$('pDateIn');if(di)P.date=di.value};
+   ['pFrom','pTo','pPrice','pDateIn'].forEach(k=>{const el=$(k);if(el)el.onchange=el.oninput=sync});priceSheet.sync=sync});
+}
+async function savePrices(c,msg){
+ const cfg=Object.assign({},S.cfg||{},{prices:c});
+ try{await Store.saveCfg('prices',c)}catch(e){toast(e.code==='nosql'?'Run the latest setup.sql in Supabase to save prices.':e.code==='denied'?'Only admins can change prices.':'Could not save. Check your connection.');return false}
+ S.cfg=cfg;if(msg)doneTick(msg);return true;
 }
 /* ---------- Add a score ---------- */
 let A=null;
@@ -1301,6 +1477,8 @@ function needsAction(g){const d=g.data||{};
  if(g.kind==='confirm'){const m=S.matches.find(x=>x.id===d.match);return !!m&&!myConf(m.id)&&!m.review}
  if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
  if(g.kind==='friend_req'){const r=S.reqs.find(x=>x.id===d.req);return !!r&&r.status==='pending'}
+ if(g.kind==='invite'){const b=S.bookings.find(x=>x.id===d.booking);return !!b&&slotDate(b.date,b.start)>new Date()&&!(b.going||[]).includes(S.uid)&&!(b.declined||[]).includes(S.uid)}
+ if(g.kind==='bk_request'){const b=S.bookings.find(x=>x.id===d.booking);return isAdmin()&&!!b&&bkStatus(b)==='pending'&&bkEnd(b)>new Date()}
  return false}
 const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>',
  flag:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
@@ -1309,7 +1487,8 @@ const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
  clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'};
 function msgView(g){
- const d=g.data||{},from=prof(g.from),fn=from?first(from):'Someone',m=d.match&&S.matches.find(x=>x.id===d.match);
+ const d=g.data||{},from=prof(g.from),fn=from?first(from):'Someone',m=d.match&&S.matches.find(x=>x.id===d.match),b=d.booking&&S.bookings.find(x=>x.id===d.booking);
+ const bkLine=x=>`${COURTS[x.court]} · ${esc(dateLabel(x.date))} · ${slotRange(x.start,x.len)}`,names=x=>andList(goingOf(x).filter((u,i,a)=>u!==S.uid&&a.indexOf(u)===i).map(u=>esc(first(prof(u))||'a member')));
  const score=m?(()=>{const r=myResult(m);return r?`<span class="scoreline">${r.html}<span class="teamsline">${matchLine(m)}</span></span>`:`<span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>`})():'';
  const gone={i:MI.flag,t:'No longer available',p:'This game has since been removed.'};
  switch(g.kind){
@@ -1322,6 +1501,18 @@ function msgView(g){
     a:st==='disputed'?(isAdmin()?`<button class="btn brand sm" data-act="review" data-v="${esc(m.id)}">Review score</button>`:''):'<span class="chip st-reviewed">Reviewed</span>'}}
   case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game played ${esc(playedWhen(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
   case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(fn)} (admin) ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
+  case 'invite':{if(!b)return gone;const st=(b.going||[]).includes(S.uid)?'in':(b.declined||[]).includes(S.uid)?'out':'',past=slotDate(b.date,b.start)<=new Date();
+   return{i:MI.cal,t:`${esc(fn)} invited you to play`,p:`${bkLine(b)}${bkStatus(b)==='pending'?' · waiting for the club to confirm':''}${b.note?`<span class="quote">“${esc(b.note)}”</span>`:''}`,
+    a:st==='in'?'<span class="chip st-confirmed">You’re in</span>':st==='out'?'<span class="chip st-disputed">You said no</span>':past?'<span class="chip">This game has passed</span>'
+     :`<button class="btn brand sm" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost sm" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button><button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">Details</button>`}}
+  case 'invite_reply':return{i:MI.cal,t:`${esc(fn)} ${d.ok?'is in':'can’t make it'}`,p:b?bkLine(b):'Your booking'};
+  case 'cancelled':{const s=d.snap||{};return{i:MI.cal,warn:1,t:`${esc(fn)} cancelled a game`,p:s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}`:'A game you were in was cancelled.'}}
+  case 'bk_request':{if(!b)return{i:MI.cal,t:'Booking request',p:'This booking has since been cancelled or declined.'};const pend=bkStatus(b)==='pending';
+   return{i:MI.cal,t:`${esc(fn)} wants to book ${COURTS[b.court]}`,p:`${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)} · ${rupees(rangePrice(b.court,b.date,b.start,b.len))}, paid at the court.${goingOf(b).length>1?` Playing: ${andList(goingOf(b).map(u=>esc(first(prof(u))||'a member')))}.`:''}`,
+    a:pend&&isAdmin()?`<button class="btn brand sm" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm</button><button class="btn ghost sm" data-act="bkReject" data-v="${esc(b.id)}">Decline</button><button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">Details</button>`:'<span class="chip st-confirmed">Confirmed</span>'}}
+  case 'bk_confirmed':{if(!b)return gone;const w=names(b);
+   return{i:MI.shield,t:`Your ${SPORTS[b.court].name.toLowerCase()} game is confirmed`,p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}${w?`, with ${w}`:''}. Pay ${rupees(rangePrice(b.court,b.date,b.start,b.len))} at the court when you arrive.`,a:`<button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">See who’s going</button>`}}
+  case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}The court isn’t free at that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
   case 'friend_req':{const r=S.reqs.find(x=>x.id===d.req);const st=r?r.status:'gone';
    return{i:MI.user,t:`${esc(fn)} wants to be friends`,p:from?`@${esc(from.username)} sent you a friend request.`:'',
     a:st==='pending'?`<button class="btn brand sm" data-act="reqAccept" data-v="${esc(r.id)}">Accept</button><button class="btn ghost sm" data-act="reqReject" data-v="${esc(r.id)}">Reject</button><button class="btn link small" data-act="player" data-v="${esc(g.from)}">View profile</button>`
@@ -1389,15 +1580,15 @@ function vPlayers(){
   ${inc.length?`<div class="card reqcard rv" style="margin:14px 0"><b>Friend requests · ${inc.length}</b>${inc.map(r=>{const p=prof(r.from);return`<div class="prow2"><span class="who" role="button" tabindex="0" data-act="player" data-v="${p.id}" aria-label="View ${esc(p.name)}'s profile">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span class="small muted">@${esc(p.username)}</span></span></span><button class="btn brand sm" data-act="reqAccept" data-v="${r.id}">Accept</button><button class="btn ghost sm" data-act="reqReject" data-v="${r.id}">Reject</button></div>`}).join('')}</div>`:''}
   ${seg('pv','Show',[['all','Everyone'],['friends',`Friends · ${friendIds().length}`],['following',`Following · ${followingN(S.uid)}`]],pv,'pvTab')}
   <div class="search" style="margin-top:14px">${ICON.search}<input id="pQ" type="search" placeholder="Search by name or username" value="${esc(f.q)}" aria-label="Search players"></div>
-  <div class="chips" style="margin:12px 0 18px">${SP_KEYS.map(k=>chip('sport',k,SPORTS[k].name)).join('')}${TIMES.map(t=>chip('time',t[0],t[1])).join('')}</div>
+  <div class="chips" style="margin:12px 0 18px">${chip('inv',true,'Open to game invites')}${SP_KEYS.map(k=>chip('sport',k,SPORTS[k].name)).join('')}${TIMES.map(t=>chip('time',t[0],t[1])).join('')}</div>
   <div class="list" id="pList"></div>`;
 }
 function paintPlayers(){
  const f=view.pf,pv=view.pv||'all',q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;const fr=friendIds();
- const list=S.profiles.filter(p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
+ const list=S.profiles.filter(p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
   .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name));
  el.innerHTML=list.map(p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
-  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
+  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to game invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
   ||`<div class="card empty rv"><b>${pv==='friends'?'No friends yet':pv==='following'?'Not following anyone yet':'No players match'}</b>${pv==='all'?'Try fewer filters.':'Open a player’s profile to add them as a friend or follow them.'}</div>`;
  reveal(el);
 }
@@ -1412,7 +1603,7 @@ function vMe(){
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
-  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd></dl></div>
+  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div style="margin-bottom:12px">${seg('mg','Show games',[['all',`All · ${all_.length}`],...SP_KEYS.map(k=>[k,`${SPORTS[k].name} · ${all_.filter(m=>m.sport===k).length}`])],mg,'mgTab')}</div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>${mg==='all'?'No games yet':'No '+SPORTS[mg].name.toLowerCase()+' games yet'}</b>Your scores and points will show here.</div>`}</div>
@@ -1494,7 +1685,7 @@ function vSettings(){
  const sw=(k)=>`<button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${k}"></button>`;
  const np=NOTIF_OK()?Notification.permission:'unsupported';
  const nctl=np==='granted'?'<span class="chip st-confirmed">On</span>':np==='denied'?'<span class="chip st-disputed">Blocked</span>':np==='unsupported'?'<span class="chip">Not available</span>':'<button class="btn brand sm" data-act="notifAsk">Turn on</button>';
- const nsub=np==='granted'?'You’ll be told about scores to confirm, friend requests and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about scores to confirm, friend requests and kudos.';
+ const nsub=np==='granted'?'You’ll be told about game invites, booking confirmations, scores to confirm and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about scores to confirm, friend requests and kudos.';
  const th=prefs.theme||'dark';
  return `<div class="hd"><div><button class="btn link small" data-act="go" data-v="me" style="padding-left:0">‹ Profile</button><h1 class="sethead"><span class="bgear">${ICON.gear}</span>Settings</h1></div></div>
  <p class="eyebrow period">Appearance</p>
@@ -1506,8 +1697,9 @@ function vSettings(){
  <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, a friend is added and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
  <p class="eyebrow period">Your level</p>
  <div class="card rv">${mySports().map(sp=>lvSettingRow(sp)).join('')||'<p class="small muted">Set your level from your profile first.</p>'}</div>
- <p class="eyebrow period">Friends</p>
- <div class="card rv">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
+ <p class="eyebrow period">Games and friends</p>
+ <div class="card rv">${row(ICON.mail,'pop','Open to game invites',me().invites?'Players booking a court can find you and invite you to their game.':'Off: you won’t show up when players look for someone to invite.',`<button class="switch" role="switch" aria-checked="${!!me().invites}" data-act="invPref" aria-label="Open to game invites"></button>`,'r-inv')}</div>
+ <div class="card rv" style="margin-top:12px">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
   <div style="margin-top:12px">${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}</div></div>
  <p class="eyebrow period">Account</p>
  <div class="card rv">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
@@ -1578,11 +1770,11 @@ function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
  openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
-  ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
+  ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>${(p.invites||isFriend(id))?`<button class="btn ball wide" style="margin-top:10px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:12px">${esc(first(p))} is not taking game invites right now.</p>`}`}
   ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
-  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
+  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
@@ -1649,6 +1841,67 @@ async function hsInstall(){
  render();
 }
 const ACT={
+ /* bookings */
+ bkCourt(v){const bk=bkState();bk.court=v;bk.sel=null;render()},
+ bkDay(v){const bk=bkState();bk.day=v;bk.sel=null;tick();render()},
+ bkBlock(){const bk=bkState();bk.block=!bk.block;bk.sel=null;render()},
+ bkInvClear(){bkState().invite=[];render()},
+ slot(v){const i=+v,bk=bkState(),c=cellOf(i);
+  if(c.b)return bookingSheet(c.b.id);
+  if(c.past)return toast('That time has passed.');
+  const max=bk.block?NSLOT:MAX_GAME;
+  if(!bk.sel)bk.sel=[i,i];
+  else{const [s,e]=bk.sel;
+   if(i>=s&&i<=e){if(s===e)bk.sel=null;else if(i===s)bk.sel=[s+1,e];else if(i===e)bk.sel=[s,e-1];else bk.sel=[i,i]}
+   else{const ns=Math.min(s,i),ne=Math.max(e,i);bk.sel=ne-ns+1<=max&&rangeFree(ns,ne)?[ns,ne]:[i,i];if(ne-ns+1>max)toast(`Games can be up to ${MAX_GAME/2} hours.`)}}
+  tick();paintSlots()},
+ slotClear(){bkState().sel=null;paintSlots()},
+ bookGo(){bookSheet()},
+ blockGo(){blockSheet()},
+ invAdd(id){const bk=bkState();if(bk.invite.length>=3)return toast('You can invite up to 3 players.');bk.invite.push(id);tick();bookSheet.paint&&bookSheet.paint()},
+ invDel(id){const bk=bkState();bk.invite=bk.invite.filter(x=>x!==id);bookSheet.paint&&bookSheet.paint()},
+ invAll(){const bk=bkState();bk.allFriends=!bk.allFriends;tick();const b=document.querySelector('[data-act="invAll"]');if(b){b.classList.toggle('on',bk.allFriends);b.setAttribute('aria-pressed',String(bk.allFriends))}const n=b&&b.parentElement.nextElementSibling;if(n)n.textContent=bk.allFriends?'All your friends get the invite. The first 3 to say yes get the spots.':'Or pick up to 3 players: your friends or anyone open to game invites.'},
+ rsn(v){qsa('#rsn .fchip').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});tick()},
+ bookSave(){const bk=bkState(),[s,e]=bk.sel,inv=[...new Set([...bk.invite,...(bk.allFriends?friendIds():[])])];
+  saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'game',by:S.uid,venue:VENUES[0].id,price:rangePrice(bk.court,bk.day,s,e-s+1),status:isAdmin()?'confirmed':'pending',confirmedBy:isAdmin()?S.uid:undefined,invited:inv,going:[],declined:[],cap:3,note:$('bNote').value.trim(),at:new Date().toISOString()},
+  isAdmin()?'Court booked':(inv.length?'Requested · invites sent':'Booking requested'))},
+ blockSave(){const bk=bkState(),[s,e]=bk.sel,on=document.querySelector('#rsn .fchip.on');saveBooking({id:'b_'+rid(),court:bk.court,date:bk.day,start:s,len:e-s+1,kind:'block',by:S.uid,reason:on?on.dataset.v:'Closed',note:$('bNote').value.trim(),at:new Date().toISOString()},'Slots blocked')},
+ bkOpen(v){bookingSheet(v)},
+ async bkConfirm(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{status:'confirmed',confirmedBy:S.uid,confirmedAt:new Date().toISOString()});
+  if(await patchBooking(nb)){notify(goingOf(nb).map(to=>({to,kind:'bk_confirmed',data:{booking:b.id}})));closeSheet();doneTick('Booking confirmed');toast('Now block this time on Hudle so it can’t be booked twice.',4200);render()}},
+ bkReject(v){confirmSheet('Decline this booking?','The slot opens up again and the host is told it couldn’t be confirmed.','Decline booking','bkRejectYes',v)},
+ async bkRejectYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;try{await Store.delBooking(v)}catch(e){return toast('Could not decline. Check your connection.')}
+  S.bookings=S.bookings.filter(x=>x.id!==v);closeSheet();toast('Booking declined');
+  notify(goingOf(b).map(to=>({to,kind:'bk_declined',data:{snap:{court:b.court,date:b.date,start:b.start,len:b.len}}})));render()},
+ async bkAccept(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;if((b.going||[]).length>=(b.cap||3)&&!(b.going||[]).includes(S.uid))return toast('This game is already full. The first 3 players said yes.');const nb=Object.assign({},b,{going:[...new Set([...(b.going||[]),S.uid])],declined:(b.declined||[]).filter(x=>x!==S.uid)});
+  if(await patchBooking(nb)){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:true}}]);closeSheet();doneTick('You’re in!');if(bkStatus(b)==='pending')toast('The club still needs to confirm this booking. You’ll get a message when it’s done.',4200);render()}},
+ async bkDecline(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{going:(b.going||[]).filter(x=>x!==S.uid),declined:[...new Set([...(b.declined||[]),S.uid])]});
+  if(await patchBooking(nb,'Got it. The host has been told.')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:false}}]);closeSheet();render()}},
+ bkCancel(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;confirmSheet(b.kind==='block'?'Unblock these slots?':'Cancel this booking?',b.kind==='block'?'Players will be able to book this time again.':'Everyone in the game and the club admins will be told.',b.kind==='block'?'Unblock':'Cancel booking','bkCancelYes',v)},
+ async bkCancelYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;try{await Store.delBooking(v)}catch(e){return toast(e.code==='denied'?'Only the host or an admin can cancel this.':'Could not cancel. Check your connection.')}
+  S.bookings=S.bookings.filter(x=>x.id!==v);closeSheet();toast(b.kind==='block'?'Slots unblocked':'Booking cancelled');
+  if(isGame(b))notify([...new Set([b.by,...(b.invited||[]),...S.admins])].map(to=>({to,kind:'cancelled',data:{snap:{court:b.court,date:b.date,start:b.start,len:b.len,confirmed:bkStatus(b)==='confirmed'}}})));render()},
+ bkScore(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;closeSheet(true);A=newA();
+  if(S.R[b.court][S.uid])A.sport=b.court;A.date=b.date;A.time=b.start;A.len=b.len;A.booking=b.id;
+  const others=goingOf(b).filter((x,i,a)=>x!==S.uid&&a.indexOf(x)===i);A.a=[{uid:S.uid},others[0]?{uid:others[0]}:null];A.b=[others[1]?{uid:others[1]}:null,others[2]?{uid:others[2]}:null];
+  view.tab='add';window.scrollTo(0,0);render()},
+ priceOpen(){priceSheet()},
+ async priceBase(){const v=Math.round(+$('pBase').value);if(!(v>=0))return toast('Enter a price in rupees.');const c=Object.assign({},priceCfg(),{base:v});if(await savePrices(c,'Base price saved')){priceSheet();if(view.tab==='book')paintSlots()}},
+ priceQuick(v){const [a,z]=v.split('|').map(Number);$('pFrom').value=a;$('pTo').value=z;priceSheet.sync&&priceSheet.sync();tick()},
+ priceDays(v){const P=priceSheet.d;P.days=v;qsa('#pDays .fchip').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});$('pDate').hidden=v!=='date';$('pDow').hidden=v!=='dow';tick()},
+ priceDow(v,el){const P=priceSheet.d,k=+v;P.dow=P.dow.includes(k)?P.dow.filter(x=>x!==k):[...P.dow,k];el.classList.toggle('on');el.setAttribute('aria-pressed',String(P.dow.includes(k)));tick()},
+ priceCourt(v,el){priceSheet.d.court=v;qsa('[data-act="priceCourt"]').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});tick()},
+ async priceAdd(){priceSheet.sync&&priceSheet.sync();const P=priceSheet.d,err=m=>{$('pErr').textContent=m};
+  if(!(P.price>=0)||!isFinite(P.price))return err('Enter a price in rupees.');if(P.to<=P.from)return err('The end time must be after the start time.');
+  if(P.days==='dow'&&!P.dow.length)return err('Pick at least one day.');if(P.days==='date'&&!P.date)return err('Pick a date.');
+  const r={id:'pr_'+rid(),price:Math.round(P.price),from:P.from,to:P.to,days:P.days==='today'?'date':P.days,court:P.court};
+  if(r.days==='date')r.date=P.days==='today'?today():P.date;if(r.days==='dow')r.dow=P.dow.slice().sort();
+  const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
+ async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
+ invitePlayer(id){const p=prof(id),bk=bkState();if(!bk.invite.includes(id))bk.invite=[...bk.invite,id].slice(-3);
+  const shared=(p.sports||[]).find(s=>mySports().includes(s));if(shared)bk.court=shared;bk.sel=null;closeSheet(true);go('book');toast(`Pick a free time and tap Request booking. ${first(p)} will get your invite.`,3600)},
+ invPref(){const p=Object.assign({},me(),{invites:!me().invites});Store.saveProfile(p).then(()=>{upsert(S.profiles,p);tick();toast(p.invites?'Players can now invite you to games':'You won’t show up in game invites');render()},()=>toast('Could not save. Check your connection.'))},
+
  fullscreen(){fsToggle()},
  hudle(){openHudle()},
  factGo(v){vBook.show&&vBook.show(+v)},
