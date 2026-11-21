@@ -195,7 +195,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -213,11 +213,11 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
- async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];if(role==='coach')d.coaches[id]=coach;put(d)},
+ async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];d.admins=d.admins.filter(x=>x!==id);if(role==='admin')d.admins.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'||k==='coaches'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -249,7 +249,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -273,13 +273,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
+   devs:dv.map(x=>x.user_id),
    coaches:Object.fromEntries(co.map(x=>[x.user_id,{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
@@ -301,6 +302,8 @@ const Live={
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
  async setRole(id,role,coach){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
+  if(role==='admin'){chk(await sb.from('rc_admins').upsert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id));return}
+  if(isAdmin(id))chk(await sb.from('rc_admins').delete().eq('user_id',id));
   if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
@@ -475,7 +478,7 @@ function buildDemo(you){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -495,20 +498,22 @@ async function startDemo(role){
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{}});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},devs:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
 const isAdmin=id=>S.admins.includes(id||S.uid);
 /* Coaches: can block slots for coaching. Admins choose whether those blocks go straight through or need confirming */
+/* Developer: an admin who can also make other people admins */
+const isDev=id=>(S.devs||[]).includes(id||S.uid);
 const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
-const roleOf=id=>isAdmin(id)?'admin':isCoach(id)?'coach':'player';
+const roleOf=id=>isDev(id)?'dev':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
 const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
-const coachLine=id=>isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
+const coachLine=id=>isDev(id)?`<p class="coachline devline"><span>🛠️</span>Developer at Racquet Culture</p>`:isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -547,7 +552,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -1088,7 +1093,7 @@ function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm(
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
-const adminChip=id=>isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
+const adminChip=id=>isDev(id)?' <span class="chip dev">Developer</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
@@ -1910,15 +1915,16 @@ function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="m
  return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
 /* Admins only: change what an account can do */
 function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id);
- if(r==='admin')return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p style="margin-top:8px"><b>${esc(first(p))} is Admin at Racquet Culture</b></p></div>`;
- return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span>
-  <div style="margin-top:10px">${seg('role','Account type',[['player','Player'],['coach','Coach']],r,'roleSet')}</div>
-  <p class="small muted" style="margin-top:8px">${r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
+ const dev=isDev();
+ if(r==='dev'||(r==='admin'&&!dev))return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p style="margin-top:8px"><b>${esc(first(p))} is ${r==='dev'?'Developer':'Admin'} at Racquet Culture</b></p></div>`;
+ return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${dev?'Developer':'Admin'} · account type</span>
+  <div style="margin-top:10px">${seg('role','Account type',dev?[['player','Player'],['coach','Coach'],['admin','Admin']]:[['player','Player'],['coach','Coach']],r,'roleSet')}</div>
+  <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} is Admin at Racquet Culture: they can confirm bookings, set prices, block slots, review scores and make players coaches.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
   ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
    <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
 async function applyRole(id,role,coach,quiet){
- try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?'Only admins can change accounts.':'Could not save. Check your connection.');return false}
- delete S.coaches[id];if(role==='coach')S.coaches[id]=coach;
+ try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?(role==='admin'||isAdmin(id)?'Only the developer can change admin access.':'Only admins can change accounts.'):'Could not save. Check your connection.');return false}
+ delete S.coaches[id];S.admins=S.admins.filter(x=>x!==id);if(role==='admin')S.admins.push(id);if(role==='coach')S.coaches[id]=coach;
  if(!quiet)notify([{to:id,kind:'role',data:{role,title:role==='coach'?coachTitle(id):'',auto:!!(coach&&coach.auto)}}]);
  playerSheet(id);return true}
 function playerSheet(id){
@@ -2085,9 +2091,9 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
- async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isAdmin(id)||!['player','coach'].includes(v)||v===roleOf(id))return;const p=prof(id);
+ async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isDev(id)||v===roleOf(id))return;if(!isDev()&&(isAdmin(id)||!['player','coach'].includes(v)))return;if(!['player','coach','admin'].includes(v))return;const p=prof(id);
   const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null;
-  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':'Now a player');toast(`${first(p)} has been told.`)}},
+  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':'Now a player');toast(`${first(p)} has been told.`)}},
  async coachSport(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(x=>x!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
   if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true))tick()},
  async coachAuto(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
