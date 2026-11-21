@@ -1119,7 +1119,7 @@ function slotHTML(t,i){
 function teamHead(label,slots,mine){return `<div class="sh${mine?' mine':''}"><em>${esc(label)}</em><span class="avs">${(slots||[]).filter(Boolean).map(slotAv).join('')}</span><b>${esc(teamNames(slots)||'–')}</b></div>`}
 function scoreGrid(sport,rows,key,heads,mineCol){const S_=SPORTS[sport];
  return `<div class="scorehead"><span></span>${heads[0]}<i></i>${heads[1]}</div><div class="sets">${rows.map((s,r)=>`<div class="setrow"><span class="eyebrow">${S_.setName} ${r+1}</span>${[0,1].map(c=>`<input class="${c===mineCol?'mine':''}" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, ${c?'right':'left'} team" data-${key}="${r},${c}" value="${esc(s[c])}" placeholder="–">`).join('<i>–</i>')}</div>`).join('')}</div>`}
-function bindGrid(key,rows,onChange,sport){const mx=MAX_GAMES[sport]||99;qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');let v=el.value.replace(/\D/g,'').slice(0,2);if(v!==''&&+v>mx){v=String(mx);toast(sport==='padel'?'A padel set has at most 7 games.':'That is too many points.')}rows[+r][+c]=v;if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
+function bindGrid(key,rows,onChange,sport){const mx=MAX_GAMES[sport]||99;qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');let v=el.value.replace(/\D/g,'').slice(0,2);if(v!==''&&+v>mx){v=rows[+r][+c]||'';toast(sport==='padel'?'A padel set has at most 7 games.':`A pickleball game goes to 11. Scores above ${mx} aren't allowed.`)}rows[+r][+c]=v;if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
 function vAdd(){
  if(!A)A=newA();fitFormat();const S_=SPORTS[A.sport],days=Array.from({length:30},(_,k)=>addDays(today(),-k));
  after=()=>{bindGrid('set',A.sets,paintFair,A.sport);paintFair();const d=document.querySelector('.dstrip .dchip[aria-pressed="true"]');if(d&&d.scrollIntoView)d.parentElement.scrollLeft=d.offsetLeft-d.parentElement.clientWidth/2+d.offsetWidth/2};
@@ -1178,7 +1178,7 @@ function timeSheet(){
    Pickleball: a game goes to 11 (or 15 or 21), win by 2; past the target it ends exactly 2 ahead (12–10, 13–11).
    Best of 3: once one side has won the first two, the match is over. A third set played after that is kept as a
    friendly "extra" set: it is saved and shown, but it does not change the winner or anyone's level. */
-const MAX_GAMES={padel:7,pickleball:30};
+const MAX_GAMES={padel:7,pickleball:25};
 function setError(sport,a,b,name){
  const w=Math.max(a,b),l=Math.min(a,b);
  if(sport==='padel'){if((w===6&&l<=4)||(w===7&&(l===5||l===6)))return'';return`${name} ${a}–${b} isn't a padel score. A set ends 6–0 to 6–4, 7–5 or 7–6.`}
