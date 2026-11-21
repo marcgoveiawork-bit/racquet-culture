@@ -879,7 +879,7 @@ function startWiz(mode,only){
 function wSteps(){
  const d=W.d,st=[];
  if(W.mode==='gender')return['gender','save'];
- if(W.mode!=='level')st.push('avatar','gender','sports','hand','invites','times','side');
+ if(W.mode!=='level')st.push('avatar','gender','sports','hand','times','side');
  const lv=W.mode==='level'?W.only:W.mode==='setup'?(d.sports.length?d.sports:SP_KEYS):d.sports.filter(sp=>!(d.levels[sp]&&isFinite(+d.levels[sp].start)));
  lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};const b=d.q[sp].band;st.push('band:'+sp);
   const n=b?QS[sp][b].length:5;for(let i=0;i<n;i++)st.push('q:'+sp+':'+i);st.push('result:'+sp)});
@@ -934,7 +934,7 @@ function wStep(key){
   return{eyebrow:'All set',title:`You're on court, ${first(p)}.`,sub:'Your profile is ready. Log your first score to enter the rankings.',valid:true,next:'Enter the club',
    body:`<div class="avbig">${avHTML(Object.assign({},p,{avatar:d.avatar}),132)}</div>
    <div class="chips" style="justify-content:center;margin-top:16px">${d.sports.map(sp=>{const v=levelFrom(sp,d.q[sp].band,d.q[sp].ans);return`<span class="chip t-${tierOf(sp,v)}">${SPORTS[sp].name} ${fmtL(v,1)}</span>`}).join('')}
-   <span class="chip">${esc(lbl(HANDS,d.hand))}</span><span class="chip">${esc(lbl(SIDES,d.side))}</span><span class="chip">${d.invites?'Open to invites':'Invites off'}</span></div>`}}
+   <span class="chip">${esc(lbl(HANDS,d.hand))}</span><span class="chip">${esc(lbl(SIDES,d.side))}</span></div>`}}
  if(kind==='save')return{eyebrow:'Nearly done',title:'Save your changes?',sub:'Your profile updates for everyone straight away.',valid:true,next:'Save',body:''};
  return{title:'',body:'',valid:true};
 }
@@ -996,6 +996,10 @@ const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
 const setsStr=sets=>(sets||[]).map(s=>s[0]+'–'+s[1]).join(', ');
+/* The score as the viewer sees it: their team's score first, and whether they won, lost or drew */
+function myResult(m,uid=S.uid){const inA=m.a.some(s=>s&&s.uid===uid),inB=m.b.some(s=>s&&s.uid===uid);if(!inA&&!inB)return null;
+ const sets=(m.sets||[]).map(x=>inA?x:[x[1],x[0]]),res=m.winner==='draw'?'drew':(m.winner==='a')===inA?'won':'lost';
+ return{res,sets,html:`<b class="res-${res}">Your team ${res}</b> <span class="num">${setsStr(sets)}</span>`}}
 function teamNames(slots){const xs=(slots||[]).filter(Boolean);if(!xs.length)return'';return xs.map(s=>s.uid===S.uid?'You':slotName(s)).join(' & ')}
 const matchLine=m=>`${esc(teamNames(m.a))} <span class="muted">vs</span> ${esc(teamNames(m.b))}`;
 const whenOf=m=>dateLabel(m.date)+(m.time!=null?', '+(m.len?slotRange(m.time,m.len):slotLabel(m.time)):'');
@@ -1032,10 +1036,10 @@ function matchRow(m,opts={}){
 }
 function vHome(){
  const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>regsOf(m).includes(S.uid));
- const players=S.profiles.filter(x=>x.setup).length,open=S.profiles.filter(x=>x.setup&&x.invites&&x.id!==S.uid).length;
+ const players=S.profiles.filter(x=>x.setup).length,wk=S.matches.filter(okMatch).filter(m=>m.date>=addDays(today(),-6)).length;
  const todo=S.msgs.filter(needsAction),disputes=S.matches.filter(m=>(S.ST[m.id]||{}).st==='disputed').length;
  return `<div class="card hero rv"><p class="eyebrow">${esc(greet())}</p><h1>${esc(first(p))}, ready to play?</h1>
-  <p class="muted" style="margin-top:6px">${players} player${players===1?'':'s'} in the club · ${open} open to invites right now.</p>
+  <p class="muted" style="margin-top:6px">${players} player${players===1?'':'s'} in the club · ${wk} game${wk===1?'':'s'} played this week.</p>
   <div class="cta">${hudleBtn()}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${moveUpCard()}
   ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
    <div class="astats"><button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
@@ -1294,7 +1298,7 @@ const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
  cal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>'};
 function msgView(g){
  const d=g.data||{},from=prof(g.from),fn=from?first(from):'Someone',m=d.match&&S.matches.find(x=>x.id===d.match);
- const score=m?`<span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>`:'';
+ const score=m?(()=>{const r=myResult(m);return r?`<span class="scoreline">${r.html}<span class="teamsline">${matchLine(m)}</span></span>`:`<span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>`})():'';
  const gone={i:MI.flag,t:'No longer available',p:'This game has since been removed.'};
  switch(g.kind){
   case 'confirm':{if(!m)return gone;const c=myConf(m.id);
@@ -1332,7 +1336,7 @@ function vInbox(){
 function disputeSheet(mid,msgId){
  const m=S.matches.find(x=>x.id===mid);if(!m)return;const rows=[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):['','']),mc=m.a.some(s=>s.uid===S.uid)?0:1;
  openSheet(`<h2>What was the score?</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))}. Enter the score you think is right. Admins and the other players will see it, and an admin will decide.</p>
-  <div style="margin-top:14px">${scoreGrid(m.sport,rows,'ds',[teamHead('Team 1',m.a,mc===0),teamHead('Team 2',m.b,mc===1)],mc)}</div>
+  <div style="margin-top:14px">${scoreGrid(m.sport,rows,'ds',[teamHead(mc===0?'Your team':'Opponents',m.a,mc===0),teamHead(mc===1?'Your team':'Opponents',m.b,mc===1)],mc)}</div>
   <label for="dNote">What happened? <span class="muted">(optional)</span></label><input id="dNote" maxlength="140" placeholder="e.g. We won the third set 6–4">
   <p class="ferr" id="dErr"></p><button class="btn brand wide" id="dSave">Send to the admins</button>`,bg=>{
   bindGrid('ds',rows,null,m.sport);
@@ -1373,15 +1377,15 @@ function vPlayers(){
   ${inc.length?`<div class="card reqcard rv" style="margin:14px 0"><b>Friend requests · ${inc.length}</b>${inc.map(r=>{const p=prof(r.from);return`<div class="prow2"><span class="who" role="button" tabindex="0" data-act="player" data-v="${p.id}" aria-label="View ${esc(p.name)}'s profile">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span class="small muted">@${esc(p.username)}</span></span></span><button class="btn brand sm" data-act="reqAccept" data-v="${r.id}">Accept</button><button class="btn ghost sm" data-act="reqReject" data-v="${r.id}">Reject</button></div>`}).join('')}</div>`:''}
   ${seg('pv','Show',[['all','Everyone'],['friends',`Friends · ${friendIds().length}`],['following',`Following · ${followingN(S.uid)}`]],pv,'pvTab')}
   <div class="search" style="margin-top:14px">${ICON.search}<input id="pQ" type="search" placeholder="Search by name or username" value="${esc(f.q)}" aria-label="Search players"></div>
-  <div class="chips" style="margin:12px 0 18px">${chip('inv',true,'Open to invites')}${SP_KEYS.map(k=>chip('sport',k,SPORTS[k].name)).join('')}${TIMES.map(t=>chip('time',t[0],t[1])).join('')}</div>
+  <div class="chips" style="margin:12px 0 18px">${SP_KEYS.map(k=>chip('sport',k,SPORTS[k].name)).join('')}${TIMES.map(t=>chip('time',t[0],t[1])).join('')}</div>
   <div class="list" id="pList"></div>`;
 }
 function paintPlayers(){
  const f=view.pf,pv=view.pv||'all',q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;const fr=friendIds();
- const list=S.profiles.filter(p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
+ const list=S.profiles.filter(p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
   .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name));
  el.innerHTML=list.map(p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
-  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
+  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
   ||`<div class="card empty rv"><b>${pv==='friends'?'No friends yet':pv==='following'?'Not following anyone yet':'No players match'}</b>${pv==='all'?'Try fewer filters.':'Open a player’s profile to add them as a friend or follow them.'}</div>`;
  reveal(el);
 }
@@ -1396,7 +1400,7 @@ function vMe(){
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
-  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
+  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div style="margin-bottom:12px">${seg('mg','Show games',[['all',`All · ${all_.length}`],...SP_KEYS.map(k=>[k,`${SPORTS[k].name} · ${all_.filter(m=>m.sport===k).length}`])],mg,'mgTab')}</div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>${mg==='all'?'No games yet':'No '+SPORTS[mg].name.toLowerCase()+' games yet'}</b>Your scores and points will show here.</div>`}</div>
@@ -1445,14 +1449,14 @@ const moveUpCard=()=>mySports().map(moveUpOffer).filter(Boolean).map(o=>`<button
 
 /* ---------- Level feedback: after adding a score, say whether each other player's level looks right ---------- */
 const VOTE_TXT={higher:'should be higher',lower:'should be lower',right:'is about right'};
-function levelVotes(sp,id){
+function levelVotes(sp,id){const them=id===S.uid?'you':'them';
  const since=new Date(Date.now()-120*864e5).toISOString(),last={};
  (S.votes||[]).filter(v=>v.target===id&&v.sport===sp&&v.voter!==id&&(v.at||'')>=since).sort((a,b)=>(a.at||'').localeCompare(b.at||'')).forEach(v=>last[v.voter]=v.vote);
  const vs=Object.values(last).filter(v=>VOTE_TXT[v]),n=vs.length;if(n<3)return null;
  const c={higher:0,right:0,lower:0};vs.forEach(v=>c[v]++);const ord=['right','higher','lower'].sort((a,b)=>c[b]-c[a]),top=ord[0],share=c[top]/n;
- if(c[ord[1]]===c[top])return{top:'split',n,k:c[top],html:`<p class="lvvote v-split"><span aria-hidden="true">⚖️</span><span>Players who played them are split on this level <span class="muted">· ${n} said</span></span></p>`};
+ if(c[ord[1]]===c[top])return{top:'split',n,k:c[top],html:`<p class="lvvote v-split"><span aria-hidden="true">⚖️</span><span>Players who played ${them} are split on this level <span class="muted">· ${n} said</span></span></p>`};
  const who=share>=.75?'Most':share>=.5?'Lots of':'A few';
- return{top,n,k:c[top],html:`<p class="lvvote v-${top}"><span aria-hidden="true">${top==='higher'?'⬆️':top==='lower'?'⬇️':'✅'}</span><span>${who} players who played them say this level ${VOTE_TXT[top]} <span class="muted">· ${c[top]} of ${n}</span></span></p>`};
+ return{top,n,k:c[top],html:`<p class="lvvote v-${top}"><span aria-hidden="true">${top==='higher'?'⬆️':top==='lower'?'⬇️':'✅'}</span><span>${who} players who played ${them} say this level ${VOTE_TXT[top]} <span class="muted">· ${c[top]} of ${n}</span></span></p>`};
 }
 function levelAsk(mid,then){
  const m=S.matches.find(x=>x.id===mid);if(!m)return then&&then();
@@ -1478,7 +1482,7 @@ function vSettings(){
  const sw=(k)=>`<button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${k}"></button>`;
  const np=NOTIF_OK()?Notification.permission:'unsupported';
  const nctl=np==='granted'?'<span class="chip st-confirmed">On</span>':np==='denied'?'<span class="chip st-disputed">Blocked</span>':np==='unsupported'?'<span class="chip">Not available</span>':'<button class="btn brand sm" data-act="notifAsk">Turn on</button>';
- const nsub=np==='granted'?'You’ll be told about scores to confirm, friend requests and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about invites, scores to confirm and kudos.';
+ const nsub=np==='granted'?'You’ll be told about scores to confirm, friend requests and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about scores to confirm, friend requests and kudos.';
  const th=prefs.theme||'dark';
  return `<div class="hd"><div><button class="btn link small" data-act="go" data-v="me" style="padding-left:0">‹ Profile</button><h1 class="sethead"><span class="bgear">${ICON.gear}</span>Settings</h1></div></div>
  <p class="eyebrow period">Appearance</p>
@@ -1487,7 +1491,7 @@ function vSettings(){
  <p class="eyebrow period">App</p>
  <div class="card rv">${row(ICON.phone,'shake','Add to Home Screen',isInstalled()?'Done. You’re using Racquet Culture from your Home Screen.':'Put the app icon on your phone so it opens full screen, like a normal app.',isInstalled()?'<span class="chip st-confirmed">Added</span>':`<button class="btn brand sm" data-act="${installEvt?'hsInstall':'hsHow'}">${installEvt?'Add':'Show me'}</button>`)}</div>
  <p class="eyebrow period">Notifications and feedback</p>
- <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, an invite is sent and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
+ <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, a friend is added and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
  <p class="eyebrow period">Your level</p>
  <div class="card rv">${mySports().map(sp=>lvSettingRow(sp)).join('')||'<p class="small muted">Set your level from your profile first.</p>'}</div>
  <p class="eyebrow period">Friends</p>
@@ -1502,7 +1506,7 @@ function vSettings(){
 function maybeAskNotif(){
  if(!NOTIF_OK()||Notification.permission!=='default'||ls.get('rc_nask_'+S.uid,0))return;
  setTimeout(()=>{if($('sheetBg')||$('app').hidden)return;ls.set('rc_nask_'+S.uid,1);
-  openSheet(`<div style="text-align:center"><span class="askbell">${ICON.bell}</span><h2 style="margin-top:14px">Turn on notifications?</h2><p class="muted" style="margin:8px 0 18px">Know straight away when someone invites you to play, asks you to confirm a score or sends you kudos.</p></div>
+  openSheet(`<div style="text-align:center"><span class="askbell">${ICON.bell}</span><h2 style="margin-top:14px">Turn on notifications?</h2><p class="muted" style="margin:8px 0 18px">Know straight away when someone asks you to confirm a score, adds you as a friend or sends you kudos.</p></div>
    <button class="btn brand wide" data-act="notifAsk">Allow notifications</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Not now</button>`)},2600);
 }
 function sysNotify(title,body){try{if(NOTIF_OK()&&Notification.permission==='granted'&&document.hidden)new Notification(title,{body,icon:'icon-192.png',badge:'icon-192.png',tag:'rc'})}catch(e){}}
@@ -1562,7 +1566,7 @@ function playerSheet(id){
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
-  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
+  <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
  playerSheet.open=id;
@@ -1693,7 +1697,7 @@ const ACT={
  theme(v){setPref('theme',v);sfx('soft');tick();render()},
  popPreview(){celebrate('This is a pop-up')},
  async notifAsk(){if(!NOTIF_OK())return toast('This browser can’t show notifications.');closeSheet(true);
-  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about invites, scores and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
+  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
  demoSwitch(v){demoSwitch(v)},
