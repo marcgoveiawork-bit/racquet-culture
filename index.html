@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="format-detection" content="telephone=no,email=no,address=no,date=no">
-<meta name="theme-color" content="#0d0918">
-<script>/* theme before first paint, so there is no flash */try{var t=(JSON.parse(localStorage.getItem('rc_prefs'))||{}).theme||'dark';document.documentElement.dataset.theme=t==='device'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){document.documentElement.dataset.theme='dark'}</script>
+<meta name="theme-color" content="#f6f3fd">
+<script>/* theme before first paint, so there is no flash */try{var t=(JSON.parse(localStorage.getItem('rc_prefs'))||{}).theme||'light';document.documentElement.dataset.theme=t==='device'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){document.documentElement.dataset.theme='dark'}</script>
 <title>Racquet Culture · Goa</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236045a7'/%3E%3Ccircle cx='32' cy='32' r='20' fill='%23fff'/%3E%3Cg fill='%236045a7'%3E%3Ccircle cx='32' cy='32' r='3'/%3E%3Ccircle cx='32' cy='20' r='2.6'/%3E%3Ccircle cx='32' cy='44' r='2.6'/%3E%3Ccircle cx='20' cy='32' r='2.6'/%3E%3Ccircle cx='44' cy='32' r='2.6'/%3E%3Ccircle cx='23.5' cy='23.5' r='2.4'/%3E%3Ccircle cx='40.5' cy='23.5' r='2.4'/%3E%3Ccircle cx='23.5' cy='40.5' r='2.4'/%3E%3Ccircle cx='40.5' cy='40.5' r='2.4'/%3E%3C/g%3E%3C/svg%3E">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -760,7 +760,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=38" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=39" alt=""></button>
     <div class="tright"><button class="ibtn fsbtn" id="fsBtn" data-act="fullscreen" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fs-in" d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><path class="fs-out" d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/></svg></button><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -778,9 +778,9 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=38"></script>
+<script src="config.js?v=39"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=38"></script>
+<script src="app.js?v=39"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
