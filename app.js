@@ -934,7 +934,7 @@ async function wFinish(){
 }
 
 /* ================= App views ================= */
-const VIEWS={settings:()=>vSettings(),home:()=>vHome(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
+const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
 function render(){
  if(!me())return showAuth();
  after=()=>{};const t=view.tab,html=(VIEWS[t]||VIEWS.home)();
@@ -949,7 +949,7 @@ function render(){
 let after=()=>{};
 function paintDock(t){qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});syncGliders()}
 function openHudle(){const w=window.open(HUDLE_URL,'_blank');if(w){try{w.opener=null}catch(e){}}else location.href=HUDLE_URL}
-function go(t){if(t==='book')return openHudle();if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
+function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
@@ -1033,6 +1033,63 @@ function vRank(){
   ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
 }
 
+/* ---------- Book (courts are booked on Hudle) ---------- */
+/* General, well-established benefits of playing. Keep these accurate: no made-up numbers. */
+const FACTS=[
+ ['💪','A full-body workout','Padel works your legs, core, arms and shoulders in every rally.'],
+ ['❤️','Good for your heart','Rallies mix quick bursts with short rests, a kind of interval training that keeps your heart fit.'],
+ ['🧠','Sharper mind','Reading the ball off the glass and planning your next shot keeps your brain busy and your reactions quick.'],
+ ['🤝','Made for friends','Padel is usually played in doubles, so every game is social. Playing with others lifts your mood and keeps you coming back.'],
+ ['🎯','Better coordination','Racquet sports train hand-eye coordination, balance and footwork.'],
+ ['😌','Less stress, better sleep','Regular exercise like padel helps you unwind, lowers stress and helps you sleep better.'],
+ ['🌱','Easy to start','The serve is underhand and the court is small, so beginners can enjoy long rallies from their first game.'],
+ ['🔥','Warm up first','A 5–10 minute warm-up before you play gets your body ready and helps prevent injuries.']
+];
+const myGames=()=>S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen);
+const iWon=m=>m[m.winner].some(x=>x&&x.uid===S.uid);
+/* Short personal nudges, built only from the player's real games and levels */
+function nudges(){
+ const out=[],gs=myGames(),last=gs[gs.length-1],fr=friendIds();
+ if(!gs.length)out.push(['🎾','Your first game is waiting','Book a court, play, and add the score here to get your level moving.']);
+ else{
+  let w=0,l=0;for(let i=gs.length-1;i>=0&&iWon(gs[i]);i--)w++;for(let i=gs.length-1;i>=0&&!iWon(gs[i]);i--)l++;
+  if(w>=2)out.push(['🏆',`You've won your last ${w} games`,'You’re on a roll. Ready for another win?']);
+  else if(w===1)out.push(['🏆','You won your last game','Keep the momentum going. Book your next one.']);
+  else if(l>=2)out.push(['💥',`${l} tough results in a row`,'Every great player has them. The best way to bounce back is your next game.']);
+  const days=Math.round((new Date(today()+'T12:00:00')-new Date(last.date+'T12:00:00'))/864e5);
+  if(days>=7)out.push(['⏰',`${days} days since your last game`,'Your level is waiting for you. Time to get back on court?']);
+ }
+ mySports().forEach(sp=>{const e=S.R[sp][S.uid];if(!e||!e.n)return;const name=SPORTS[sp].name.toLowerCase(),r=e.r;
+  if(e.last>0)out.push(['📈',`Your ${name} level is climbing`,`Up ${fmtD(e.last)} after your last game, now ${fmtL(r)}.`]);
+  const rk=rankOf(sp,S.uid);if(rk&&rk.pos&&rk.pos<=10)out.push(['🥇',`#${rk.pos} in ${lbl(TIERS,rk.tier)} ${name}`,rk.pos===1?'You’re top of the table. Can you stay there?':'A few more wins could take you higher.']);
+  const close=fr.map(id=>({id,e:S.R[sp][id]})).filter(x=>x.e&&x.e.n);
+  const chase=close.filter(x=>x.e.r<r&&r-x.e.r<=0.3&&x.e.last>0).sort((a,b)=>b.e.r-a.e.r)[0];
+  if(chase)out.push(['👀',`${first(prof(chase.id))} is catching up`,`Your friend is only ${fmtL(r-chase.e.r)} behind your ${name} level and climbing. Stay ahead!`]);
+  const ahead=close.filter(x=>x.e.r>r&&x.e.r-r<=0.3).sort((a,b)=>a.e.r-b.e.r)[0];
+  if(ahead)out.push(['🎯',`${first(prof(ahead.id))} is just ahead of you`,`Only ${fmtL(ahead.e.r-r)} above you in ${name}. One good win could close the gap.`]);
+ });
+ return out.slice(0,4);
+}
+let factT=null;
+function vBook(){
+ const v=VENUES[0];
+ after=()=>{clearInterval(factT);let i=0;const n=FACTS.length;
+  const show=k=>{const el=$('factCar');if(!el){clearInterval(factT);return}i=(k+n)%n;qsa('#factCar .fact').forEach((f,j)=>f.classList.toggle('on',j===i));qsa('#factDots button').forEach((d,j)=>d.setAttribute('aria-current',String(j===i)))};
+  show(0);if(!calm())factT=setInterval(()=>show(i+1),5500);
+  const car=$('factCar');if(car){let x0=null;car.ontouchstart=e=>{x0=e.touches[0].clientX};car.ontouchend=e=>{if(x0==null)return;const dx=e.changedTouches[0].clientX-x0;if(Math.abs(dx)>40){show(i+(dx<0?1:-1));clearInterval(factT);if(!calm())factT=setInterval(()=>show(i+1),5500)}x0=null}}
+  vBook.show=k=>{show(k);clearInterval(factT);if(!calm())factT=setInterval(()=>show(i+1),5500)};
+ };
+ const ns=nudges();
+ return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div>
+  <div class="card bookhero rv"><img class="bh-ico" src="hudle.png" alt="" width="56" height="56"><div><b>Book with us through Hudle</b><p class="small muted">Pick your time and pay on Hudle, the app we use for court bookings. ${esc(v.courts)} at ${esc(v.name)}, ${esc(v.area)}.</p></div>
+   ${hudleBtn('btn ball wide')}</div>
+  ${ns.length?`<div class="sec"><h2>For you</h2></div><div class="list">${ns.map(([i,t,p])=>`<div class="card nudge rv"><span class="ng-i" aria-hidden="true">${i}</span><div><b>${esc(t)}</b><p class="small muted">${esc(p)}</p></div></div>`).join('')}</div>`:''}
+  <div class="sec"><h2>Why play padel?</h2></div>
+  <div class="card factcar rv" id="factCar" aria-live="polite">${FACTS.map(([i,t,p],k)=>`<div class="fact${k===0?' on':''}"><span class="fc-i" aria-hidden="true">${i}</span><b>${esc(t)}</b><p class="muted">${esc(p)}</p></div>`).join('')}
+   <div class="fdots" id="factDots">${FACTS.map((_,k)=>`<button type="button" data-act="factGo" data-v="${k}" aria-label="Fact ${k+1}" aria-current="${k===0}"></button>`).join('')}</div></div>
+  <div class="sec"><h2>Where to find us</h2></div>
+  ${mapCard(v)}`;
+}
 /* ---------- Add a score ---------- */
 let A=null;
 const addSports=()=>SP_KEYS.filter(k=>S.R[k][S.uid]);
@@ -1431,6 +1488,7 @@ async function hsInstall(){
 const ACT={
  fullscreen(){fsToggle()},
  hudle(){openHudle()},
+ factGo(v){vBook.show&&vBook.show(+v)},
  hsHow(){homeSheet()},
  hsInstall(){hsInstall()},
  authMode(v){if(v===authMode)return;authMode=v;paintAuth(v==='up'?1:-1)},
