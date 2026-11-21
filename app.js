@@ -496,10 +496,13 @@ function demoChooser(){
   <button type="button" class="btn ghost wide" data-act="demoGo" data-v="dev"><b>Developer</b><span>Everything an admin does, plus giving or removing admin access</span></button></div>`)}
 async function startDemo(role){
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
- demoPrev={store:Store,uid:S.uid};closeSheet(true);S.needSql=false;
+ demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you)};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you);Store=Demo;S.uid=demoId(role);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  splash('Demo: '+lbl(DEMO_AS,role).toLowerCase()+' view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
+function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for all four accounts. Your real account is not touched.</p>
+ <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
+async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you));S.uid=demoId(role);closeSheet(true);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
@@ -1087,7 +1090,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved.</span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -2190,7 +2193,7 @@ const ACT={
   try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
- demoSwitch(v){demoSwitch(v)},
+ demoSwitch(v){demoSwitch(v)},demoResetAsk(){demoResetAsk()},demoResetYes(){demoReset()},
  pvGo(v){view.pv=v;go('players')},
 
  aDate(v){A.date=v;if(A.time!=null&&(slotDate(v,A.time)>new Date()))A.time=null,A.len=0;tick();render()},
