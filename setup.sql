@@ -354,8 +354,7 @@ create policy "rc coaches write" on public.rc_coaches for all to authenticated u
 grant select, insert, update, delete on public.rc_coaches to authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_coaches; exception when duplicate_object then null; end $$;
 
--- Admin access can only be given or removed by the club owner, here in Supabase (see "Making someone an admin" at the end).
--- The app can never add or remove admins.
+-- Admin access is given or removed by the developer (see the Developer section below), or here in Supabase.
 drop policy if exists "rc admins insert" on public.rc_admins;
 drop policy if exists "rc admins delete" on public.rc_admins;
 revoke insert, update, delete on public.rc_admins from authenticated;
@@ -394,6 +393,32 @@ begin
 end $$;
 drop trigger if exists rc_booking_status on public.rc_bookings;
 create trigger rc_booking_status before insert or update on public.rc_bookings for each row execute function public.rc_booking_status();
+
+-- Developer role: an admin who can also give or remove admin access from the app.
+create table if not exists public.rc_developers (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now()
+);
+alter table public.rc_developers enable row level security;
+drop policy if exists "rc developers read" on public.rc_developers;
+create policy "rc developers read" on public.rc_developers for select to authenticated using (true);
+grant select on public.rc_developers to authenticated;   -- no one can add developers from the app
+
+create or replace function public.rc_is_dev() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_developers where user_id = auth.uid());
+$$;
+revoke all on function public.rc_is_dev() from public;
+grant execute on function public.rc_is_dev() to authenticated;
+
+-- Only the developer can make someone an admin or take admin away (never a developer, never themselves)
+drop policy if exists "rc admins insert" on public.rc_admins;
+drop policy if exists "rc admins delete" on public.rc_admins;
+create policy "rc admins insert" on public.rc_admins for insert to authenticated with check (public.rc_is_dev());
+create policy "rc admins delete" on public.rc_admins for delete to authenticated
+  using (public.rc_is_dev() and user_id <> auth.uid() and not exists (select 1 from public.rc_developers d where d.user_id = rc_admins.user_id));
+grant insert, delete on public.rc_admins to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_developers; exception when duplicate_object then null; end $$;
+
 
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
