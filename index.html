@@ -677,6 +677,11 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .upcard{display:flex;align-items:center;gap:14px;width:100%;margin-top:12px;text-align:left;border-color:rgba(220,245,90,.35)}.upcard>span:nth-child(2){flex:1;display:flex;flex-direction:column;gap:2px}
 .teamsline{display:block;margin-top:4px;font:400 13px/1.4 var(--body);color:var(--muted)}.res-won{color:var(--good)}.res-lost{color:var(--bad)}.res-drew{color:var(--ball)}
 .joined{margin:4px 0 0}
+.findme{margin-left:auto;margin-right:8px;gap:6px}.findme svg{width:15px;height:15px}
+.rrow.flash,.pod.flash{animation:rkflash 1.6s var(--ease) 2}
+@keyframes rkflash{0%,100%{box-shadow:0 0 0 0 rgba(220,245,90,0)}40%{box-shadow:0 0 0 4px rgba(220,245,90,.55)}}
+.rkline{margin:8px 0 0;font-size:13px;line-height:1.35}
+.rkg{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px}.rkg button{border:1px solid var(--line2);background:transparent;color:var(--muted);border-radius:999px;padding:6px 14px;font:600 12.5px var(--body);cursor:pointer}.rkg button[aria-checked="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
 .lvask{display:grid;gap:10px;margin-top:16px}
 .lvvote{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;font-size:12.5px;line-height:1.4;padding:8px 10px;border-radius:12px;background:rgba(var(--wr),.04);border:1px solid var(--line)}
 .sethead{display:flex;align-items:center;gap:12px}
@@ -760,7 +765,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=40" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=41" alt=""></button>
     <div class="tright"><button class="ibtn fsbtn" id="fsBtn" data-act="fullscreen" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fs-in" d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><path class="fs-out" d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/></svg></button><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -778,9 +783,9 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=40"></script>
+<script src="config.js?v=41"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

@@ -544,8 +544,9 @@ function preview(m){
  return applyMatch(R,m,mk);
 }
 const lvlOf=(sp,id)=>{const e=S.R[sp][id];return e?e.r:null};
-function rankOf(sp,id){const e=S.R[sp][id];if(!e||!e.n)return null;const t=tierOf(sp,e.r);
- const list=Object.entries(S.R[sp]).filter(([pid,x])=>x.n&&prof(pid)&&tierOf(sp,x.r)===t).sort((a,b)=>b[1].r-a[1].r);
+/* A player's place in their tier, the same as the Rankings table; g limits it to 'male' or 'female' players */
+function rankOf(sp,id,g){const e=S.R[sp][id];if(!e||!e.n)return null;const t=tierOf(sp,e.r);
+ const list=Object.entries(S.R[sp]).filter(([pid,x])=>{const p=prof(pid);return x.n&&p&&p.setup&&tierOf(sp,x.r)===t&&(!g||g==='all'||p.gender===g)}).sort((a,b)=>b[1].r-a[1].r);
  return{pos:list.findIndex(([pid])=>pid===id)+1,of:list.length,tier:t}}
 
 
@@ -1072,12 +1073,12 @@ function vRank(){
  const g=view.rg||'all',t=view.rt,all=Object.entries(S.R[sp]).filter(([id])=>{const p=prof(id);return p&&p.setup&&(g==='all'||p.gender===g)}).map(([id,e])=>({id,e,p:prof(id)}));
  const inT=all.filter(x=>tierOf(sp,x.e.r)===t),ranked=inT.filter(x=>x.e.n).sort((a,b)=>b.e.r-a.e.r),wait=inT.filter(x=>!x.e.n).sort((a,b)=>b.e.r-a.e.r);
  const counts=Object.fromEntries(TIERS.map(([k])=>[k,all.filter(x=>x.e.n&&tierOf(sp,x.e.r)===k).length]));
- const row=(x,i)=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">${i+1}</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)} · ${x.e.w}–${x.e.l}</span></span><span class="sc"><b class="num">${fmtL(x.e.r)}</b><span class="delta ${dcls(x.e.last)}">${fmtD(x.e.last)}</span></span></button>`;
+ const row=(x,i)=>`<button class="rrow rv${x.id===S.uid?' mine':''}"${x.id===S.uid?' id="rkMe"':''} data-act="player" data-v="${x.id}"><span class="rk">${i+1}</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)} · ${x.e.w}–${x.e.l}</span></span><span class="sc"><b class="num">${fmtL(x.e.r)}</b><span class="delta ${dcls(x.e.last)}">${fmtD(x.e.last)}</span></span></button>`;
  const pod=ranked.slice(0,3),order=[1,0,2].filter(i=>pod[i]);
  const MET=['gold','silver','bronze'],myPos=ranked.findIndex(x=>x.id===S.uid);
  const goal=myPos<0?'':myPos<3?`<p class="goal">You're on the ${['gold','silver','bronze'][myPos]} step. Hold on to it.</p>`:`<p class="goal">You're #${myPos+1}. <b>${fmtL(Math.max(.01,pod[2].e.r-ranked[myPos].e.r))}</b> more to reach the podium.</p>`;
- const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} ${MET[i]} rv" data-act="player" data-v="${x.id}"><span class="shine" aria-hidden="true"></span>${i===0?'<span class="crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8.5l4.6 3.8L12 5l4.4 7.3L21 8.5 19.2 19H4.8z"/><circle cx="3" cy="8" r="1.6"/><circle cx="12" cy="4.4" r="1.6"/><circle cx="21" cy="8" r="1.6"/></svg></span>':''}<span class="medal">${i+1}</span><span class="ring">${avHTML(x.p)}</span><span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span><span class="ptag">${['Gold','Silver','Bronze'][i]}</span></button>`}).join('')}</div>${goal}`:'';
- return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div><button class="refresh" data-act="rankRefresh" aria-label="Refresh rankings" title="Refresh">${ICON.refresh}</button></div>
+ const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} ${MET[i]} rv${x.id===S.uid?' mine':''}"${x.id===S.uid?' id="rkMe"':''} data-act="player" data-v="${x.id}"><span class="shine" aria-hidden="true"></span>${i===0?'<span class="crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8.5l4.6 3.8L12 5l4.4 7.3L21 8.5 19.2 19H4.8z"/><circle cx="3" cy="8" r="1.6"/><circle cx="12" cy="4.4" r="1.6"/><circle cx="21" cy="8" r="1.6"/></svg></span>':''}<span class="medal">${i+1}</span><span class="ring">${avHTML(x.p)}</span><span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span><span class="ptag">${['Gold','Silver','Bronze'][i]}</span></button>`}).join('')}</div>${goal}`:'';
+ return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div>${S.R[sp][S.uid]&&S.R[sp][S.uid].n?`<button class="btn ball sm findme" data-act="rankMe">${ICON.search}<span>Find me</span></button>`:''}<button class="refresh" data-act="rankRefresh" aria-label="Refresh rankings" title="Refresh">${ICON.refresh}</button></div>
   <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}
   ${seg('rg','Players',[['all','All'],['male','Men'],['female','Women']],g,'rankGender')}</div>
@@ -1570,16 +1571,21 @@ function askMemberLevel(id){
  openSheet(`<h2>${esc(first(p))}'s ${sp.name.toLowerCase()} level</h2><p class="muted small">${esc(p.name)} has not set a ${sp.name.toLowerCase()} level yet. Enter your best guess. It is only used for this game until they set their own.</p>
   <label for="gLvl">Level</label>${lvlInput(A.sport,null)}<p class="ferr" id="gErr"></p><button class="btn brand wide" data-act="memberLevel" data-v="${id}">Add ${esc(first(p))}</button>`);
 }
+const GWORD={male:'men',female:'women'};
+function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="muted">Not ranked yet: no games played</span>';
+ return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
  openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
+  ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
-   return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
+   return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
-  <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
+  <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));
+  qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
  playerSheet.open=id;
 }
 function refreshSocial(id){if($('sheetBg')&&playerSheet.open===id&&document.querySelector('#sheetBg .relbtns')){playerSheet(id)}else if(!$('sheetBg'))render();else if(view.tab==='inbox'||view.tab==='players')render()}
@@ -1671,6 +1677,9 @@ const ACT={
  rankSport(v){view.rs=v;const e=S.R[v][S.uid];view.rt=e?tierOf(v,e.r):view.rt;render()},
  rankTier(v){view.rt=v;render()},
  rankGender(v){view.rg=v;render()},
+ rankMe(){const sp=view.rs,e=S.R[sp][S.uid];if(!e)return;const p=me(),t=tierOf(sp,e.r);let moved=false;
+  if(view.rt!==t){view.rt=t;moved=true}if(view.rg&&view.rg!=='all'&&p.gender!==view.rg){view.rg='all';moved=true}
+  if(moved)render();setTimeout(()=>{const el=$('rkMe');if(!el)return;el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');tick()},moved?350:0)},
  rankAt(v){view.rs=v;const e=S.R[v][S.uid];if(e)view.rt=tierOf(v,e.r);go('rank')},
  player(v){playerSheet(v)},
  closeSheet(){closeSheet()},
