@@ -164,7 +164,7 @@ const VENUES=[
  {id:'rc',name:'Racquet Culture',short:'Racquet Culture',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
   url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'},
- {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
+ {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'round',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'}
