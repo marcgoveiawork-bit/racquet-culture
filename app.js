@@ -296,15 +296,16 @@ const Demo=Object.assign(memStore('demo',()=>Demo.d,()=>{}),{
  async email(){return S.email||''},async newPassword(){throw errc('demo')}
 });
 const D_FN=['Aarav','Aditi','Akash','Alisha','Amit','Ananya','Arjun','Avinash','Bianca','Carlos','Celina','Chris','Clara','Daniel','Deepa','Dev','Diya','Elena','Eshan','Farah','Gaurav','Gina','Hrishi','Isha','Ishaan','Jason','Jaya','Karan','Kavya','Kiara','Leon','Lina','Maya','Meera','Mihir','Nikhil','Nina','Omkar','Pooja','Pranav','Priya','Rahul','Rhea','Rohan','Sahil','Sana','Sara','Shaun','Simran','Tanvi','Tara','Varun','Vikram','Zoya'];
+const D_FEM=new Set(['Aditi','Alisha','Ananya','Bianca','Celina','Clara','Deepa','Diya','Elena','Farah','Gina','Isha','Jaya','Kavya','Kiara','Lina','Maya','Meera','Nina','Pooja','Priya','Rhea','Sana','Sara','Simran','Tanvi','Tara','Zoya']);
 const D_LN=['Naik','Kamat','DSouza','Fernandes','Prabhu','Sawant','Shetty','Pai','Menezes','Gaonkar','Rane','Rodrigues','Dias','Pereira','Costa','Almeida','Lobo','Desai','Kerkar','Borkar','Shirodkar','Mascarenhas','Noronha','Sequeira','Gomes','Coutinho','Verma','Mehta','Kapoor','Iyer','Nair','Singh','Malhotra','Bhat','Joshi'];
 function buildDemo(you){
  const r=rng(2026),pick=a=>a[Math.floor(r()*a.length)],gauss=()=>{let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
  const now=Date.now(),DAYS=120,T=today(),ago=h=>new Date(now-h*36e5).toISOString();
  const used=new Set([you.username.toLowerCase(),'caelan','surya','arjun']),names=new Set(['Caelan DaCosta','Surya N','Arjun Kamat']),ps=[];
  const lv=(sp,v)=>({start:v,band:tierOf(sp,v),at:new Date(now-DAYS*864e5).toISOString()});
- const caelan={id:'d_caelan',username:'caelan',name:'Caelan DaCosta',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['early','evening'],side:'left',levels:{padel:lv('padel',5.2),pickleball:lv('pickleball',4.1)},_skill:{padel:5.3,pickleball:4.2},_grow:{padel:.05,pickleball:.05}};
- const arjun={id:'d_arjun',username:'arjun',name:'Arjun Kamat',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening','night'],side:'right',friends:'request',levels:{padel:lv('padel',3.4),pickleball:lv('pickleball',3.2)},_skill:{padel:3.45,pickleball:3.2},_grow:{padel:.12,pickleball:.08}};
- const surya={id:'d_surya',username:'surya',name:'Surya N',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'left',invites:true,times:['morning','night'],side:'right',levels:{padel:lv('padel',4.7),pickleball:lv('pickleball',3.9)},_skill:{padel:4.8,pickleball:4.0},_grow:{padel:.1,pickleball:.08}};
+ const caelan={id:'d_caelan',username:'caelan',name:'Caelan DaCosta',gender:'male',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['early','evening'],side:'left',levels:{padel:lv('padel',5.2),pickleball:lv('pickleball',4.1)},_skill:{padel:5.3,pickleball:4.2},_grow:{padel:.05,pickleball:.05}};
+ const arjun={id:'d_arjun',username:'arjun',name:'Arjun Kamat',gender:'male',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening','night'],side:'right',friends:'request',levels:{padel:lv('padel',3.4),pickleball:lv('pickleball',3.2)},_skill:{padel:3.45,pickleball:3.2},_grow:{padel:.12,pickleball:.08}};
+ const surya={id:'d_surya',username:'surya',name:'Surya N',gender:'male',setup:true,demo:true,avatar:null,sports:['padel','pickleball'],hand:'left',invites:true,times:['morning','night'],side:'right',levels:{padel:lv('padel',4.7),pickleball:lv('pickleball',3.9)},_skill:{padel:4.8,pickleball:4.0},_grow:{padel:.1,pickleball:.08}};
  while(ps.length<97){
   const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;names.add(name);
   let un=(fn+'.'+ln.slice(0,4)).toLowerCase(),k=2;while(used.has(un))un=(fn+'.'+ln.slice(0,4)).toLowerCase()+(k++);used.add(un);
@@ -312,10 +313,11 @@ function buildDemo(you){
   sports.forEach(sp=>{const v=sp==='padel'?clamp(3+gauss()*1.15,.8,6.6):clamp(3.2+gauss()*.75,1.2,5.4),st=Math.round(v*10)/10;
    levels[sp]=lv(sp,st);skill[sp]=v+gauss()*.25;grow[sp]=(.1+gauss()*.3)*(sp==='padel'?1:.6)});
   const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.45?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
-  ps.push({id:'d_'+ps.length,username:un,name,setup:true,demo:true,avatar:null,sports,
+  ps.push({id:'d_'+ps.length,username:un,name,gender:D_FEM.has(fn)?'female':'male',setup:true,demo:true,avatar:null,sports,
    hand:r()<.82?'right':r()<.6?'left':'none',invites:r()<.65,times,side:pick(['left','right','either','either']),levels,_skill:skill,_grow:grow});
  }
  ps.push(caelan,surya,arjun);
+ if(!you.gender)you.gender='male';
  const all=[you,...ps];
  if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
  const sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
@@ -774,6 +776,8 @@ async function enter(fresh){
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
  try{S.email=await Store.email()}catch(e){}
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
+ /* players who joined before the Men and Women rankings: ask once for gender */
+ if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);return startWiz('gender')}
  if(fresh)splash(first(p),greet());
  showApp();maybeAskNotif();
 }
@@ -830,6 +834,7 @@ const ICON={
  bars:n=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 19v-3" ${n<1?'opacity=".3"':''}/><path d="M12 19v-8" ${n<2?'opacity=".3"':''}/><path d="M18 19V5" ${n<3?'opacity=".3"':''}/></svg>`
 };
 const letter=t=>`<span class="ai" style="font:500 17px var(--display)">${t}</span>`;
+const GENDERS=[['male','Male','',letter('M')],['female','Female','',letter('F')]];
 const HANDS=[['right','Right-handed','',letter('R')],['left','Left-handed','',letter('L')],['none','No preference','Comfortable with either hand',letter('R/L')]];
 const TIMES=[['early','Early morning','6 to 9 am',ICON.sunrise],['morning','Morning','9 am to 12',ICON.sun],['afternoon','Afternoon','12 to 4 pm',ICON.noon],['evening','Evening','4 to 8 pm',ICON.sunset],['night','Night','8 to 11 pm',ICON.moon]];
 const SIDES=[['left','Left side','The backhand side (revés)'],['right','Right side','The forehand side (drive)'],['either','Either side','Happy on both']];
@@ -837,13 +842,14 @@ const lbl=(arr,v)=>(arr.find(x=>x[0]===v)||[])[1]||'';
 
 function startWiz(mode,only){
  const p=me();
- W={mode,only:only||null,i:0,dir:1,d:{avatar:p.avatar||null,sports:[...(p.sports||[])],hand:p.hand||'',invites:p.invites===undefined?null:p.invites,times:[...(p.times||[])],side:p.side||'',levels:JSON.parse(JSON.stringify(p.levels||{})),q:{}}};
+ W={mode,only:only||null,i:0,dir:1,d:{gender:p.gender||'',avatar:p.avatar||null,sports:[...(p.sports||[])],hand:p.hand||'',invites:p.invites===undefined?null:p.invites,times:[...(p.times||[])],side:p.side||'',levels:JSON.parse(JSON.stringify(p.levels||{})),q:{}}};
  if(mode==='level')W.only.forEach(sp=>W.d.q[sp]={band:'',ans:[]});
  $('auth').hidden=true;$('app').hidden=true;$('wiz').hidden=false;window.scrollTo(0,0);closeSheet(true);paintWiz();
 }
 function wSteps(){
  const d=W.d,st=[];
- if(W.mode!=='level')st.push('avatar','sports','hand','invites','times','side');
+ if(W.mode==='gender')return['gender','save'];
+ if(W.mode!=='level')st.push('avatar','gender','sports','hand','invites','times','side');
  const lv=W.mode==='level'?W.only:W.mode==='setup'?(d.sports.length?d.sports:SP_KEYS):d.sports.filter(sp=>!(d.levels[sp]&&isFinite(+d.levels[sp].start)));
  lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};const b=d.q[sp].band;st.push('band:'+sp);
   const n=b?QS[sp][b].length:5;for(let i=0;i<n;i++)st.push('q:'+sp+':'+i);st.push('result:'+sp)});
@@ -871,6 +877,8 @@ function wStep(key){
    ${d.avatar?`<p style="text-align:center;margin-top:10px"><button type="button" class="btn link small" data-act="wNoPhoto">Remove photo and use my initials</button></p>`:`<p class="small muted" style="text-align:center;margin-top:12px">No photo? Your initials on club purple look great too.</p>`}`}}
  if(kind==='sports')return{eyebrow:'Your game',title:'Which sports do you play?',sub:'Choose one or both. Each sport has its own level and its own rankings.',valid:d.sports.length>0,
   body:`<div class="opts two">${SP_KEYS.map(k=>opt({multi:1,big:1,act:'wSport',v:k,on:d.sports.includes(k),title:SPORTS[k].name,sub:k==='padel'?'Our purple court':'Our pickleball court',icon:ICON[k]})).join('')}</div>`};
+ if(kind==='gender')return{eyebrow:'About you',title:'Are you male or female?',sub:'This puts you in the Men or Women rankings. Everyone is always in All.',valid:!!d.gender,single:1,
+  body:`<div class="opts" role="radiogroup">${GENDERS.map(g=>opt({act:'wGender',v:g[0],on:d.gender===g[0],title:g[1],sub:g[2],icon:g[3]})).join('')}</div>`};
  if(kind==='hand')return{eyebrow:'Your game',title:'Which hand do you play with?',sub:'Helps partners plan who covers the middle.',valid:!!d.hand,single:1,
   body:`<div class="opts" role="radiogroup">${HANDS.map(h=>opt({act:'wHand',v:h[0],on:d.hand===h[0],title:h[1],sub:h[2],icon:h[3]})).join('')}</div>`};
  if(kind==='invites')return{eyebrow:'Playing with others',title:'Accept game invites from other players?',sub:'Players looking for a fourth can find you and invite you to a game.',valid:d.invites!==null,single:1,
@@ -924,7 +932,7 @@ function wPickThenNext(){if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock
 async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
  Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]={start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()}});
- const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true});
+ const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true,gender:d.gender||p.gender||''});
  const btn=$('wiz').querySelector('[data-act="wNext"]');if(btn){btn.disabled=true;btn.textContent='Saving…'}
  try{await Store.saveProfile(np)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}return toast('Could not save. Check your connection and try again.')}
  const i=S.profiles.findIndex(x=>x.id===np.id);S.profiles[i]=np;rate();
@@ -1016,7 +1024,7 @@ function seg(key,label,items,cur,act){return `<div class="seg full" data-key="${
 function vRank(){
  const ms=mySports();if(!view.rs)view.rs=ms[0];const sp=view.rs;
  if(!view.rt){const e=S.R[sp][S.uid];view.rt=e?tierOf(sp,e.r):'intermediate'}
- const t=view.rt,all=Object.entries(S.R[sp]).filter(([id])=>{const p=prof(id);return p&&p.setup}).map(([id,e])=>({id,e,p:prof(id)}));
+ const g=view.rg||'all',t=view.rt,all=Object.entries(S.R[sp]).filter(([id])=>{const p=prof(id);return p&&p.setup&&(g==='all'||p.gender===g)}).map(([id,e])=>({id,e,p:prof(id)}));
  const inT=all.filter(x=>tierOf(sp,x.e.r)===t),ranked=inT.filter(x=>x.e.n).sort((a,b)=>b.e.r-a.e.r),wait=inT.filter(x=>!x.e.n).sort((a,b)=>b.e.r-a.e.r);
  const counts=Object.fromEntries(TIERS.map(([k])=>[k,all.filter(x=>x.e.n&&tierOf(sp,x.e.r)===k).length]));
  const row=(x,i)=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">${i+1}</span>${avHTML(x.p)}<span class="nm"><b>${esc(x.p.name)}</b><span>@${esc(x.p.username)} · ${x.e.w}–${x.e.l}</span></span><span class="sc"><b class="num">${fmtL(x.e.r)}</b><span class="delta ${dcls(x.e.last)}">${fmtD(x.e.last)}</span></span></button>`;
@@ -1026,7 +1034,8 @@ function vRank(){
  const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} ${MET[i]} rv" data-act="player" data-v="${x.id}"><span class="shine" aria-hidden="true"></span>${i===0?'<span class="crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8.5l4.6 3.8L12 5l4.4 7.3L21 8.5 19.2 19H4.8z"/><circle cx="3" cy="8" r="1.6"/><circle cx="12" cy="4.4" r="1.6"/><circle cx="21" cy="8" r="1.6"/></svg></span>':''}<span class="medal">${i+1}</span><span class="ring">${avHTML(x.p)}</span><span class="pn">${esc(first(x.p))}</span><span class="pl num">${fmtL(x.e.r)}</span><span class="ptag">${['Gold','Silver','Bronze'][i]}</span></button>`}).join('')}</div>${goal}`:'';
  return `<div class="hd"><div><p class="eyebrow">Community</p><h1>Rankings</h1></div><button class="refresh" data-act="rankRefresh" aria-label="Refresh rankings" title="Refresh">${ICON.refresh}</button></div>
   <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
-  ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}</div>
+  ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}
+  ${seg('rg','Players',[['all','All'],['male','Men'],['female','Women']],g,'rankGender')}</div>
   <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises. Scores under review are left out until an admin checks them.</p>
   ${podium}<div class="list">${(pod.length>=3?ranked.slice(3).map((x,i)=>row(x,i+3)):ranked.map(row)).join('')}</div>
   ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Add a score and the ranking fills up.</div>`:''}
@@ -1324,7 +1333,7 @@ function vMe(){
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
   <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
-  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
+  <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
   <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
   <button class="card setlink hov rv" data-act="go" data-v="settings"><span class="sico" data-a="spin">${ICON.gear}</span><span><b>Settings</b><span class="small muted">Theme, notifications, sounds, pop-ups, friend requests and your account</span></span><span class="go">›</span></button>
@@ -1503,6 +1512,7 @@ const ACT={
  wNext(){const st=wSteps(),s=wStep(st[W.i]);if(!s.valid)return;if(W.i>=st.length-1)return wFinish();wGo(1)},
  wNoPhoto(){W.d.avatar=null;tick();paintWiz(false)},
  wSport(v){W.jp='wSport|'+v;const a=W.d.sports;W.d.sports=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
+ wGender(v){W.jp='wGender|'+v;W.d.gender=v;paintWiz(false);wPickThenNext()},
  wHand(v){W.jp='wHand|'+v;W.d.hand=v;paintWiz(false);wPickThenNext()},
  wInv(v){W.jp='wInv|'+v;W.d.invites=v==='yes';paintWiz(false);wPickThenNext()},
  wTime(v){W.jp='wTime|'+v;const a=W.d.times;W.d.times=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
@@ -1512,6 +1522,7 @@ const ACT={
  go(v){go(v)},
  rankSport(v){view.rs=v;const e=S.R[v][S.uid];view.rt=e?tierOf(v,e.r):view.rt;render()},
  rankTier(v){view.rt=v;render()},
+ rankGender(v){view.rg=v;render()},
  rankAt(v){view.rs=v;const e=S.R[v][S.uid];if(e)view.rt=tierOf(v,e.r);go('rank')},
  player(v){playerSheet(v)},
  closeSheet(){closeSheet()},
