@@ -76,12 +76,18 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - More courts or locations: add them to `COURT_NOS` and `VENUES`. The `court` check in `setup.sql` only allows `padel` and `pickleball`, and bookings don't store a court number yet.
 
 ## Release workflow (from V1.1 on)
-- The live app (repo root) is **V1.3** (V1.1 to V1.3 released 21 Nov 2026; V1.2 and V1.3 went straight live at Marc's request). New work goes only into `preview/`, served at https://marcgoveiawork-bit.github.io/racquet-culture/preview/ and labelled e.g. `V1.1demo` (set by `window.RC_VER` in `preview/index.html`; `window.RC_PREVIEW=true` there).
+- The live app (repo root) is **V1.4** (My Padel name and logo, opening screen; 21 Nov 2026). Before that it was **V1.3** (V1.1 to V1.3 released 21 Nov 2026; V1.2 and V1.3 went straight live at Marc's request). New work goes only into `preview/`, served at https://marcgoveiawork-bit.github.io/racquet-culture/preview/ and labelled e.g. `V1.1demo` (set by `window.RC_VER` in `preview/index.html`; `window.RC_PREVIEW=true` there).
 - `preview/` always opens in demo mode with made-up data. Only the developer and players given **Demo access** (rc_demo_access) can get in.
 - When Marc confirms a demo version, copy `preview/app.js` and `preview/index.html` to the root, set the root's `RC_VER` to the release number (e.g. `1.1`) and `RC_PREVIEW` to false (or remove that line), bump `v=`, and merge. Never change the root without Marc's OK.
 - Roles (V1.3): Developer (platinum, rc_developers) > Owner (gold, rc_owners + rc_admins) > Admin (silver, rc_admins) > Coach (bronze, rc_coaches) > Player. The Developer sets anyone up to Owner; Owners set up to Admin; Admins switch Player/Coach. Demo views go up to the person's own role.
 
-## V1.4demo: My Padel, several clubs (preview only, 21 Nov 2026)
+## V1.4 (live): My Padel name, logo and opening screen
+- The live app is now called **My Padel**, with Marc's logo as the app and home-screen icon (`brand/`).
+- Opening the app shows the My Padel logo, the tagline "Every court. One app." and "Pick a court to start" (`showWelcome`, `WELCOME_COURTS` in `app.js`). Live lists only Racquet Culture; tapping it carries on to sign-in or the app as before. A password-reset link skips the opening screen.
+
+## V1.5demo: several clubs, starting with Sunday (preview only, 21 Nov 2026)
+- Was labelled V1.4demo before V1.4 went live with just the name, logo and opening screen.
+- The preview's opening screen lists every club in `VENUES`. Picking one sets the club; in demo, picking a club the account hasn't joined opens that club's sign-in.
 - The app is now called **My Padel** (title, home-screen name). The home-screen icon is Marc's My Padel logo in `preview/brand/` (icon-192, icon-512, apple-touch-icon). To change it, replace those files, same names and sizes.
 - **Clubs** live in `VENUES` in `app.js`: Racquet Culture (`rc`, in-app slot booking) and Sunday Racquet & Social Club (`sunday`, Siolim; 3 padel + 1 pickleball court; `book.kind:'link'` to District). To add a club: an entry in `VENUES`, a logo in `preview/venues/`, and a `:root[data-venue="id"]` colour block in `index.html` (copy Sunday's).
 - The logo in the top bar is a swipeable club switcher. The current club is `VID` (saved as `rc_venue`, or `?venue=` in the URL). It colours the app via `data-venue` on `<html>`.

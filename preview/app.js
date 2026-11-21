@@ -567,6 +567,8 @@ async function startDemo(role){
  demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you,rank);Store=Demo;S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  splash('Demo: '+lbl(DEMO_AS,role).toLowerCase()+' view',Demo.d.profiles.length+' players · '+VENUES.length+' clubs · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
+ /* picked a club on the opening screen that this account hasn't joined: ask them to sign in there */
+ const wp=welcomePick;welcomePick=null;if(wp&&wp!==VID&&!isMember(S.uid,wp))setTimeout(()=>venueSignIn(wp),calm()?300:2100);
 }
 function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for every demo account. Your real account is not touched.</p>
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
@@ -2413,10 +2415,21 @@ function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeo
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
 
 /* ================= Start ================= */
+const WELCOME_COURTS=VENUES.map(v=>({id:v.id,name:v.name,area:v.area.replace(/, India$/,''),logo:v.logo}));
+/* The opening screen: the My Padel logo and tagline, then the player picks a court */
+let go_on=()=>{},welcomePick=null;
+function showWelcome(then){go_on=then;const el=$('welcome');if(!el)return then();
+ $('wCourts').innerHTML=WELCOME_COURTS.map(c=>`<button type="button" class="wcourt" data-court="${esc(c.id)}"><span class="wmark w-${esc(c.id)}"><img src="${esc(c.logo)}" alt=""></span><span><b>${esc(c.name)}</b><small>${esc(c.area)}</small></span><span class="go" aria-hidden="true">›</span></button>`).join('');
+ $('wFoot').textContent='My Padel · V'+APP_VER;
+ qsa('#wCourts [data-court]').forEach(b=>b.onclick=()=>pickCourt(b.dataset.court));
+ el.hidden=false;
+}
+function pickCourt(v){$('welcome').hidden=true;tick();if(VENUES.some(x=>x.id===v)){VID=v;ls.set('rc_venue',v);applyVenue();welcomePick=v}go_on()}
 (async function boot(){
  applyVenue();
  try{await Store.init()}catch(e){console.warn(e)}
  let id=null;try{id=await Store.session()}catch(e){}
- if(id){S.uid=id;await enter(false)}else showAuth();
- booted=true;if(recovery)setTimeout(showReset,300);
+ const start=async()=>{if(id){S.uid=id;await enter(false)}else showAuth();booted=true;if(recovery)setTimeout(showReset,300)};
+ if(recovery)return start();
+ showWelcome(start);
 })();

@@ -800,12 +800,45 @@ a.btn{text-decoration:none}
 .vrow .vmark{flex:none}.vrow .grow{flex:1;min-width:0}.vrow b{display:block}
 .splash .v-sunday img{width:150px}
 .auth .avenue{display:flex;align-items:center;gap:10px;margin:0 0 16px}.auth .avenue .vbtn{transform:scale(.8)}.auth .avenue .vbtn.on{transform:scale(.9)}
+
+/* ============ Opening screen: My Padel, then pick a court ============ */
+.welcome{position:fixed;inset:0;z-index:60;overflow:auto;display:grid;place-items:center;padding:32px 22px calc(32px + var(--safe-b));background:radial-gradient(70% 55% at 50% 22%,rgba(29,90,155,.55),transparent 70%),radial-gradient(60% 50% at 50% 100%,rgba(29,90,155,.25),transparent 70%),#0b1220;color:#fff}
+.welcome[hidden]{display:none}
+.wcin{width:100%;max-width:420px;text-align:center}
+.wlogo{width:132px;height:132px;border-radius:30px;display:block;margin:0 auto;box-shadow:0 22px 50px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08);animation:wPop .9s var(--spring) both}
+.wname{margin:22px 0 0;font:500 34px/1.1 var(--display);letter-spacing:-.01em;animation:rise .7s var(--ease) .15s both}
+.wtag{margin:10px 0 0;font-size:16px;color:rgba(255,255,255,.72);animation:rise .7s var(--ease) .25s both}
+.wpick{margin:40px 0 14px;color:rgba(255,255,255,.6);animation:rise .7s var(--ease) .35s both}
+.wcourts{display:grid;gap:12px;animation:rise .7s var(--ease) .45s both}
+.wcourt{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:20px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#fff;font:inherit;text-align:left;cursor:pointer;transition:transform .35s var(--spring),background .25s,border-color .25s}
+.wcourt:active{transform:scale(.98)}
+@media (hover:hover){.wcourt:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.24);transform:translateY(-2px)}}
+.wcourt b{display:block;font-size:16px}.wcourt small{display:block;color:rgba(255,255,255,.62);font-size:13px;margin-top:2px}
+.wcourt .go{margin-left:auto;font-size:22px;color:rgba(255,255,255,.5)}
+.wmark{flex:none;display:grid;place-items:center;height:54px;min-width:54px;border-radius:14px;padding:0 10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
+.wmark img{height:40px;width:auto;display:block}
+.wmark.w-rc{background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289)}
+.wmark.w-sunday{width:54px;padding:0;border-radius:50%;background:radial-gradient(120% 120% at 30% 20%,#4542e0,#2e2bc7 55%,#2320a6)}.wmark.w-sunday img{height:26px}
+.wfoot{margin-top:30px;font-size:12px;color:rgba(255,255,255,.4)}
+@keyframes wPop{from{opacity:0;transform:scale(.7) translateY(10px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
 <div class="aura" aria-hidden="true"></div><div class="grain" aria-hidden="true"></div>
 <div class="sprog" id="sprog" aria-hidden="true"></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<!-- Opening screen: the My Padel logo, then pick a court -->
+<section class="welcome" id="welcome" hidden>
+  <div class="wcin">
+    <img class="wlogo" src="brand/icon-512.png" alt="My Padel">
+    <h1 class="wname">My Padel</h1>
+    <p class="wtag">Every court. One app.</p>
+    <p class="eyebrow wpick">Pick a court to start</p>
+    <div class="wcourts" id="wCourts"></div>
+    <p class="wfoot" id="wFoot"></p>
+  </div>
+</section>
 
 <!-- Sign in / create account -->
 <section class="auth" id="auth" hidden>
@@ -855,10 +888,10 @@ a.btn{text-decoration:none}
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--brand-hi)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--brand-hi)" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script>window.RC_VER='1.4demo';window.RC_PREVIEW=true</script>
-<script src="config.js?v=61"></script>
+<script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
+<script src="config.js?v=62"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=61"></script>
+<script src="app.js?v=62"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
