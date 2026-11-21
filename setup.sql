@@ -354,12 +354,11 @@ create policy "rc coaches write" on public.rc_coaches for all to authenticated u
 grant select, insert, update, delete on public.rc_coaches to authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_coaches; exception when duplicate_object then null; end $$;
 
--- Admins can make other people admins (or take it away), but never remove themselves
+-- Admin access can only be given or removed by the club owner, here in Supabase (see "Making someone an admin" at the end).
+-- The app can never add or remove admins.
 drop policy if exists "rc admins insert" on public.rc_admins;
 drop policy if exists "rc admins delete" on public.rc_admins;
-create policy "rc admins insert" on public.rc_admins for insert to authenticated with check (public.rc_is_admin());
-create policy "rc admins delete" on public.rc_admins for delete to authenticated using (public.rc_is_admin() and user_id <> auth.uid());
-grant insert, delete on public.rc_admins to authenticated;
+revoke insert, update, delete on public.rc_admins from authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_admins; exception when duplicate_object then null; end $$;
 
 create or replace function public.rc_is_coach() returns boolean language sql stable security definer set search_path = public as $$
