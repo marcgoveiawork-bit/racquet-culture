@@ -213,7 +213,7 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
- async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};d.admins=d.admins.filter(x=>x!==id);delete d.coaches[id];if(role==='admin')d.admins.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
+ async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];if(role==='coach')d.coaches[id]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
@@ -301,9 +301,7 @@ const Live={
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
  async setRole(id,role,coach){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
-  if(role==='admin'){chk(await sb.from('rc_admins').upsert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id))}
-  else{chk(await sb.from('rc_admins').delete().eq('user_id',id));
-   if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))}},
+  if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
@@ -1912,14 +1910,15 @@ function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="m
  return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
 /* Admins only: change what an account can do */
 function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id);
+ if(r==='admin')return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p class="small muted" style="margin-top:8px">${esc(first(p))} is a club admin. Only the club owner can give or remove admin access.</p></div>`;
  return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span>
-  <div style="margin-top:10px">${seg('role','Account type',[['player','Player'],['coach','Coach'],['admin','Admin']],r,'roleSet')}</div>
-  <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} can confirm bookings, set prices, block slots and review scores.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
+  <div style="margin-top:10px">${seg('role','Account type',[['player','Player'],['coach','Coach']],r,'roleSet')}</div>
+  <p class="small muted" style="margin-top:8px">${r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
   ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
    <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
 async function applyRole(id,role,coach,quiet){
  try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?'Only admins can change accounts.':'Could not save. Check your connection.');return false}
- S.admins=S.admins.filter(x=>x!==id);delete S.coaches[id];if(role==='admin')S.admins.push(id);if(role==='coach')S.coaches[id]=coach;
+ delete S.coaches[id];if(role==='coach')S.coaches[id]=coach;
  if(!quiet)notify([{to:id,kind:'role',data:{role,title:role==='coach'?coachTitle(id):'',auto:!!(coach&&coach.auto)}}]);
  playerSheet(id);return true}
 function playerSheet(id){
@@ -2086,9 +2085,9 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
- async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||v===roleOf(id))return;const p=prof(id);
+ async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isAdmin(id)||!['player','coach'].includes(v)||v===roleOf(id))return;const p=prof(id);
   const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null;
-  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':'Now a player');toast(`${first(p)} has been told.`)}},
+  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':'Now a player');toast(`${first(p)} has been told.`)}},
  async coachSport(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(x=>x!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
   if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true))tick()},
  async coachAuto(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
