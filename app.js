@@ -411,13 +411,18 @@ function buildDemo(you){
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
-async function demoSwitch(){const d=Demo.d;if(!d)return;S.uid=S.uid===d.alt?d.you:d.alt;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
- window.scrollTo(0,0);render();celebrate(S.uid===d.alt?'You are now Arjun':'Back to you (admin)')}
-async function startDemo(){
+async function demoSwitch(to){const d=Demo.d;if(!d)return;const next=to==='player'?d.alt:to==='admin'?d.you:(S.uid===d.alt?d.you:d.alt);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
+ window.scrollTo(0,0);render();celebrate(S.uid===d.alt?'Now viewing as a player':'Now viewing as an admin')}
+/* Pick how to see the demo: as an ordinary player or as an admin */
+function demoChooser(){
+ openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched. You can switch between player and admin at any time from the bar at the top.</p>
+  <div class="demopick"><button type="button" class="btn brand wide" data-act="demoGo" data-v="player"><b>View as player</b><span>Add scores, confirm games, climb the rankings</span></button>
+  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="admin"><b>View as admin</b><span>Everything a player sees, plus reviewing disputed scores</span></button></div>`)}
+async function startDemo(role){
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid};closeSheet(true);S.needSql=false;
- Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
- splash('Demo mode','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
+ Demo.d=buildDemo(you);Store=Demo;S.uid=role==='player'?Demo.d.alt:you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ splash(role==='player'?'Demo: player view':'Demo: admin view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
@@ -949,7 +954,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?`<div class="demobar"><span><b>Demo mode.</b> ${Demo.d&&S.uid===Demo.d.alt?'You are <b>Arjun</b>, an ordinary player.':'You are an <b>admin</b>.'} Nothing is saved.</span><span class="dbtns"><button class="btn ghost sm" data-act="demoSwitch">${Demo.d&&S.uid===Demo.d.alt?'Back to admin':'Switch to Arjun'}</button><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const pl=!!(Demo.d&&S.uid===Demo.d.alt);return`<div class="demobar"><span><b>Demo mode.</b> ${pl?'You are <b>Arjun</b>, a player.':'You are an <b>admin</b>.'} Nothing is saved.</span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as"><button type="button" role="radio" aria-checked="${pl}" data-act="demoSwitch" data-v="player">Player</button><button type="button" role="radio" aria-checked="${!pl}" data-act="demoSwitch" data-v="admin">Admin</button></span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -1573,7 +1578,7 @@ const ACT={
  retake(v){startWiz('level',[v])},
  pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)buzz([12,40,12]);if(v==='sound'&&prefs.sound)sfx('pop');if(v==='popups'&&prefs.popups)celebrate('Pop-ups on');
   const r=$('r-'+v);if(r){r.classList.add('play');setTimeout(()=>r.classList.remove('play'),1000)}},
- demo(){startDemo()},exitDemo(){exitDemo()},
+ demo(){demoChooser()},demoGo(v){startDemo(v==='player'?'player':'admin')},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
  async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()},
  /* inbox */
@@ -1591,7 +1596,7 @@ const ACT={
   try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about invites, scores and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
- demoSwitch(){demoSwitch()},
+ demoSwitch(v){demoSwitch(v)},
  pvGo(v){view.pv=v;go('players')},
 
  aDate(v){A.date=v;if(A.time!=null&&(slotDate(v,A.time)>new Date()))A.time=null,A.len=0;tick();render()},
