@@ -284,6 +284,29 @@ end $$;
 drop trigger if exists rc_booking_status on public.rc_bookings;
 create trigger rc_booking_status before insert or update on public.rc_bookings for each row execute function public.rc_booking_status();
 
+-- Late and no-show reports that an admin has confirmed (or dismissed).
+-- Everyone signed in can read them (they power the reliability line on profiles); only admins can add them.
+-- Who sent the report stays inside the admins' inbox, not in this table's public columns.
+create table if not exists public.rc_conduct (
+  id          text primary key,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  kind        text not null check (kind in ('late','noshow','dismissed')),
+  sport       text not null check (sport in ('padel','pickleball')),
+  report      text unique,
+  data        jsonb not null default '{}'::jsonb,
+  created_by  uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now()
+);
+alter table public.rc_conduct enable row level security;
+drop policy if exists "rc conduct read"   on public.rc_conduct;
+drop policy if exists "rc conduct insert" on public.rc_conduct;
+drop policy if exists "rc conduct delete" on public.rc_conduct;
+create policy "rc conduct read"   on public.rc_conduct for select to authenticated using (true);
+create policy "rc conduct insert" on public.rc_conduct for insert to authenticated with check (public.rc_is_admin() and auth.uid() = created_by and user_id <> auth.uid());
+create policy "rc conduct delete" on public.rc_conduct for delete to authenticated using (public.rc_is_admin());
+grant select, insert, delete on public.rc_conduct to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_conduct; exception when duplicate_object then null; end $$;
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
