@@ -478,22 +478,27 @@ function buildDemo(you){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
-async function demoSwitch(to){const d=Demo.d;if(!d)return;const next=to==='player'?d.alt:to==='admin'?d.you:(S.uid===d.alt?d.you:d.alt);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
- window.scrollTo(0,0);render();celebrate(S.uid===d.alt?'Now viewing as a player':'Now viewing as an admin')}
+const DEMO_AS=[['dev','Developer'],['admin','Admin'],['coach','Coach'],['player','Player']];
+const demoId=r=>{const d=Demo.d;return r==='player'?d.alt:r==='admin'?d.adm:r==='coach'?d.coach:d.you};
+const demoRole=()=>{const d=Demo.d;return!d?'dev':S.uid===d.alt?'player':S.uid===d.adm?'admin':S.uid===d.coach?'coach':'dev'};
+async function demoSwitch(to){const d=Demo.d;if(!d)return;const next=demoId(to);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
+ window.scrollTo(0,0);render();celebrate('Now viewing as '+(to==='admin'?'an admin':to==='dev'?'the developer':'a '+to))}
 /* Pick how to see the demo: as an ordinary player or as an admin */
 function demoChooser(){
- openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched. You can switch between player and admin at any time from the bar at the top.</p>
-  <div class="demopick"><button type="button" class="btn brand wide" data-act="demoGo" data-v="player"><b>View as player</b><span>Add scores, confirm games, climb the rankings</span></button>
-  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="admin"><b>View as admin</b><span>Everything a player sees, plus reviewing disputed scores</span></button></div>`)}
+ openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched. You can switch between the four accounts at any time from the bar at the top.</p>
+  <div class="demopick"><button type="button" class="btn brand wide" data-act="demoGo" data-v="player"><b>Player</b><span>Book courts, add scores, confirm games, climb the rankings</span></button>
+  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="coach"><b>Coach</b><span>Everything a player does, plus blocking court time for coaching</span></button>
+  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="admin"><b>Admin</b><span>Confirms bookings, reviews scores and reports, posts club news, switches players and coaches</span></button>
+  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="dev"><b>Developer</b><span>Everything an admin does, plus giving or removing admin access</span></button></div>`)}
 async function startDemo(role){
- const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
+ const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid};closeSheet(true);S.needSql=false;
- Demo.d=buildDemo(you);Store=Demo;S.uid=role==='player'?Demo.d.alt:you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
- splash(role==='player'?'Demo: player view':'Demo: admin view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
+ Demo.d=buildDemo(you);Store=Demo;S.uid=demoId(role);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ splash('Demo: '+lbl(DEMO_AS,role).toLowerCase()+' view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
@@ -1027,11 +1032,12 @@ function wStep(key){
    body:`<div class="opts" role="radiogroup">${it[1].map((a,j)=>opt({act:'wAns',v:sp+'|'+qi+'|'+j,on:cur!==undefined&&q.pick&&q.pick[+qi]===j,title:a[0]})).join('')}</div><p class="qhint">Answer for how you play most of the time.</p>`}}
  if(kind==='result'){const q=d.q[sp],v=levelFrom(sp,q.band,q.ans),t=tierOf(sp,v),had=S.R[sp][S.uid]&&S.R[sp][S.uid].n;
   const segs=TIERS.map(([k,n])=>{const lo=k==='beginner'?S_.min:S_.cut[k==='intermediate'?0:1],hi=k==='pro'?S_.max:S_.cut[k==='beginner'?0:1];return`<span class="${k===t?'on':''}" style="flex:${hi-lo}"><em>${n}</em></span>`}).join('');
-  return{eyebrow:`${S_.name} level`,title:'Your starting level',sub:'',valid:true,result:{sp,v},
+  return{eyebrow:`${S_.name} level`,title:'Your starting level',sub:'',valid:true,result:{sp,v},next:'Confirm this level',alt:`<button class="btn ghost" data-act="wRetake" data-v="${sp}">Retake</button>`,
    body:`<div class="lvl"><div class="big num" id="lvlNum">0.0</div><div class="tierchip"><span class="chip t-${t}">${TIER_NAME[t]} rankings</span></div>
    <div class="gauge">${segs}<i class="mark" id="lvlMark"></i></div>
    <p class="muted small" style="margin-top:34px">${S_.name} is rated from ${fmtL(S_.min,1)} to ${fmtL(S_.max,1)}. Your level now moves with every result you log: beat stronger players to climb faster.</p>
-   ${had?'<p class="small" style="margin-top:10px;color:var(--ball)">Your matches will be recalculated from this new starting level.</p>':''}</div>`}}
+   <p class="small lockn">Not quite right? Tap <b>Retake</b> to answer again. Once you confirm, your starting level is locked and only your results move it. You can still drop to a lower tier later from your level card.</p>
+</div>`}}
  if(kind==='done'){const p=me();
   return{eyebrow:'All set',title:`You're on court, ${first(p)}.`,sub:'Your profile is ready. Log your first score to enter the rankings.',valid:true,next:'Enter the club',
    body:`<div class="avbig">${avHTML(Object.assign({},p,{avatar:d.avatar}),132)}</div>
@@ -1047,7 +1053,7 @@ function paintWiz(anim=true){
   <div class="wprog"><div class="wbar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="Profile set-up progress"><i style="width:${W.prevPct||0}%"></i></div><div class="wcount"><span>${esc(s.eyebrow||'')}</span><span class="num">${W.i+1} of ${st.length}</span></div></div></div>
   <div class="wbody"><div class="wstep${anim?' intro':' still'}${W.dir<0?' back':''}" ${anim?'':'style="animation:none"'}>
    <h1>${esc(s.title)}</h1>${s.sub?`<p class="muted">${esc(s.sub)}</p>`:''}${s.body}</div></div>
-  <div class="wfoot">${W.mode!=='setup'&&W.i===0?`<button class="btn ghost" data-act="wCancel">Cancel</button>`:''}<button class="btn brand wide" data-act="wNext" ${s.valid?'':'disabled'}>${esc(s.next||'Continue')}</button></div>`;
+  <div class="wfoot">${W.mode!=='setup'&&W.i===0?`<button class="btn ghost" data-act="wCancel">Cancel</button>`:''}${s.alt||''}<button class="btn brand wide" data-act="wNext" ${s.valid?'':'disabled'}>${esc(s.next||'Continue')}</button></div>`;
  W.jp=null;clearTimeout(W.it);if(anim)W.it=setTimeout(()=>{const st=$('wiz').querySelector('.wstep.intro');if(st)st.classList.remove('intro')},1600);
  requestAnimationFrame(()=>{const b=$('wiz').querySelector('.wbar i');if(b)b.style.width=pct+'%';W.prevPct=pct});
  const up=$('wiz').querySelector('.upload');if(up)up.dataset.a='bounce';const ph=$('wPhoto');if(ph)ph.onchange=async()=>{try{W.d.avatar={kind:'img',src:await readPhoto(ph.files[0])};paintWiz(false);toast('Looking good.')}catch(e){toast(e.message)}};
@@ -1081,7 +1087,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const pl=!!(Demo.d&&S.uid===Demo.d.alt);return`<div class="demobar"><span><b>Demo mode.</b> ${pl?'You are <b>Arjun</b>, a player.':'You are an <b>admin</b>.'} Nothing is saved.</span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as"><button type="button" role="radio" aria-checked="${pl}" data-act="demoSwitch" data-v="player">Player</button><button type="button" role="radio" aria-checked="${!pl}" data-act="demoSwitch" data-v="admin">Admin</button></span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved.</span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -1746,7 +1752,6 @@ function vMe(){
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
   <div class="sec"><h2>Levels</h2></div><div class="grid2">${mySports().map(sp=>levelCard(sp,S.uid)).join('')}</div>
-  <div class="cta">${mySports().map(sp=>`<button class="btn ghost sm" data-act="retake" data-v="${sp}">Retake ${SPORTS[sp].name.toLowerCase()} questions</button>`).join('')}</div>
   <div class="sec"><h2>How you play</h2></div>
   <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd><dt>Phone</dt><dd>${myPhone()?`${esc(myPhone().phone)} <span class="muted small">· ${esc(lbl(PH_WHO,myPhone().vis||'admins'))} can see it</span>`:'Not added. Add it in Settings.'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
@@ -2163,10 +2168,11 @@ const ACT={
  delMatch(v){confirmSheet('Delete this score?','Everyone’s levels from this game are recalculated without it.','Delete','delMatchYes',v)},
  async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only the player who added it, or an admin, can delete this score.':'Could not delete. Check your connection.')}S.matches=S.matches.filter(m=>m.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();toast('Score deleted')},
  editProfile(){startWiz('edit')},
- retake(v){startWiz('level',[v])},
+ retake(v){const L=me().levels||{};if(L[v]&&isFinite(+L[v].start))return toast('Your starting level is set. Play games to move it.');startWiz('level',[v])},
+ wRetake(sp){const d=W.d;d.q[sp]={band:'',ans:[]};W.i=wSteps().indexOf('band:'+sp);W.dir=-1;window.scrollTo(0,0);paintWiz()},
  pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)buzz([12,40,12]);if(v==='sound'&&prefs.sound)sfx('pop');if(v==='popups'&&prefs.popups)celebrate('Pop-ups on');
   const r=$('r-'+v);if(r){r.classList.add('play');setTimeout(()=>r.classList.remove('play'),1000)}},
- demo(){demoChooser()},demoGo(v){startDemo(v==='player'?'player':'admin')},exitDemo(){exitDemo()},
+ demo(){demoChooser()},demoGo(v){startDemo(DEMO_AS.some(x=>x[0]===v)?v:'player')},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
  async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()},
  /* inbox */
