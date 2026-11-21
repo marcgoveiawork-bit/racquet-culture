@@ -509,7 +509,7 @@ const ccSelect=(id,cur)=>`<select id="${id}" class="ccsel" aria-label="Country c
 const phoneOf=(cc,raw)=>{const d=String(raw||'').replace(/\D/g,'').replace(/^0+/,'');return d.length>=6&&d.length<=14?cc+' '+d:null};
 const myPhone=()=>S.phones[S.uid]||null;
 const canSeePhone=id=>{const r=S.phones[id];if(!r||!r.phone)return false;return id===S.uid||isAdmin()||r.vis==='all'||(r.vis==='friends'&&isFriend(id))};
-const phoneLink=id=>canSeePhone(id)?`<a class="phlink" href="tel:${esc(S.phones[id].phone.replace(/\s/g,''))}">${esc(S.phones[id].phone)}</a>`:'';
+const phoneLink=id=>canSeePhone(id)?`<a class="phlink" data-act="tel" href="tel:${esc(S.phones[id].phone.replace(/\s/g,''))}">${esc(S.phones[id].phone)}</a>`:'';
 function relWith(id){
  const rs=S.reqs.filter(r=>(r.from===S.uid&&r.to===id)||(r.from===id&&r.to===S.uid)).sort((a,b)=>(b.at||'').localeCompare(a.at||''));
  const acc=rs.find(r=>r.status==='accepted');if(acc)return{st:'friends',r:acc};
@@ -740,7 +740,7 @@ addEventListener('scroll',()=>{if(!scRaf)scRaf=requestAnimationFrame(onScroll)},
 let authMode='in',fails=0,lockUntil=0,tkT=0,tkSeq=0;
 const UN_RE=/^[A-Za-z0-9._-]+$/;
 function showAuth(){
- $('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
+ $('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);mountBar();
  $('modeNote').textContent=Store.mode==='live'?'':'Preview mode: accounts and scores are saved on this device only.';
  paintAuth(0);
 }
@@ -956,7 +956,7 @@ function startWiz(mode,only){
  const p=me();
  W={mode,only:only||null,i:0,dir:1,d:{gender:p.gender||'',avatar:p.avatar||null,sports:[...(p.sports||[])],hand:p.hand||'',invites:p.invites===undefined?null:p.invites,times:[...(p.times||[])],side:p.side||'',levels:JSON.parse(JSON.stringify(p.levels||{})),q:{}}};
  if(mode==='level')W.only.forEach(sp=>W.d.q[sp]={band:'',ans:[]});
- $('auth').hidden=true;$('app').hidden=true;$('wiz').hidden=false;window.scrollTo(0,0);closeSheet(true);paintWiz();
+ $('auth').hidden=true;$('app').hidden=true;$('wiz').hidden=false;window.scrollTo(0,0);closeSheet(true);mountBar();paintWiz();
 }
 function wSteps(){
  const d=W.d,st=[];
@@ -1058,7 +1058,7 @@ const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>
 function render(){
  if(!me())return showAuth();
  after=()=>{};const t=view.tab,html=(VIEWS[t]||VIEWS.home)();
- $('main').innerHTML=`<div class="view">${html}</div>`;
+ $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
  $('banner').innerHTML=Store.mode==='demo'?(()=>{const pl=!!(Demo.d&&S.uid===Demo.d.alt);return`<div class="demobar"><span><b>Demo mode.</b> ${pl?'You are <b>Arjun</b>, a player.':'You are an <b>admin</b>.'} Nothing is saved.</span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as"><button type="button" role="radio" aria-checked="${pl}" data-act="demoSwitch" data-v="player">Player</button><button type="button" role="radio" aria-checked="${!pl}" data-act="demoSwitch" data-v="admin">Admin</button></span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
@@ -1249,8 +1249,11 @@ function slotsHTML(){
  return parts.map(([n,a,z])=>`<p class="eyebrow period">${n}</p><div class="slots">${Array.from({length:z-a},(_,k)=>cellHTML(a+k)).join('')}</div>`).join('');
 }
 function bkBarHTML(){const bk=bkState();if(!bk.sel)return'';const [s,e]=bk.sel,len=e-s+1;
- return `<div style="height:96px" aria-hidden="true"></div><div class="bkbar"><div class="grow"><b class="price">${bk.block?'Close '+durLabel(len):rupees(rangePrice(bk.court,bk.day,s,len))+' · '+durLabel(len)}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':'Book'}</button></div>`}
-function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();const bar=$('bkBar');if(bar)bar.innerHTML=bkBarHTML()}
+ return `<div class="bkbar"><div class="grow"><b class="price">${bk.block?'Close '+durLabel(len):rupees(rangePrice(bk.court,bk.day,s,len))+' · '+durLabel(len)}</b><br><span class="muted">${esc(dateLabel(bk.day))} · ${slotRange(s,len)}</span></div><button class="btn ghost sm" data-act="slotClear">Clear</button><button class="btn ${bk.block?'danger':'brand'} sm" data-act="${bk.block?'blockGo':'bookGo'}">${bk.block?'Block':isAdmin()?'Book':'Request booking'}</button></div>`}
+/* The Book bar floats above the dock. It lives outside the page (the page animates with a transform, which would pin it to the page instead of the screen) */
+function mountBar(){let h=$('bkFloat');if(!h){h=document.createElement('div');h.id='bkFloat';document.body.appendChild(h)}
+ const on=view.tab==='book'&&!$('app').hidden,html=on?bkBarHTML():'';if(h.dataset.h!==html){h.innerHTML=html;h.dataset.h=html}const sp=$('bkBar');if(sp)sp.innerHTML=html?'<div style="height:96px" aria-hidden="true"></div>':''}
+function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();mountBar()}
 function vBook(){
  const bk=bkState(),days=Array.from({length:14},(_,k)=>addDays(today(),k)),v=VENUES[0],up=myBookings(),adm=isAdmin(),pend=pendingBookings();
  after=()=>{clearInterval(factT);let i=0;const n=FACTS.length;
@@ -1270,7 +1273,7 @@ function vBook(){
   ${adm?`<div class="card rv"><div class="setline"><div><b>Block slots</b><p class="small muted">Close the court for coaching, maintenance or events. Players see it as closed.</p></div><button class="switch" role="switch" aria-checked="${!!bk.block}" data-act="bkBlock" aria-label="Block slots"></button></div></div>`:''}
   <div class="legend"><span><i class="lg-free"></i>Free</span><span><i class="lg-mine"></i>Your games</span><span><i class="lg-booked"></i>Booked</span><span><i class="lg-block"></i>Closed</span><span class="muted">${n} game${n===1?'':'s'} this day</span></div>
   <p class="small muted" style="margin:-4px 0 4px">Tap an open time, then the next ones to make it longer (up to ${MAX_GAME/2} hours). Prices are per 30 minutes and you <b>pay at the court when you arrive</b>. The club confirms each booking and you get a message when it's done. All times are Indian Standard Time.${adm?' As an admin you see who is playing in each slot. Tap a booking to confirm it, see the players or cancel it.':''}</p>
-  <div id="slotGrid">${slotsHTML()}</div><div id="bkBar">${bkBarHTML()}</div>
+  <div id="slotGrid">${slotsHTML()}</div><div id="bkBar"></div>
   ${ns.length?`<div class="sec"><h2>For you</h2></div><div class="list">${ns.map(([i,t,p])=>`<div class="card nudge rv"><span class="ng-i" aria-hidden="true">${i}</span><div><b>${esc(t)}</b><p class="small muted">${esc(p)}</p></div></div>`).join('')}</div>`:''}
   <div class="sec"><h2>Why play padel?</h2></div>
   <div class="card factcar rv" id="factCar" aria-live="polite">${FACTS.map(([i,t,p],k)=>`<div class="fact${k===0?' on':''}"><span class="fc-i" aria-hidden="true">${i}</span><b>${esc(t)}</b><p class="muted">${esc(p)}</p></div>`).join('')}
@@ -1328,7 +1331,7 @@ function bookingSheet(id){
   <div style="margin-top:10px">${stChip(b)}${!pend&&b.confirmedBy&&adm?` <span class="tiny muted">by ${esc(first(prof(b.confirmedBy))||'an admin')}</span>`:''}</div>
   ${adm&&pend?`<p class="small muted" style="margin-top:8px">After confirming, block ${slotRange(b.start,b.len)} ${(dl=>dl==='Today'||dl==='Tomorrow'?dl.toLowerCase():'on '+esc(dl))(dateLabel(b.date))} on Hudle so no one else books it there.</p>`:''}
   ${b.note?`<p style="margin-top:10px">${esc(b.note)}</p>`:''}
-  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2">${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b>${adm&&id!==S.uid&&canSeePhone(id)?`<span>${phoneLink(id)}</span>`:''}</span>${status(id)}</div>`}).join('')}</div>`
+  ${seeAll?`<div class="pickl" style="margin-top:14px">${[b.by,...(b.invited||[])].map(id=>{const p=prof(id);return`<div class="prow2${p?' tap':''}"${p?` role="button" tabindex="0" data-act="player" data-v="${esc(id)}" aria-label="Open ${esc(p.name)}’s profile"`:''}>${avHTML(p||{name:'?'})}<span class="nm"><b>${esc(p?p.name:'Former member')}${id===S.uid?' (you)':''}</b>${adm&&id!==S.uid&&canSeePhone(id)?`<span>${phoneLink(id)}</span>`:''}</span>${status(id)}${p?'<span class="go" aria-hidden="true">›</span>':''}</div>`}).join('')}</div>`
    :`<p class="small muted" style="margin-top:12px">This time is booked by ${esc(host?first(host):'a member')}.</p>`}
   ${acts.length?`<div class="cta">${acts.join('')}</div>`:''}<button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">Close</button>`);
 }
@@ -1833,7 +1836,7 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const loaderHTML=t=>`<div class="loader"><span class="lball" aria-hidden="true"><svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="30" fill="#d9f24c"/><path d="M17 22c10 10 10 26 0 36M63 22C53 32 53 48 63 58" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/></svg></span><span class="lshadow" aria-hidden="true"></span><p>${esc(t)}</p>
  <div class="skel">${'<i></i>'.repeat(5)}</div></div>`;
 async function loadRank(force){
- view.tab='rank';paintDock('rank');window.scrollTo(0,0);$('main').innerHTML=loaderHTML(force?'Refreshing rankings…':'Loading rankings…');
+ view.tab='rank';paintDock('rank');mountBar();window.scrollTo(0,0);$('main').innerHTML=loaderHTML(force?'Refreshing rankings…':'Loading rankings…');
  const t0=Date.now();if(force||Store.mode==='live'){try{await reload()}catch(e){toast('Could not refresh. Check your connection.')}}
  await wait(Math.max(0,(calm()?250:850)-(Date.now()-t0)));if(view.tab==='rank'){render();if(force)doneTick('Rankings up to date')}
 }
