@@ -165,7 +165,7 @@ const VENUES=[
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
   url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'},
  {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
-  courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'round',color:'#2e2bc7',
+  courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'}
 ];
@@ -596,25 +596,38 @@ async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};
  const np=Object.assign({},p,{venues:[...new Set([...venuesOf(p),vid])],vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
  try{await Store.saveProfile(np)}catch(e){if(!quiet)toast('Could not join. Check your connection and try again.');return false}
  upsert(S.profiles,np);return true}
-function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo';
- openSheet(`<div class="vjoin" data-venue="${esc(vid)}"><div class="vjhead">${vMark(v,'big')}</div>
-  <p class="eyebrow" style="text-align:center;margin-top:14px">Sign in</p><h2 style="text-align:center">${esc(v.name)}</h2>
-  <p class="muted small" style="text-align:center;margin:6px 0 4px">Use the same email and password you always use on My Padel. Your profile, friends and messages come with you. ${esc(v.short)} has its own rankings, and your level there starts from the level you have now.</p>
-  <form id="vjForm" novalidate>
-   <label for="vjEmail">Email</label><input id="vjEmail" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(S.email||'')}"${S.email&&!demo?' readonly':''} placeholder="you@example.com">
-   <label for="vjPass">Password</label><div class="pw"><input id="vjPass" type="password" autocomplete="current-password"><button type="button" class="pwtoggle" id="vjT">Show</button></div>
-   <p class="ferr" id="vjErr" role="alert"></p>
-   <button class="btn brand wide" id="vjBtn" type="submit">Sign in to ${esc(v.short)}</button>
-   ${demo?`<p class="tiny muted" style="text-align:center;margin-top:10px">Demo mode: any email and password work.</p>`:''}
-  </form><p class="tiny muted" style="text-align:center;margin-top:14px">You only do this once. After that, tap the club logos at the top to switch.</p></div>`,bg=>{
-  bg.querySelector('#vjT').onclick=()=>{const i=$('vjPass'),sh=i.type==='password';i.type=sh?'text':'password';$('vjT').textContent=sh?'Hide':'Show'};
-  bg.querySelector('#vjForm').onsubmit=async e=>{e.preventDefault();const em=$('vjEmail').value.trim(),pw=$('vjPass').value,err=t=>{$('vjErr').textContent=t;buzz([30,40,30])};
-   if(!demo&&!EMAIL_RE.test(em))return err('Enter the email you signed up with.');if(!pw)return err('Enter your password.');
-   const b=$('vjBtn');b.disabled=true;b.textContent='Signing in…';
-   try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
-   catch(x){b.disabled=false;b.textContent=`Sign in to ${v.short}`;return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
-   if(!await joinVenue(vid)){b.disabled=false;b.textContent=`Sign in to ${v.short}`;return}
-   await setVenue(vid);doneTick('Welcome to '+v.short)}});
+/* A full sign-in page for the club, in its own colours, like the main sign-in page */
+function closeVenueSignIn(){const el=$('vjPage');if(el)el.hidden=true;applyVenue();$('app').hidden=false;render()}
+function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo',from=VEN();closeSheet(true);
+ document.documentElement.dataset.venue=vid;applyPrefs();
+ let el=$('vjPage');if(!el){el=document.createElement('section');el.id='vjPage';el.className='auth vjpage';document.body.appendChild(el)}
+ el.innerHTML=`<div class="aside">
+   <svg class="court" viewBox="0 0 400 200" aria-hidden="true"><rect class="draw" x="4" y="4" width="392" height="192" rx="6"/><line class="draw" x1="200" y1="0" x2="200" y2="200"/><line class="draw" x1="60" y1="4" x2="60" y2="196"/><line class="draw" x1="340" y1="4" x2="340" y2="196"/><line class="draw" x1="60" y1="100" x2="340" y2="100"/></svg>
+   <img class="alogo" src="${esc(v.splash)}" alt="${esc(v.name)}" style="${v.id==='rc'?'':'width:min(300px,72%)'}">
+   <div><p class="atag"><b>${esc(v.name)}</b>${esc(v.area)} · ${esc(v.courts)}.</p><ul class="afeat"><li>Your profile, friends and messages come with you</li><li>Its own rankings, starting from your current level</li><li>Sign in once, then switch clubs any time</li></ul></div>
+   <p class="afoot">My Padel · ${esc(v.name)}</p></div>
+  <div class="amain"><div class="acard">
+   <h1>Sign in to ${esc(v.name)}</h1>
+   <p class="muted">Use the same email and password you always use on My Padel. You only do this once.</p>
+   <form id="vjForm" novalidate>
+    <label for="vjEmail">Email</label><input id="vjEmail" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(S.email||'')}"${S.email&&!demo?' readonly':''} placeholder="you@example.com">
+    <label for="vjPass">Password</label><div class="pw"><input id="vjPass" type="password" autocomplete="current-password"><button type="button" class="pwtoggle" id="vjT">Show</button></div>
+    <p class="aerr" id="vjErr" role="alert"></p>
+    <button class="btn brand wide" id="vjBtn" type="submit">Sign in</button>
+    ${demo?`<p class="small muted" style="text-align:center;margin-top:12px">Demo mode: any email and password work.</p>`:''}
+    <button type="button" class="btn ghost wide" id="vjBack" style="margin-top:14px">Back to ${esc(from.name)}</button>
+   </form></div></div>`;
+ el.hidden=false;$('app').hidden=true;window.scrollTo(0,0);el.scrollTop=0;
+ $('vjT').onclick=()=>{const i=$('vjPass'),sh=i.type==='password';i.type=sh?'text':'password';$('vjT').textContent=sh?'Hide':'Show'};
+ $('vjBack').onclick=()=>{tick();closeVenueSignIn()};
+ $('vjForm').onsubmit=async e=>{e.preventDefault();const em=$('vjEmail').value.trim(),pw=$('vjPass').value,err=t=>{$('vjErr').textContent=t;buzz([30,40,30])};
+  if(!demo&&!EMAIL_RE.test(em))return err('Enter the email you signed up with.');if(!pw)return err('Enter your password.');
+  const b=$('vjBtn');b.disabled=true;b.textContent='Signing in…';
+  try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
+  catch(x){b.disabled=false;b.textContent='Sign in';return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
+  if(!await joinVenue(vid)){b.disabled=false;b.textContent='Sign in';return}
+  el.hidden=true;$('app').hidden=false;await setVenue(vid);doneTick('Welcome to '+v.name)};
+ setTimeout(()=>{const f=$(S.email&&!demo?'vjPass':'vjEmail');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
 }
 
 /* ---------- App state ---------- */
@@ -912,7 +925,7 @@ function showAuth(){
 /* Sign-in page: pick the club. New accounts start there; one account works at every club */
 function paintAuthVenue(){const v=VEN(),el=$('aVenue');
  if(el)el.innerHTML=VENUES.map(x=>`<button type="button" class="vbtn${x.id===VID?' on':''}" data-act="authVenue" data-v="${x.id}" aria-label="${esc(x.name)}" aria-pressed="${x.id===VID}" title="${esc(x.name)}">${vMark(x)}</button>`).join('')+`<span class="small"><b>${esc(v.name)}</b><span class="muted" style="display:block">One account for every club</span></span>`;
- const lg=document.querySelector('#auth .alogo');if(lg){lg.src=v.splash;lg.alt=v.name;lg.style.width=v.mark==='round'?'min(200px,56%)':''}
+ const lg=document.querySelector('#auth .alogo');if(lg){lg.src=v.splash;lg.alt=v.name;lg.style.width=v.id==='rc'?'':'min(300px,72%)'}
  const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>${esc(v.name)}</b>${esc(v.area)} · ${esc(v.courts)}. Sign in with your My Padel account, the same one at every club.`;
  const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='My Padel · '+v.short}
 function paintAuth(dir){
