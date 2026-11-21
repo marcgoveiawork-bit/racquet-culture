@@ -513,7 +513,7 @@ const isDev=id=>(S.devs||[]).includes(id||S.uid);
 const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
 const roleOf=id=>isDev(id)?'dev':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
 const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
-const coachLine=id=>isDev(id)?`<p class="coachline devline"><span>🛠️</span>Developer at Racquet Culture</p>`:isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
+const coachLine=id=>isDev(id)?'':isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -1916,7 +1916,7 @@ function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="m
 /* Admins only: change what an account can do */
 function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id);
  const dev=isDev();
- if(r==='dev'||(r==='admin'&&!dev))return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p style="margin-top:8px"><b>${esc(first(p))} is ${r==='dev'?'Developer':'Admin'} at Racquet Culture</b></p></div>`;
+ if(r==='dev'||(r==='admin'&&!dev))return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p style="margin-top:8px"><b>${r==='dev'?`${esc(first(p))} is a Developer`:`${esc(first(p))} is Admin at Racquet Culture`}</b></p></div>`;
  return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${dev?'Developer':'Admin'} · account type</span>
   <div style="margin-top:10px">${seg('role','Account type',dev?[['player','Player'],['coach','Coach'],['admin','Admin']]:[['player','Player'],['coach','Coach']],r,'roleSet')}</div>
   <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} is Admin at Racquet Culture: they can confirm bookings, set prices, block slots, review scores and make players coaches.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
