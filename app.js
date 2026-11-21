@@ -195,7 +195,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -212,9 +212,10 @@ function memStore(mode,get,put){return{mode,
  async updateReq(r){const d=get();upsert(d.reqs,r);put(d)},
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
- async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)}
+ async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
+ async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -246,7 +247,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -270,13 +271,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
-   votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data]))};
+   votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
+   conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
@@ -294,6 +296,7 @@ const Live={
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
+ async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
 };
 let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
@@ -445,7 +448,12 @@ function buildDemo(you){
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
   const gap=P._skill[m.sport]-P.levels[m.sport].start,x=r()+gap*.8,vote=x>.85?'higher':x<.2?'lower':'right';votes.push({id:'dv_'+k+'_'+t,voter,target:t,sport:m.sport,match:m.id,vote,at:m.at})})});
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
+ /* reliability: a few confirmed late and no-show reports, and one new report waiting for an admin */
+ const conduct=[];pool2.slice(12,17).forEach((p,k)=>{const sp=p.sports[0];conduct.push({id:'dc_'+k,user:p.id,kind:k%3===2?'noshow':'late',sport:sp,report:'drp_'+k,by:caelan.id,at:ago(24*(3+k*4))})});
+ const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
+ const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
+ if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -465,11 +473,11 @@ async function startDemo(role){
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[]});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,cfg:{},profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},conduct:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
@@ -504,7 +512,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -543,7 +551,10 @@ const TIER_KEYS=['beginner','intermediate','pro'],LV_CLOSE=0.1;
 const r2=x=>Math.round(x*100)/100;
 const capFor=(sp,t)=>{const i=TIER_KEYS.indexOf(t);return i<2?r2(SPORTS[sp].cut[i]-.01):null};
 const dropTo=(sp,t)=>r2(SPORTS[sp].bands[t][1]-.2);
-function levelEvents(){const ev=[];S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];((L&&Array.isArray(L.adj))?L.adj:[]).forEach(a=>{if(a&&isFinite(+a.r)&&a.at)ev.push({sp,id:p.id,r:+a.r,cap:a.cap==null?null:+a.cap,at:a.at,kind:a.kind,date:isoIST(Date.parse(a.at))})})}));return ev.sort((x,y)=>x.at.localeCompare(y.at))}
+function levelEvents(){const ev=[];S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];((L&&Array.isArray(L.adj))?L.adj:[]).forEach(a=>{if(a&&isFinite(+a.r)&&a.at)ev.push({sp,id:p.id,r:+a.r,cap:a.cap==null?null:+a.cap,at:a.at,kind:a.kind,date:isoIST(Date.parse(a.at))})})}));(S.conduct||[]).forEach(c=>{const pn=penOf(c);if(pn&&c.at)ev.push({sp:c.sport,id:c.user,delta:-pn,at:c.at,kind:c.kind,date:isoIST(Date.parse(c.at))})});return ev.sort((x,y)=>x.at.localeCompare(y.at))}
+/* Admin-confirmed reports knock a little off the player's level in that sport */
+const PEN={noshow:{padel:.15,pickleball:.1},late:{padel:.05,pickleball:.03}};
+const penOf=c=>c&&PEN[c.kind]&&PEN[c.kind][c.sport]||0;
 /* The tier a player was in before their latest drop (they can never be capped below a tier they never left) */
 function dropFrom(sp,id){const p=prof(id),L=p&&p.levels&&p.levels[sp];const d=((L&&L.adj)||[]).filter(a=>a.kind==='drop').pop();return d?d.from:null}
 /* Offer to move up: only for a capped player who is within LV_CLOSE of the next tier and hasn't just said stay */
@@ -555,7 +566,7 @@ function rate(){
  S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(L&&isFinite(+L.start))mk(sp,p.id,clampL(sp,L.start))}));
  const ev=levelEvents();let ei=0;
  const evFirst=(e,m)=>e.date<(m.date||'')||(e.date===m.date&&e.at<=(m.at||''));
- const applyEv=e=>{const E=R[e.sp][e.id];if(!E)return;const before=E.r;E.r=clampL(e.sp,e.r);E.cap=e.cap;E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
+ const applyEv=e=>{const E=R[e.sp]&&R[e.sp][e.id];if(!E)return;const before=E.r;if(e.delta!=null){E.r=clampL(e.sp,E.r+e.delta)}else{E.r=clampL(e.sp,e.r);E.cap=e.cap}E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
  S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{while(ei<ev.length&&evFirst(ev[ei],m))applyEv(ev[ei++]);D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
  while(ei<ev.length)applyEv(ev[ei++]);
  S.R=R;S.D=D;
@@ -595,6 +606,12 @@ function splash(big,small){
 function joinedOf(p){if(!p)return null;if(p.created)return isoIST(Date.parse(p.created));
  const c=[...Object.values(p.levels||{}).map(l=>l&&l.at&&isoIST(Date.parse(l.at))),...S.matches.filter(m=>regsOf(m).includes(p.id)).map(m=>m.date)].filter(Boolean).sort();return c[0]||null}
 function joinedLine(p){const j=joinedOf(p);return j?`<p class="joined small muted">Joined the community on ${new Date(j+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</p>`:''}
+/* Reliability: built only from reports an admin has confirmed */
+function reliability(id){const now=Date.now(),D=864e5,c=(S.conduct||[]).filter(x=>x.user===id&&x.at),played=S.matches.some(m=>regsOf(m).includes(id))||S.bookings.some(b=>isGame(b)&&goingOf(b).includes(id)&&bkEnd(b)<new Date());
+ const late=c.filter(x=>x.kind==='late'&&now-Date.parse(x.at)<30*D).length,miss=c.filter(x=>x.kind==='noshow'&&now-Date.parse(x.at)<90*D).length;
+ if(!played&&!late&&!miss)return null;
+ return{late,miss,html:`<div class="relia">${miss?`<span class="chip st-disputed">Missed ${miss} game${miss===1?'':'s'} in the past 3 months</span>`:'<span class="chip st-confirmed">Never missed a game</span>'}${late?`<span class="chip st-pending">Showed up late for ${late} game${late===1?'':'s'} in the past month</span>`:'<span class="chip st-confirmed">Always arrived on time</span>'}</div>`}}
+const reliaHTML=id=>(reliability(id)||{}).html||'';
 function dateLabel(iso){if(!iso)return'';const t=today(),d=new Date(iso+'T12:00:00');
  if(iso===t)return'Today';if(iso===addDays(t,-1))return'Yesterday';
  return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
@@ -1275,6 +1292,7 @@ function bookingSheet(id){
  if(pending&&future)acts.push(`<button class="btn brand" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button>`);
  if(going.includes(S.uid)&&future)acts.push(`<button class="btn ghost" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it any more</button>`);
  if(started&&(b.by===S.uid||going.includes(S.uid)))acts.push(`<button class="btn ball" data-act="bkScore" data-v="${esc(b.id)}">Add the score</button>`);
+ if(started&&(b.by===S.uid||going.includes(S.uid))&&goingOf(b).some(u=>u!==S.uid))acts.push(`<button class="btn ghost" data-act="reportOpen" data-v="b|${esc(b.id)}">Report late or no-show</button>`);
  if(future&&(b.by===S.uid||adm))acts.push(`<button class="btn danger" data-act="bkCancel" data-v="${esc(b.id)}">Cancel booking</button>`);
  openSheet(`<h2>${COURTS[b.court]}</h2><p class="muted small">${esc(VENUES[0].name)} · ${when} · ${rupees(b.price||rangePrice(b.court,b.date,b.start,b.len))}, paid at the court</p>
   <div style="margin-top:10px">${stChip(b)}${!pend&&b.confirmedBy&&adm?` <span class="tiny muted">by ${esc(first(prof(b.confirmedBy))||'an admin')}</span>`:''}</div>
@@ -1478,6 +1496,7 @@ function needsAction(g){const d=g.data||{};
  if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
  if(g.kind==='friend_req'){const r=S.reqs.find(x=>x.id===d.req);return !!r&&r.status==='pending'}
  if(g.kind==='invite'){const b=S.bookings.find(x=>x.id===d.booking);return !!b&&slotDate(b.date,b.start)>new Date()&&!(b.going||[]).includes(S.uid)&&!(b.declined||[]).includes(S.uid)}
+ if(g.kind==='report')return isAdmin()&&!S.conduct.some(c=>c.report===d.rep);
  if(g.kind==='bk_request'){const b=S.bookings.find(x=>x.id===d.booking);return isAdmin()&&!!b&&bkStatus(b)==='pending'&&bkEnd(b)>new Date()}
  return false}
 const MI={check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>',
@@ -1513,6 +1532,14 @@ function msgView(g){
   case 'bk_confirmed':{if(!b)return gone;const w=names(b);
    return{i:MI.shield,t:`Your ${SPORTS[b.court].name.toLowerCase()} game is confirmed`,p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}${w?`, with ${w}`:''}. Pay ${rupees(rangePrice(b.court,b.date,b.start,b.len))} at the court when you arrive.`,a:`<button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">See who’s going</button>`}}
   case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}The court isn’t free at that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
+  case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
+   const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
+   const whenTxt=src?`played ${esc(playedWhen(src))}`:bb?`on ${esc(dateLabel(bb.date))}, ${slotRange(bb.start,bb.len)}`:d.date?`on ${esc(dateLabel(d.date))}`:'';
+   return{i:MI.flag,warn:!done,t:`${g.from===S.uid?'You':esc(fn)} reported ${tn}`,p:`Says ${tp?esc(first(tp)):'they'} ${what} for a ${SPORTS[d.sport].name.toLowerCase()} game ${whenTxt}.${d.note?`<span class="quote">“${esc(d.note)}”</span>`:''}`,
+    a:done?`<span class="chip ${done.kind==='dismissed'?'':'st-confirmed'}">${done.kind==='dismissed'?'Dismissed':'Confirmed'} by ${done.by===S.uid?'you':esc(first(prof(done.by))||'an admin')}</span>`
+     :isAdmin()?`<button class="btn brand sm" data-act="repOk" data-v="${g.id}">Confirm · level −${pn.toFixed(2)}</button><button class="btn ghost sm" data-act="repNo" data-v="${g.id}">Dismiss</button>${tp?`<button class="btn link small" data-act="player" data-v="${esc(d.target)}">Profile</button>`:''}`:''}}
+  case 'conduct':return{i:MI.flag,warn:1,t:d.k==='noshow'?'Marked as a no-show':'Marked as late',p:`An admin confirmed you ${d.k==='noshow'?'didn’t show up':'showed up late'} for a ${SPORTS[d.sport].name.toLowerCase()} game${d.date?` on ${esc(dateLabel(d.date))}`:''}. Your ${SPORTS[d.sport].name.toLowerCase()} level drops ${(+d.pen||0).toFixed(2)}, and it shows on your profile${d.k==='noshow'?' for 3 months':' for a month'}. If this is wrong, talk to the club.`};
+  case 'report_done':return{i:MI.shield,t:'Thanks for your report',p:`An admin ${d.ok?'confirmed':'looked at'} your report${d.ok?'. The player’s profile and level are updated.':' and decided to leave it.'}`};
   case 'friend_req':{const r=S.reqs.find(x=>x.id===d.req);const st=r?r.status:'gone';
    return{i:MI.user,t:`${esc(fn)} wants to be friends`,p:from?`@${esc(from.username)} sent you a friend request.`:'',
     a:st==='pending'?`<button class="btn brand sm" data-act="reqAccept" data-v="${esc(r.id)}">Accept</button><button class="btn ghost sm" data-act="reqReject" data-v="${esc(r.id)}">Reject</button><button class="btn link small" data-act="player" data-v="${esc(g.from)}">View profile</button>`
@@ -1596,7 +1623,7 @@ function paintPlayers(){
 function vMe(){
  const p=me(),mg=view.mg||'all',all_=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse(),mine=mg==='all'?all_:all_.filter(m=>m.sport===mg);
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${joinedLine(p)}
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -1768,7 +1795,7 @@ function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="m
  return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>${(p.invites||isFriend(id))?`<button class="btn ball wide" style="margin-top:10px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:12px">${esc(first(p))} is not taking game invites right now.</p>`}`}
   ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
@@ -1782,6 +1809,35 @@ function playerSheet(id){
 }
 function refreshSocial(id){if($('sheetBg')&&playerSheet.open===id&&document.querySelector('#sheetBg .relbtns')){playerSheet(id)}else if(!$('sheetBg'))render();else if(view.tab==='inbox'||view.tab==='players')render()}
 /* Send kudos to the other players in a game */
+/* Report a player who was late or didn't show up. It goes to the admins, who decide; nothing changes until one confirms it */
+function reportSheet(v){const [t,id]=v.split('|');let sport,when,others,src={};
+ if(t==='m'){const m=S.matches.find(x=>x.id===id);if(!m)return;sport=m.sport;when=whenOf(m);others=regsOf(m);src={match:m.id,date:m.date}}
+ else{const b=S.bookings.find(x=>x.id===id);if(!b)return;sport=b.court;when=`${dateLabel(b.date)} · ${slotRange(b.start,b.len)}`;others=goingOf(b);src={booking:b.id,date:b.date}}
+ others=[...new Set(others)].filter(u=>u!==S.uid&&prof(u));if(!others.length)return toast('There is no one else in this game to report.');
+ const st={who:others.length===1?others[0]:null,k:null};
+ openSheet(`<h2>Report a player</h2><p class="muted small">${SPORTS[sport].name} · ${esc(when)}. The club admins see this and decide. Only admins see who reported it.</p>
+  <label>Who?</label><div class="chips" id="rpWho">${others.map(u=>`<button type="button" class="fchip${st.who===u?' on':''}" aria-pressed="${st.who===u}" data-rw="${u}">${esc(first(prof(u)))}</button>`).join('')}</div>
+  <label>What happened?</label><div class="chips" id="rpK"><button type="button" class="fchip" aria-pressed="false" data-rk="late">Showed up late</button><button type="button" class="fchip" aria-pressed="false" data-rk="noshow">Didn’t show up</button></div>
+  <label for="rpNote">Anything to add? <span class="muted">(optional)</span></label><input id="rpNote" maxlength="140" placeholder="e.g. Arrived 25 minutes after the start">
+  <p class="ferr" id="rpErr"></p><button class="btn brand wide" id="rpSend">Send to the admins</button>
+  <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`,bg=>{
+  const pick=(sel,attr,key)=>qsa(sel,bg).forEach(b=>b.onclick=()=>{st[key]=b.dataset[attr];qsa(sel,bg).forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',String(on))});tick()});
+  pick('[data-rw]','rw','who');pick('[data-rk]','rk','k');
+  bg.querySelector('#rpSend').onclick=async()=>{if(!st.who)return $('rpErr').textContent='Pick the player.';if(!st.k)return $('rpErr').textContent='Pick what happened.';
+   const admins=S.admins.filter(a=>a!==S.uid&&a!==st.who);if(!admins.length&&!isAdmin())return $('rpErr').textContent='No admins are set up yet.';
+   const data=Object.assign({rep:'rp_'+rid(),target:st.who,k:st.k,sport,note:$('rpNote').value.trim()},src);
+   await notify(admins.map(to=>({to,kind:'report',data})));
+   if(isAdmin()){try{await Store.send([{to:S.uid,kind:'report',data}])}catch(e){}await reload()}
+   closeSheet();doneTick('Sent to the admins');
+   toast(isAdmin()?'Sent. It’s in your inbox too, so you can confirm it yourself.':'Thanks. An admin will look at it. Nothing changes unless they confirm it.',4200);render()}});
+}
+async function repDecide(msgId,ok){const g=S.msgs.find(x=>x.id===msgId);if(!g||!isAdmin())return;const d=g.data||{};
+ if(S.conduct.some(c=>c.report===d.rep))return toast('Another admin already dealt with this.');
+ const c={id:'cd_'+rid(),user:d.target,kind:ok?d.k:'dismissed',sport:d.sport,report:d.rep,by:S.uid,at:new Date().toISOString(),match:d.match||null,booking:d.booking||null,date:d.date||null};
+ try{await Store.addConduct(c)}catch(e){toast(e.code==='nosql'?'Reports need the latest SQL in Supabase first (conduct.sql).':e.code==='done'?'Another admin already dealt with this.':e.code==='denied'?'Only admins can do this.':'Could not save. Check your connection.');return}
+ S.conduct.push(c);rate();const pn=penOf(c);
+ const out=[];if(g.from!==S.uid)out.push({to:g.from,kind:'report_done',data:{ok}});if(ok)out.push({to:d.target,kind:'conduct',data:{k:d.k,sport:d.sport,pen:pn,date:d.date||null}});
+ notify(out);doneTick(ok?'Report confirmed':'Report dismissed');if(ok)toast(`${first(prof(d.target))||'The player'}’s ${SPORTS[d.sport].name.toLowerCase()} level drops ${pn.toFixed(2)}. Their profile now shows it.`,3800);render()}
 function kudosSheet(mid,justSaved){
  const m=S.matches.find(x=>x.id===mid);if(!m)return;const others=regsOf(m).filter(u=>u!==S.uid&&prof(u));if(!others.length)return;
  const to=new Set(others),sent=sentKudos();
@@ -1789,6 +1845,7 @@ function kudosSheet(mid,justSaved){
   <label>To</label><div class="chips" id="kTo">${others.map(u=>`<button type="button" class="fchip on" aria-pressed="true" data-kto="${u}">${esc(first(prof(u)))}</button>`).join('')}</div>
   <div class="kgrid">${REACT.map(([k,e,l])=>`<button type="button" class="kbtn" data-k="${k}"><span class="ke">${e}</span><span>${l}</span></button>`).join('')}</div>
   <p class="tiny muted" style="margin-top:10px">They get it in their inbox, with your name.</p>
+  <button class="btn link small" style="margin-top:6px" data-act="reportOpen" data-v="m|${esc(mid)}">Someone was late or didn’t show up? Report it</button>
   <button class="btn ghost wide" style="margin-top:12px" data-act="closeSheet">${justSaved?'Maybe later':'Close'}</button>`,bg=>{
   qsa('[data-kto]',bg).forEach(b=>b.onclick=()=>{const u=b.dataset.kto;if(to.has(u))to.delete(u);else to.add(u);b.classList.toggle('on',to.has(u));b.setAttribute('aria-pressed',String(to.has(u)));tick()});
   qsa('[data-k]',bg).forEach(b=>b.onclick=async()=>{const k=b.dataset.k,list=[...to].filter(u=>!sent[mid+'|'+u+'|'+k]);
@@ -1898,6 +1955,9 @@ const ACT={
   if(r.days==='date')r.date=P.days==='today'?today():P.date;if(r.days==='dow')r.dow=P.dow.slice().sort();
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
+ reportOpen(v){closeSheet(true);setTimeout(()=>reportSheet(v),60)},
+ async repOk(v){await repDecide(v,true)},
+ async repNo(v){await repDecide(v,false)},
  invitePlayer(id){const p=prof(id),bk=bkState();if(!bk.invite.includes(id))bk.invite=[...bk.invite,id].slice(-3);
   const shared=(p.sports||[]).find(s=>mySports().includes(s));if(shared)bk.court=shared;bk.sel=null;closeSheet(true);go('book');toast(`Pick a free time and tap Request booking. ${first(p)} will get your invite.`,3600)},
  invPref(){const p=Object.assign({},me(),{invites:!me().invites});Store.saveProfile(p).then(()=>{upsert(S.profiles,p);tick();toast(p.invites?'Players can now invite you to games':'You won’t show up in game invites');render()},()=>toast('Could not save. Check your connection.'))},
