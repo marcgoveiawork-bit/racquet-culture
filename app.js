@@ -325,7 +325,7 @@ const Demo=Object.assign(memStore('demo',()=>Demo.d,()=>{}),{
 const D_FN=['Aarav','Aditi','Akash','Alisha','Amit','Ananya','Arjun','Avinash','Bianca','Carlos','Celina','Chris','Clara','Daniel','Deepa','Dev','Diya','Elena','Eshan','Farah','Gaurav','Gina','Hrishi','Isha','Ishaan','Jason','Jaya','Karan','Kavya','Kiara','Leon','Lina','Maya','Meera','Mihir','Nikhil','Nina','Omkar','Pooja','Pranav','Priya','Rahul','Rhea','Rohan','Sahil','Sana','Sara','Shaun','Simran','Tanvi','Tara','Varun','Vikram','Zoya'];
 const D_FEM=new Set(['Aditi','Alisha','Ananya','Bianca','Celina','Clara','Deepa','Diya','Elena','Farah','Gina','Isha','Jaya','Kavya','Kiara','Lina','Maya','Meera','Nina','Pooja','Priya','Rhea','Sana','Sara','Simran','Tanvi','Tara','Zoya']);
 const D_LN=['Naik','Kamat','DSouza','Fernandes','Prabhu','Sawant','Shetty','Pai','Menezes','Gaonkar','Rane','Rodrigues','Dias','Pereira','Costa','Almeida','Lobo','Desai','Kerkar','Borkar','Shirodkar','Mascarenhas','Noronha','Sequeira','Gomes','Coutinho','Verma','Mehta','Kapoor','Iyer','Nair','Singh','Malhotra','Bhat','Joshi'];
-function buildDemo(you){
+function buildDemo(you,rank='dev'){
  const r=rng(2026),pick=a=>a[Math.floor(r()*a.length)],gauss=()=>{let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
  const now=Date.now(),DAYS=120,T=today(),ago=h=>new Date(now-h*36e5).toISOString();
  const used=new Set([you.username.toLowerCase(),'caelan','surya','arjun']),names=new Set(['Caelan DaCosta','Surya N','Arjun Kamat']),ps=[];
@@ -481,31 +481,34 @@ function buildDemo(you){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(rank==='dev'||rank==='admin'?[you.id]:[]),caelan.id,surya.id],devs:rank==='dev'?[you.id]:[],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
 const DEMO_AS=[['dev','Developer'],['admin','Admin'],['coach','Coach'],['player','Player']];
+/* Demo accounts go up to the person's real role: players see the player view, coaches up to coach, admins up to admin, the developer all four */
+const DEMO_RANK={player:0,coach:1,admin:2,dev:3};
+const demoRank=()=>demoPrev&&demoPrev.rank||'player',demoOk=r=>DEMO_RANK[r]<=DEMO_RANK[demoRank()],demoAs=()=>DEMO_AS.filter(([k])=>demoOk(k));
 const demoId=r=>{const d=Demo.d;return r==='player'?d.alt:r==='admin'?d.adm:r==='coach'?d.coach:d.you};
 const demoRole=()=>{const d=Demo.d;return!d?'dev':S.uid===d.alt?'player':S.uid===d.adm?'admin':S.uid===d.coach?'coach':'dev'};
-async function demoSwitch(to){const d=Demo.d;if(!d)return;const next=demoId(to);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
+async function demoSwitch(to){const d=Demo.d;if(!d||!demoOk(to))return;const next=demoId(to);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
  window.scrollTo(0,0);render();celebrate('Now viewing as '+(to==='admin'?'an admin':to==='dev'?'the developer':'a '+to))}
 /* Pick how to see the demo: as an ordinary player or as an admin */
 function demoChooser(){
- openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched. You can switch between the four accounts at any time from the bar at the top.</p>
-  <div class="demopick"><button type="button" class="btn brand wide" data-act="demoGo" data-v="player"><b>Player</b><span>Book courts, add scores, confirm games, climb the rankings</span></button>
-  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="coach"><b>Coach</b><span>Everything a player does, plus blocking court time for coaching</span></button>
-  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="admin"><b>Admin</b><span>Confirms bookings, reviews scores and reports, posts club news, switches players and coaches</span></button>
-  <button type="button" class="btn ghost wide" data-act="demoGo" data-v="dev"><b>Developer</b><span>Everything an admin does, plus giving or removing admin access</span></button></div>`)}
+ const info={player:'Book courts, add scores, confirm games, climb the rankings',coach:'Everything a player does, plus blocking court time for coaching',admin:'Confirms bookings, reviews scores and reports, posts club news, switches players and coaches',dev:'Everything an admin does, plus giving or removing admin access'};
+ const rank=roleOf(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','dev'].filter(ok);
+ openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched.${list.length>1?' You can switch between the demo accounts at any time from the bar at the top.':''}</p>
+  <div class="demopick">${list.map((k,i)=>`<button type="button" class="btn ${i?'ghost':'brand'} wide" data-act="demoGo" data-v="${k}"><b>${lbl(DEMO_AS,k)}</b><span>${info[k]}</span></button>`).join('')}</div>`)}
 async function startDemo(role){
+ const rank=me()?roleOf(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
- demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you)};closeSheet(true);S.needSql=false;
- Demo.d=buildDemo(you);Store=Demo;S.uid=demoId(role);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
+ Demo.d=buildDemo(you,rank);Store=Demo;S.uid=demoId(role);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  splash('Demo: '+lbl(DEMO_AS,role).toLowerCase()+' view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
-function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for all four accounts. Your real account is not touched.</p>
+function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for every demo account. Your real account is not touched.</p>
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
-async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you));S.uid=demoId(role);closeSheet(true);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
+async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);S.uid=demoId(role);closeSheet(true);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
 async function exitDemo(){
  if(PREVIEW){location.href='../';return}
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
@@ -925,7 +928,7 @@ async function enter(fresh){
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
  /* players who joined before the Men and Women rankings: ask once for gender */
  if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);return startWiz('gender')}
- if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(isDev()?'dev':'player');return previewLocked()}
+ if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(roleOf(S.uid));return previewLocked()}
  if(fresh)splash(first(p),greet());
  showApp();maybeAskNotif();
 }
@@ -1098,7 +1101,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns">${demoAs().length>1?`<span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span>`:''}<button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
