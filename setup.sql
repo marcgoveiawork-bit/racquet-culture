@@ -475,3 +475,114 @@ create policy "rc admins delete" on public.rc_admins for delete to authenticated
          and (public.rc_is_dev() or not exists (select 1 from public.rc_owners o where o.user_id = rc_admins.user_id)));
 grant insert, delete on public.rc_admins to authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_owners; exception when duplicate_object then null; end $$;
+
+-- ============ Per-club roles (My Padel, several clubs) ============
+-- Owners, admins and coaches now belong to one club each (venue). A person can be admin at one club and a player at another.
+-- Every existing row belongs to Racquet Culture ('rc'), so the live app keeps working exactly as before.
+-- The developer (rc_developers) keeps every power at every club. Safe to re-run.
+
+alter table public.rc_admins  add column if not exists venue text not null default 'rc';
+alter table public.rc_owners  add column if not exists venue text not null default 'rc';
+alter table public.rc_coaches add column if not exists venue text not null default 'rc';
+
+-- one row per person per club
+do $$
+declare t text;
+begin
+  foreach t in array array['rc_admins','rc_owners','rc_coaches'] loop
+    if exists (select 1 from pg_constraint where conrelid = ('public.'||t)::regclass and contype = 'p'
+               and pg_get_constraintdef(oid) = 'PRIMARY KEY (user_id)') then
+      execute format('alter table public.%I drop constraint %I', t, t||'_pkey');
+      execute format('alter table public.%I add constraint %I primary key (user_id, venue)', t, t||'_pkey');
+    end if;
+  end loop;
+end $$;
+
+-- role checks for a given club (the developer counts everywhere)
+create or replace function public.rc_is_admin_at(v text) returns boolean language sql stable security definer set search_path = public as $$
+  select public.rc_is_dev() or exists (select 1 from public.rc_admins where user_id = auth.uid() and venue = coalesce(v,'rc'));
+$$;
+create or replace function public.rc_is_owner_at(v text) returns boolean language sql stable security definer set search_path = public as $$
+  select public.rc_is_dev() or exists (select 1 from public.rc_owners where user_id = auth.uid() and venue = coalesce(v,'rc'));
+$$;
+create or replace function public.rc_is_coach_at(v text) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_coaches where user_id = auth.uid() and venue = coalesce(v,'rc'));
+$$;
+-- an admin at any club (phone numbers stay visible to club admins)
+create or replace function public.rc_is_any_admin() returns boolean language sql stable security definer set search_path = public as $$
+  select public.rc_is_dev() or exists (select 1 from public.rc_admins where user_id = auth.uid());
+$$;
+revoke all on function public.rc_is_admin_at(text), public.rc_is_owner_at(text), public.rc_is_coach_at(text), public.rc_is_any_admin() from public;
+grant execute on function public.rc_is_admin_at(text), public.rc_is_owner_at(text), public.rc_is_coach_at(text), public.rc_is_any_admin() to authenticated;
+
+-- the old checks now mean "at Racquet Culture": court bookings, slot prices and coaching blocks only exist there
+create or replace function public.rc_is_admin() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_admins where user_id = auth.uid() and venue = 'rc');
+$$;
+create or replace function public.rc_is_owner() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_owners where user_id = auth.uid() and venue = 'rc');
+$$;
+create or replace function public.rc_is_coach() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_coaches where user_id = auth.uid() and venue = 'rc');
+$$;
+create or replace function public.rc_booking_status() returns trigger language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if public.rc_is_admin() then return new; end if;
+  if tg_op = 'INSERT' then
+    if new.kind = 'game' then
+      new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', '"pending"');
+    else
+      select auto into ok from public.rc_coaches where user_id = auth.uid() and venue = 'rc';
+      new.data := jsonb_set(jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{reason}', '"Coaching"'),
+                            '{status}', case when coalesce(ok,false) then '"confirmed"'::jsonb else '"pending"'::jsonb end);
+    end if;
+  else
+    new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', coalesce(old.data->'status','"confirmed"'::jsonb));
+    if old.data ? 'confirmedBy' then new.data := jsonb_set(new.data, '{confirmedBy}', old.data->'confirmedBy'); end if;
+  end if;
+  return new;
+end $$;
+
+-- who can give which role, at which club:
+--   the developer: owners, admins and coaches anywhere
+--   an owner: admins at their own club
+--   an admin: coaches at their own club
+drop policy if exists "rc admins insert" on public.rc_admins;
+drop policy if exists "rc admins delete" on public.rc_admins;
+create policy "rc admins insert" on public.rc_admins for insert to authenticated with check (public.rc_is_owner_at(venue));
+create policy "rc admins delete" on public.rc_admins for delete to authenticated
+  using (public.rc_is_owner_at(venue)
+         and user_id <> auth.uid()
+         and not exists (select 1 from public.rc_developers d where d.user_id = rc_admins.user_id)
+         and (public.rc_is_dev() or not exists (select 1 from public.rc_owners o where o.user_id = rc_admins.user_id and o.venue = rc_admins.venue)));
+drop policy if exists "rc coaches write" on public.rc_coaches;
+create policy "rc coaches write" on public.rc_coaches for all to authenticated using (public.rc_is_admin_at(venue)) with check (public.rc_is_admin_at(venue));
+
+-- scores and reports: only that club's admins (games without a club are Racquet Culture's)
+drop policy if exists "rc matches delete" on public.rc_matches;
+drop policy if exists "rc matches admin update" on public.rc_matches;
+create policy "rc matches delete" on public.rc_matches for delete to authenticated using (auth.uid() = created_by or public.rc_is_admin_at(data->>'venue'));
+create policy "rc matches admin update" on public.rc_matches for update to authenticated using (public.rc_is_admin_at(data->>'venue')) with check (public.rc_is_admin_at(data->>'venue'));
+drop policy if exists "rc conduct insert" on public.rc_conduct;
+drop policy if exists "rc conduct delete" on public.rc_conduct;
+create policy "rc conduct insert" on public.rc_conduct for insert to authenticated with check (public.rc_is_admin_at(data->>'venue') and auth.uid() = created_by and user_id <> auth.uid());
+create policy "rc conduct delete" on public.rc_conduct for delete to authenticated using (public.rc_is_admin_at(data->>'venue'));
+
+-- club news, admin replies and conduct notices: only that club's admins
+drop policy if exists "rc msg insert" on public.rc_messages;
+create policy "rc msg insert" on public.rc_messages for insert to authenticated with check (
+  auth.uid() = from_user
+  and (kind not in ('community','admin_reply','conduct') or public.rc_is_admin_at(data->>'venue'))
+  and length(coalesce(data->>'text','')) <= case when public.rc_is_admin_at(data->>'venue') then 600 else 160 end
+);
+
+-- phone numbers: still visible to admins (of any club)
+drop policy if exists "rc private read" on public.rc_private;
+create policy "rc private read" on public.rc_private for select to authenticated using (
+  user_id = auth.uid()
+  or public.rc_is_any_admin()
+  or vis = 'all'
+  or (vis = 'friends' and exists (select 1 from public.rc_friend_requests r where r.status = 'accepted'
+        and ((r.from_user = auth.uid() and r.to_user = rc_private.user_id) or (r.to_user = auth.uid() and r.from_user = rc_private.user_id))))
+);

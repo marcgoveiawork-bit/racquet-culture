@@ -785,11 +785,11 @@ a.btn{text-decoration:none}
 .vmark{display:grid;place-items:center;height:46px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.22)}
 .vmark img{display:block;height:36px;width:auto}
 .vmark.v-rc{padding:5px 9px;background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289)}
-.vmark.v-sunday{width:46px;border-radius:50%;background:radial-gradient(120% 120% at 30% 20%,#4542e0,#2e2bc7 55%,#2320a6)}
-.vmark.v-sunday img{height:24px}
+.vmark.v-sunday{padding:5px 14px;background:linear-gradient(135deg,#4542e0,#2e2bc7 60%,#2320a6)}
+.vmark.v-sunday img{height:30px}
 .vbtn.on .vmark{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--brand-hi),0 8px 22px rgba(var(--br-rgb),.45)}
 .vmark.big{height:84px;border-radius:20px;margin:0 auto}.vmark.big img{height:64px}
-.vmark.big.v-sunday{width:84px;border-radius:50%}.vmark.big.v-sunday img{height:44px}
+.vmark.big.v-sunday img{height:54px}
 .vjhead{display:flex;justify-content:center;margin-top:8px}
 .awaynote{margin:4px 0 0;font-size:12.5px;font-weight:600;color:var(--muted)}
 .linkbook{gap:10px}.lbico{display:inline-grid;place-items:center;height:26px;padding:0 9px;border-radius:8px;background:#fff}.lbico img{height:13px;width:auto;display:block}
@@ -798,7 +798,8 @@ a.btn{text-decoration:none}
 .vlist{display:grid;gap:10px}
 .vrow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .vrow .vmark{flex:none}.vrow .grow{flex:1;min-width:0}.vrow b{display:block}
-.splash .v-sunday img{width:150px}
+.splash .v-sunday img{width:min(260px,64vw)}
+.vjpage{position:fixed;inset:0;z-index:55;overflow:auto;background:var(--bg)}.vjpage[hidden]{display:none}.vjpage .alogo{border-radius:22px}
 .auth .avenue{display:flex;align-items:center;gap:10px;margin:0 0 16px}.auth .avenue .vbtn{transform:scale(.8)}.auth .avenue .vbtn.on{transform:scale(.9)}
 
 /* ============ Opening screen: My Padel, then pick a court ============ */
@@ -818,9 +819,14 @@ a.btn{text-decoration:none}
 .wmark{flex:none;display:grid;place-items:center;height:54px;min-width:54px;border-radius:14px;padding:0 10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
 .wmark img{height:40px;width:auto;display:block}
 .wmark.w-rc{background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289)}
-.wmark.w-sunday{width:54px;padding:0;border-radius:50%;background:radial-gradient(120% 120% at 30% 20%,#4542e0,#2e2bc7 55%,#2320a6)}.wmark.w-sunday img{height:26px}
+.wmark.w-sunday{padding:0 14px;background:linear-gradient(135deg,#4542e0,#2e2bc7 60%,#2320a6)}.wmark.w-sunday img{height:34px}
 .wfoot{margin-top:30px;font-size:12px;color:rgba(255,255,255,.4)}
 @keyframes wPop{from{opacity:0;transform:scale(.7) translateY(10px)}to{opacity:1;transform:none}}
+
+.clublines{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:8px}.clublines .coachline{margin-top:0}
+.coachline.plain{background:rgba(var(--wr),.06);color:var(--muted)}
+.rcclub{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.rchead{display:flex;align-items:center;gap:10px}.vmark.sm{height:30px;border-radius:9px}.vmark.sm img{height:22px}.vmark.sm.v-rc{padding:3px 6px}.vmark.sm.v-sunday{padding:3px 8px}.vmark.sm.v-sunday img{height:20px}
 </style>
 </head>
 <body>
@@ -889,9 +895,9 @@ a.btn{text-decoration:none}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--brand-hi)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--brand-hi)" stop-opacity="0"/></linearGradient></defs></svg>
 
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
-<script src="config.js?v=62"></script>
+<script src="config.js?v=64"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=62"></script>
+<script src="app.js?v=67"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
