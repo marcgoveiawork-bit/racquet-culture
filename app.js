@@ -193,9 +193,10 @@ async function sha(s){
  catch(e){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return 'f'+(h>>>0).toString(16)}
 }
 const LIVE=window.RC_LIVE||{};
+const APP_VER=window.RC_VER||'1',PREVIEW=!!window.RC_PREVIEW;
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -215,9 +216,10 @@ function memStore(mode,get,put){return{mode,
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
  async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];d.admins=d.admins.filter(x=>x!==id);if(role==='admin')d.admins.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
+ async setDemoAcc(id,on){const d=get();d.demoAcc=(d.demoAcc||[]).filter(x=>x!==id);if(on)d.demoAcc.push(id);put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs','demoAcc'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'||k==='coaches'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -249,7 +251,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers','rc_demo_access'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -273,14 +275,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
-   devs:dv.map(x=>x.user_id),
+   devs:dv.map(x=>x.user_id),demoAcc:da.map(x=>x.user_id),
    coaches:Object.fromEntries(co.map(x=>[x.user_id,{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
@@ -305,6 +307,7 @@ const Live={
   if(role==='admin'){chk(await sb.from('rc_admins').upsert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id));return}
   if(isAdmin(id))chk(await sb.from('rc_admins').delete().eq('user_id',id));
   if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))},
+ async setDemoAcc(id,on){const r=on?await sb.from('rc_demo_access').insert({user_id:id}):await sb.from('rc_demo_access').delete().eq('user_id',id);if(r.error&&r.error.code!=='23505'){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
@@ -478,7 +481,7 @@ function buildDemo(you){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[you.id,caelan.id,surya.id],devs:[you.id],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -504,9 +507,10 @@ function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Ever
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
 async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you));S.uid=demoId(role);closeSheet(true);await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
 async function exitDemo(){
+ if(PREVIEW){location.href='../';return}
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[]});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[],demoAcc:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
@@ -517,7 +521,7 @@ const prof=id=>S.profiles.find(p=>p.id===id)||null;
 const isAdmin=id=>S.admins.includes(id||S.uid);
 /* Coaches: can block slots for coaching. Admins choose whether those blocks go straight through or need confirming */
 /* Developer: an admin who can also make other people admins */
-const isDev=id=>(S.devs||[]).includes(id||S.uid);
+const isDev=id=>(S.devs||[]).includes(id||S.uid),canDemo=id=>isDev(id)||(S.demoAcc||[]).includes(id||S.uid);
 const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
 const roleOf=id=>isDev(id)?'dev':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
 const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
@@ -560,7 +564,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],demoAcc:d.demoAcc||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -767,6 +771,9 @@ addEventListener('scroll',()=>{if(!scRaf)scRaf=requestAnimationFrame(onScroll)},
 /* ================= Sign in and create account ================= */
 let authMode='in',fails=0,lockUntil=0,tkT=0,tkSeq=0;
 const UN_RE=/^[A-Za-z0-9._-]+$/;
+/* The demo version is only open to the developer and the players they give demo access to */
+function previewLocked(){$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
+ $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><img class="alogo" src="logo.png" alt="Racquet Culture" style="max-width:180px"><h1 style="margin-top:18px">Demo mode is invite only</h1><p class="muted" style="margin-top:8px">This is where new updates are tried out before they go live. Your account doesn't have demo access yet.</p><a class="btn brand wide" style="margin-top:18px" href="../">Go to the app</a><button class="btn ghost wide" style="margin-top:10px" data-act="signOut">Sign out</button><p class="small muted vline">V${esc(APP_VER)}</p></div>`}
 function showAuth(){
  $('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);mountBar();
  $('modeNote').textContent=Store.mode==='live'?'':'Preview mode: accounts and scores are saved on this device only.';
@@ -798,7 +805,7 @@ function paintAuth(dir){
    <button class="btn brand wide" id="aBtn" type="submit">${up?'Create account':'Sign in'}</button>
    ${up?'':`<p class="small muted" style="text-align:center;margin-top:14px">Forgot your password? <button type="button" class="btn link small" data-act="forgot">Get help</button></p>`}
   </form>
-  <p class="small muted" style="text-align:center;margin-top:18px">Just looking? <button type="button" class="btn link small" data-act="demo">Try the demo</button></p></div>`;
+</div>`;
  vInit();syncGliders();
  $('pwT').onclick=()=>{const p=$('aPass'),s=p.type==='password';p.type=s?'text':'password';$('pwT').textContent=s?'Hide':'Show';$('pwT').setAttribute('aria-pressed',String(s))};
  $('aForm').onsubmit=e=>{e.preventDefault();up?doSignUp():doSignIn()};
@@ -918,6 +925,7 @@ async function enter(fresh){
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
  /* players who joined before the Men and Women rankings: ask once for gender */
  if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);return startWiz('gender')}
+ if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(isDev()?'dev':'player');return previewLocked()}
  if(fresh)splash(first(p),greet());
  showApp();maybeAskNotif();
 }
@@ -1090,7 +1098,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${DEMO_AS.map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -1615,6 +1623,7 @@ function msgView(g){
   case 'admin_reply':{const toMe=d.player===S.uid,pl=prof(d.player);
    return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
+  case 'demo_access':return{i:MI.shield,t:d.on?'You have demo access':'Demo access removed',p:d.on?'You’ve been given access to demo mode. You can switch to it in Settings to see new updates before they go live.':`${esc(fn)} removed your demo access.`,a:d.on?'<button class="btn ghost sm" data-act="go" data-v="settings">Open Settings</button>':''};
   case 'role':return{i:MI.shield,t:d.role==='coach'?'You’re now a coach':d.role==='admin'?'You’re now a club admin':'Your account is now a player account',p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
@@ -1859,8 +1868,9 @@ function vSettings(){
  <div class="card rv">${row(ICON.phone,'shake','Phone number',myPhone()?esc(myPhone().phone):'Not added yet. Admins use it to reach you about bookings.',`<button class="btn ghost sm" data-act="phEdit">${myPhone()?'Change':'Add'}</button>`,'r-phone')}
   ${myPhone()?`<p class="small muted" style="margin:12px 0 8px">Who can see your number?</p>${seg('phv','Who can see your number',PH_VIS,myPhone().vis||'admins','phVis')}`:''}</div>
  <div class="card rv" style="margin-top:12px">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
- <div class="card rv" style="margin-top:12px">${Store.mode==='demo'?`<b>You're in demo mode</b><p class="small muted" style="margin:4px 0 12px">Add scores, review disputes and explore. None of it is saved.</p><button class="btn ball sm" data-act="exitDemo">Exit demo</button>`:`<b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See the app full of life: 100 made-up players, games and an admin inbox, with you in it. Nothing is saved and the real club is not touched.</p><button class="btn ghost sm" data-act="demo">Start demo mode</button>`}</div>
- ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}`;
+ ${Store.mode==='demo'?`<div class="card rv" style="margin-top:12px"><b>You're in demo mode · V${esc(APP_VER)}</b><p class="small muted" style="margin:4px 0 12px">You're trying the next version of the app with made-up players and games. None of it is saved and the real club is not touched.</p><button class="btn ball sm" data-act="exitDemo">${PREVIEW?'Back to the app':'Exit demo'}</button></div>`:canDemo()?`<div class="card rv" style="margin-top:12px"><b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See new updates before they go live, with 100 made-up players and games. Nothing you do there touches the real club.</p>${PREVIEW?`<button class="btn ghost sm" data-act="demo">Start demo mode</button>`:`<a class="btn ghost sm" href="preview/">Open demo mode</a>`}</div>`:''}
+ ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}
+ <p class="small muted vline">Racquet Culture · V${esc(APP_VER)}</p>`;
 }
 /* Ask once per device, a few seconds after signing in */
 function maybeAskNotif(){
@@ -1931,6 +1941,12 @@ function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p
   <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} is Admin at Racquet Culture: they can confirm bookings, set prices, block slots, review scores and make players coaches.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
   ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
    <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
+function demoRow(id){if(!isDev()||isDev(id))return'';const on=canDemo(id);
+ return `<div class="card rolecard democard" style="margin-top:12px"><span class="eyebrow">Developer · demo mode</span><div class="setline" style="margin-top:10px"><div><b>Demo access</b><p class="small muted">${on?`${esc(first(prof(id)))} can open demo mode from Settings to try new updates before they go live.`:'Let them try new updates in demo mode before they go live.'}</p></div><button class="switch" role="switch" aria-checked="${on}" data-act="demoAcc" data-v="${id}" aria-label="Demo access"></button></div></div>`}
+async function setDemoAcc(id){const on=!canDemo(id);
+ try{await Store.setDemoAcc(id,on)}catch(e){return toast(e.code==='nosql'?'Demo access needs the latest SQL in Supabase first (demo-access.sql).':e.code==='denied'?'Only the developer can change demo access.':'Could not save. Check your connection and try again.')}
+ S.demoAcc=(S.demoAcc||[]).filter(x=>x!==id);if(on)S.demoAcc.push(id);
+ notify([{to:id,kind:'demo_access',data:{on}}]);playerSheet(id);toast(on?`${first(prof(id))} now has demo access`:`Demo access removed for ${first(prof(id))}`)}
 async function applyRole(id,role,coach,quiet){
  try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?(role==='admin'||isAdmin(id)?'Only the developer can change admin access.':'Only admins can change accounts.'):'Could not save. Check your connection.');return false}
  delete S.coaches[id];S.admins=S.admins.filter(x=>x!==id);if(role==='admin')S.admins.push(id);if(role==='coach')S.coaches[id]=coach;
@@ -1945,7 +1961,7 @@ function playerSheet(id){
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd>${id!==S.uid&&canSeePhone(id)?`<dt>Phone</dt><dd>${phoneLink(id)}</dd>`:''}<dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
-  ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}
+  ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}${id!==S.uid?demoRow(id):''}
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));syncGliders();
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
@@ -2194,7 +2210,7 @@ const ACT={
   try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
- demoSwitch(v){demoSwitch(v)},demoResetAsk(){demoResetAsk()},demoResetYes(){demoReset()},
+ demoSwitch(v){demoSwitch(v)},demoAcc(v){setDemoAcc(v)},demoResetAsk(){demoResetAsk()},demoResetYes(){demoReset()},
  pvGo(v){view.pv=v;go('players')},
 
  aDate(v){A.date=v;if(A.time!=null&&(slotDate(v,A.time)>new Date()))A.time=null,A.len=0;tick();render()},
