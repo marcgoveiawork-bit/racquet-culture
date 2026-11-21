@@ -217,7 +217,7 @@ const bRow=r=>Object.assign({},r.data||{},{id:r.id,court:r.court,date:r.day,star
 const cRow=r=>Object.assign({},r.data||{},{id:r.id,match:r.match_id,user:r.user_id,verdict:r.verdict,at:r.created_at});
 const gRow=r=>({id:r.id,to:r.to_user,from:r.from_user,kind:r.kind,data:r.data||{},read:r.read,at:r.created_at});
 const bData=b=>{const {id,court,date,start,len,kind,by,...data}=b;return data};
-const missing=e=>/schema cache|does not exist|PGRST205|42P01/i.test((e&&(e.message+' '+e.code))||'');
+const missing=e=>!!e&&(e.code==='PGRST205'||e.code==='42P01');
 const Live={
  mode:'live',
  async init(){
@@ -241,12 +241,12 @@ const Live={
  async newPassword(pw){const {error}=await sb.auth.updateUser({password:pw});if(error)throw error},
  async signOut(){await sb.auth.signOut()},
  async load(){
-  const all=async(t,cols,f0)=>{const out=[];for(let f=0;;f+=1000){let q=sb.from(t).select(cols).order('id').range(f,f+999);if(f0)q=f0(q);const {data,error}=await q;if(error)throw error;out.push(...data);if(data.length<1000)return out}};
+  const all=async(t,cols,f0,ord='id')=>{const out=[];for(let f=0;;f+=1000){let q=sb.from(t).select(cols).order(ord).range(f,f+999);if(f0)q=f0(q);const {data,error}=await q;if(error)throw error;out.push(...data);if(data.length<1000)return out}};
   /* tables added in the bookings update: if setup.sql has not been run again yet, the rest of the app keeps working */
   const opt=p=>p.then(x=>x,e=>{if(missing(e)){S.needSql=true;return[]}throw e});
   S.needSql=false;
   const [p,m,b,c,a,g,f,q]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
-   opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id')),
+   opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
    opt(all('rc_follows','*')),opt(all('rc_friend_requests','*'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
@@ -417,7 +417,7 @@ async function demoSwitch(){const d=Demo.d;if(!d)return;S.uid=S.uid===d.alt?d.yo
  window.scrollTo(0,0);render();celebrate(S.uid===d.alt?'You are now Arjun':'Back to you (admin)')}
 async function startDemo(){
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
- demoPrev={store:Store,uid:S.uid};closeSheet(true);
+ demoPrev={store:Store,uid:S.uid};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you);Store=Demo;S.uid=you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,bk:null});
  splash('Demo mode','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
 }
@@ -1428,7 +1428,7 @@ function maybeAskNotif(){
   openSheet(`<div style="text-align:center"><span class="askbell">${ICON.bell}</span><h2 style="margin-top:14px">Turn on notifications?</h2><p class="muted" style="margin:8px 0 18px">Know straight away when someone invites you to play, asks you to confirm a score or sends you kudos.</p></div>
    <button class="btn brand wide" data-act="notifAsk">Allow notifications</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Not now</button>`)},2600);
 }
-function sysNotify(title,body){try{if(NOTIF_OK()&&Notification.permission==='granted'&&document.hidden)new Notification(title,{body,icon:'logo-sm.png',tag:'rc'})}catch(e){}}
+function sysNotify(title,body){try{if(NOTIF_OK()&&Notification.permission==='granted'&&document.hidden)new Notification(title,{body,icon:'icon-192.png',badge:'icon-192.png',tag:'rc'})}catch(e){}}
 
 /* ---------- Loading screen (rankings) ---------- */
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
@@ -1608,7 +1608,7 @@ const ACT={
  theme(v){setPref('theme',v);sfx('soft');tick();render()},
  popPreview(){celebrate('This is a pop-up')},
  async notifAsk(){if(!NOTIF_OK())return toast('This browser can’t show notifications.');closeSheet(true);
-  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about invites, scores and kudos here.',icon:'logo-sm.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
+  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about invites, scores and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
  demoSwitch(){demoSwitch()},
