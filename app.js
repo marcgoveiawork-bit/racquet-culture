@@ -455,8 +455,8 @@ const isAdmin=id=>S.admins.includes(id||S.uid);
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
 const following=id=>S.follows.some(f=>f.follower===S.uid&&f.followee===id);
-const followerN=id=>S.follows.filter(f=>f.followee===id).length;
-const followingN=id=>S.follows.filter(f=>f.follower===id).length;
+const followerN=id=>new Set(S.follows.filter(f=>f.followee===id&&prof(f.follower)).map(f=>f.follower)).size;
+const followingN=id=>new Set(S.follows.filter(f=>f.follower===id&&prof(f.followee)&&(prof(f.followee).setup)).map(f=>f.followee)).size;
 const friendIds=()=>[...new Set(S.reqs.filter(r=>r.status==='accepted').map(r=>r.from===S.uid?r.to:r.from))].filter(id=>id!==S.uid&&prof(id));
 const isFriend=id=>friendIds().includes(id);
 function relWith(id){
@@ -1331,12 +1331,12 @@ function msgView(g){
  return{i:MI.check,t:'Message',p:''};
 }
 function vInbox(){
- const all=S.msgs,todo=all.filter(needsAction),f=view.ib||'all',list=f==='todo'?todo:all;
+ const all=S.msgs,todo=all.filter(needsAction),f=view.ib||'all',list=f==='todo'?todo:all,up=myBookings();
  after=()=>{const un=S.msgs.filter(g=>!g.read);if(!un.length)return;setTimeout(()=>{un.forEach(g=>{g.read=true;Store.updateMsg(g).catch(()=>{})});paintBadge()},1500)};
  return `<div class="hd"><div><p class="eyebrow">Messages</p><h1>Inbox</h1></div></div>
-  ${seg('ib','Show',[['all','All'],['todo',`To do${todo.length?' · '+todo.length:''}`]],f,'ibTab')}
-  <div class="list" style="margin-top:14px">${list.map(g=>{const v=msgView(g);return`<div class="card msg rv${g.read?'':' unread'}${v.warn?' warn':''}"><span class="mi">${v.i}</span><div class="mb"><b class="mt">${v.t}</b><p>${v.p}</p><span class="tiny muted">${esc(timeAgo(g.at))}</span>${v.a?`<div class="cta">${v.a}</div>`:''}</div></div>`}).join('')
-   ||`<div class="card empty rv"><b>${f==='todo'?'All done':'No messages yet'}</b>${f==='todo'?'Nothing needs you right now.':'Invites, scores to confirm and updates from admins arrive here.'}</div>`}</div>`;
+  ${seg('ib','Show',[['all','All'],['todo',`To do${todo.length?' · '+todo.length:''}`],['up',`Upcoming${up.length?' · '+up.length:''}`]],f,'ibTab')}
+  ${f==='up'?`<div class="list" style="margin-top:14px">${up.map(bookingRow).join('')||`<div class="card empty rv"><b>No upcoming games</b>Book a court or accept an invite and your games show here.</div>`}</div><button class="btn ball wide" style="margin-top:14px" data-act="go" data-v="book">Book a court</button>`:`<div class="list" style="margin-top:14px">${list.map(g=>{const v=msgView(g);return`<div class="card msg rv${g.read?'':' unread'}${v.warn?' warn':''}"><span class="mi">${v.i}</span><div class="mb"><b class="mt">${v.t}</b><p>${v.p}</p><span class="tiny muted">${esc(timeAgo(g.at))}</span>${v.a?`<div class="cta">${v.a}</div>`:''}</div></div>`}).join('')
+   ||`<div class="card empty rv"><b>${f==='todo'?'All done':'No messages yet'}</b>${f==='todo'?'Nothing needs you right now.':'Invites, scores to confirm and updates from admins arrive here.'}</div>`}</div>`}`;
 }
 /* A player says the score is wrong: they enter what they think it was, and admins and the other players hear about it */
 function disputeSheet(mid,msgId){
@@ -1395,16 +1395,6 @@ function paintPlayers(){
   ||`<div class="card empty rv"><b>${pv==='friends'?'No friends yet':pv==='following'?'Not following anyone yet':'No players match'}</b>${pv==='all'?'Try fewer filters.':'Open a player’s profile to add them as a friend or follow them.'}</div>`;
  reveal(el);
 }
-function paintPlayers(){
- const f=view.pf,q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;
- const list=S.profiles.filter(p=>p.setup&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
-  .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||a.name.localeCompare(b.name));
- el.innerHTML=list.map(p=>`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}</span>
-  <div class="tags">${(p.sports||[]).map(sp=>{const r=lvlOf(sp,p.id);return r!=null?`<span class="chip t-${tierOf(sp,r)}">${SPORTS[sp].name} ${fmtL(r,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`).join('')
-  ||`<div class="card empty rv"><b>No players match</b>Try fewer filters.</div>`;
- reveal(el);
-}
-
 /* ---------- My profile ---------- */
 function vMe(){
  const p=me(),mine=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse();
