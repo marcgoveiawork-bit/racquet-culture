@@ -322,6 +322,7 @@ function buildDemo(you){
    hand:r()<.82?'right':r()<.6?'left':'none',invites:r()<.65,times,side:pick(['left','right','either','either']),levels,_skill:skill,_grow:grow});
  }
  ps.push(caelan,surya,arjun);
+ ps.forEach(p=>{if(!p.created)p.created=new Date(now-(DAYS+1+Math.floor(r()*330))*864e5).toISOString()});
  if(!you.gender)you.gender='male';
  const all=[you,...ps];
  if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
@@ -427,7 +428,7 @@ function demoChooser(){
   <div class="demopick"><button type="button" class="btn brand wide" data-act="demoGo" data-v="player"><b>View as player</b><span>Add scores, confirm games, climb the rankings</span></button>
   <button type="button" class="btn ghost wide" data-act="demoGo" data-v="admin"><b>View as admin</b><span>Everything a player sees, plus reviewing disputed scores</span></button></div>`)}
 async function startDemo(role){
- const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
+ const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'jamie.demo',name:'Jamie Demo',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you);Store=Demo;S.uid=role==='player'?Demo.d.alt:you.id;await reload();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  splash(role==='player'?'Demo: player view':'Demo: admin view','100 players · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
@@ -562,6 +563,10 @@ function splash(big,small){
  el.innerHTML=`<div><img src="logo.png" alt=""><p class="s1">${esc(small)}</p><p class="s2">${esc(big)}</p></div>`;
  document.body.appendChild(el);setTimeout(()=>el.remove(),calm()?700:2000);
 }
+/* When a player joined: saved when the account is made; for older accounts, the earliest level or game we know of */
+function joinedOf(p){if(!p)return null;if(p.created)return isoIST(Date.parse(p.created));
+ const c=[...Object.values(p.levels||{}).map(l=>l&&l.at&&isoIST(Date.parse(l.at))),...S.matches.filter(m=>regsOf(m).includes(p.id)).map(m=>m.date)].filter(Boolean).sort();return c[0]||null}
+function joinedLine(p){const j=joinedOf(p);return j?`<p class="joined small muted">Joined the community on ${new Date(j+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</p>`:''}
 function dateLabel(iso){if(!iso)return'';const t=today(),d=new Date(iso+'T12:00:00');
  if(iso===t)return'Today';if(iso===addDays(t,-1))return'Yesterday';
  return d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
@@ -1393,7 +1398,7 @@ function paintPlayers(){
 function vMe(){
  const p=me(),mg=view.mg||'all',all_=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse(),mine=mg==='all'?all_:all_.filter(m=>m.sport===mg);
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${joinedLine(p)}
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -1561,7 +1566,7 @@ function askMemberLevel(id){
 }
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${joinedLine(p)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
