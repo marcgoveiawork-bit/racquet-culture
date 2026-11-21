@@ -339,6 +339,63 @@ create policy "rc private insert" on public.rc_private for insert to authenticat
 create policy "rc private update" on public.rc_private for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 grant select, insert, update on public.rc_private to authenticated;
 
+-- Coach accounts, and letting admins change account types from the app.
+create table if not exists public.rc_coaches (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  sports      text[] not null default '{padel}',
+  auto        boolean not null default false,   -- true: their coaching blocks go straight through
+  updated_at  timestamptz not null default now()
+);
+alter table public.rc_coaches enable row level security;
+drop policy if exists "rc coaches read"  on public.rc_coaches;
+drop policy if exists "rc coaches write" on public.rc_coaches;
+create policy "rc coaches read"  on public.rc_coaches for select to authenticated using (true);
+create policy "rc coaches write" on public.rc_coaches for all to authenticated using (public.rc_is_admin()) with check (public.rc_is_admin());
+grant select, insert, update, delete on public.rc_coaches to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_coaches; exception when duplicate_object then null; end $$;
+
+-- Admins can make other people admins (or take it away), but never remove themselves
+drop policy if exists "rc admins insert" on public.rc_admins;
+drop policy if exists "rc admins delete" on public.rc_admins;
+create policy "rc admins insert" on public.rc_admins for insert to authenticated with check (public.rc_is_admin());
+create policy "rc admins delete" on public.rc_admins for delete to authenticated using (public.rc_is_admin() and user_id <> auth.uid());
+grant insert, delete on public.rc_admins to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_admins; exception when duplicate_object then null; end $$;
+
+create or replace function public.rc_is_coach() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_coaches where user_id = auth.uid());
+$$;
+revoke all on function public.rc_is_coach() from public;
+grant execute on function public.rc_is_coach() to authenticated;
+
+-- Players book games; admins and coaches can block slots
+drop policy if exists "rc bookings insert" on public.rc_bookings;
+create policy "rc bookings insert" on public.rc_bookings for insert to authenticated
+  with check (auth.uid() = created_by and (kind = 'game' or public.rc_is_admin() or public.rc_is_coach()));
+
+-- Status rules: player bookings start pending; a coach's block is confirmed straight away only if an admin allowed it,
+-- and is always marked as Coaching. Only admins can confirm anything.
+create or replace function public.rc_booking_status() returns trigger language plpgsql security definer set search_path = public as $$
+declare ok boolean;
+begin
+  if public.rc_is_admin() then return new; end if;
+  if tg_op = 'INSERT' then
+    if new.kind = 'game' then
+      new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', '"pending"');
+    else
+      select auto into ok from public.rc_coaches where user_id = auth.uid();
+      new.data := jsonb_set(jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{reason}', '"Coaching"'),
+                            '{status}', case when coalesce(ok,false) then '"confirmed"'::jsonb else '"pending"'::jsonb end);
+    end if;
+  else
+    new.data := jsonb_set(coalesce(new.data,'{}'::jsonb) - 'confirmedBy', '{status}', coalesce(old.data->'status','"confirmed"'::jsonb));
+    if old.data ? 'confirmedBy' then new.data := jsonb_set(new.data, '{confirmedBy}', old.data->'confirmedBy'); end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists rc_booking_status on public.rc_bookings;
+create trigger rc_booking_status before insert or update on public.rc_bookings for each row execute function public.rc_booking_status();
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
