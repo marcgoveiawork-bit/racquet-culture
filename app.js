@@ -17,7 +17,7 @@ const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.par
 
 /* ---------- Preferences ---------- */
 const sysCalm=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let prefs=Object.assign({calm:sysCalm,haptics:true,sound:true,popups:true,theme:'dark'},ls.get('rc_prefs',{}));
+let prefs=Object.assign({calm:sysCalm,haptics:true,sound:true,popups:true,theme:'light'},ls.get('rc_prefs',{}));
 const calm=()=>!!prefs.calm;
 const sysLight=matchMedia('(prefers-color-scheme: light)');
 const themeNow=()=>prefs.theme==='device'?(sysLight.matches?'light':'dark'):prefs.theme==='light'?'light':'dark';
@@ -809,6 +809,8 @@ async function enter(fresh){
   if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};
    try{await Store.saveProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505')return pickUsername(p);throw e}}}catch(e){p=null}}
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
+ /* the theme a player last chose follows them to every device; new players start in light */
+ if(p.theme&&p.theme!==prefs.theme)setPref('theme',p.theme);else if(!p.theme&&!p.setup&&prefs.theme!=='light')setPref('theme','light');
  try{S.email=await Store.email()}catch(e){}
  if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
  /* players who joined before the Men and Women rankings: ask once for gender */
@@ -1699,7 +1701,7 @@ const ACT={
  cfChange(id){const g=S.msgs.find(x=>x.id===id);if(g)disputeSheet(g.data.match,id)},
  review(v){reviewSheet(v)},
  pvTab(v){view.pv=v;render()},
- theme(v){setPref('theme',v);sfx('soft');tick();render()},
+ theme(v){setPref('theme',v);sfx('soft');tick();render();const p=me();if(p&&S.uid&&Store.mode!=='demo'&&p.theme!==v){const np=Object.assign({},p,{theme:v});Store.saveProfile(np).then(()=>upsert(S.profiles,np),()=>{})}},
  popPreview(){celebrate('This is a pop-up')},
  async notifAsk(){if(!NOTIF_OK())return toast('This browser can’t show notifications.');closeSheet(true);
   try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('Racquet Culture',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'icon-192.png',badge:'icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
