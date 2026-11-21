@@ -728,16 +728,17 @@ a.btn{text-decoration:none}
 .coachline{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:5px 12px;border-radius:999px;font-size:13px;font-weight:600;background:var(--brand-soft);color:var(--brand-hi)}
 .sl.blocked.pend{border-style:dashed}
 .rolecard{border-color:rgba(139,111,230,.35)}
-.chip.dev,.chip.admin,.chip.coach{position:relative;overflow:hidden;font-weight:700;background-size:220% 100%;animation:metalflow 4s ease-in-out infinite}
-.chip.dev::after,.chip.admin::after,.chip.coach::after{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.85),transparent);transform:skewX(-20deg);animation:metalshine 2.8s ease-in-out infinite;pointer-events:none}
-.chip.admin,[data-theme="light"] .chip.admin{color:#4a3300;background-image:linear-gradient(115deg,#b8860b 0%,#f5d061 22%,#fff3b0 38%,#e6b422 55%,#c9971c 72%,#f7dc6f 100%);box-shadow:0 0 0 1px rgba(184,134,11,.55),0 2px 10px rgba(230,180,34,.45)}
-.chip.coach,[data-theme="light"] .chip.coach{color:#2b2f36;background-image:linear-gradient(115deg,#7d838c 0%,#b9bec6 22%,#e9ecef 38%,#a3a9b1 55%,#80868f 72%,#c4c9d0 100%);box-shadow:0 0 0 1px rgba(110,116,125,.6),0 2px 8px rgba(0,0,0,.25)}
+.chip.dev,.chip.owner,.chip.admin,.chip.coach{position:relative;overflow:hidden;font-weight:700;background-size:220% 100%;animation:metalflow 4s ease-in-out infinite}
+.chip.dev::after,.chip.owner::after,.chip.admin::after,.chip.coach::after{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.85),transparent);transform:skewX(-20deg);animation:metalshine 2.8s ease-in-out infinite;pointer-events:none}
+.chip.owner,[data-theme="light"] .chip.owner{color:#4a3300;background-image:linear-gradient(115deg,#b8860b 0%,#f5d061 22%,#fff3b0 38%,#e6b422 55%,#c9971c 72%,#f7dc6f 100%);box-shadow:0 0 0 1px rgba(184,134,11,.55),0 2px 10px rgba(230,180,34,.45)}
+.chip.admin,[data-theme="light"] .chip.admin{color:#2b2f36;background-image:linear-gradient(115deg,#7d838c 0%,#b9bec6 22%,#e9ecef 38%,#a3a9b1 55%,#80868f 72%,#c4c9d0 100%);box-shadow:0 0 0 1px rgba(110,116,125,.6),0 2px 8px rgba(0,0,0,.25)}
+.chip.coach,[data-theme="light"] .chip.coach{color:#3b1d06;background-image:linear-gradient(115deg,#7a4419 0%,#c47a3c 22%,#f0b07a 38%,#b0662c 55%,#8a4c1e 72%,#d08a4e 100%);box-shadow:0 0 0 1px rgba(122,68,25,.6),0 2px 8px rgba(176,102,44,.35)}
 .chip.dev{color:#1d2a4a;background-image:linear-gradient(115deg,#dfe9ff 0%,#ffffff 16%,#cfe8ff 30%,#f6e6ff 44%,#ffffff 56%,#d3f4ff 70%,#ece6ff 84%,#ffffff 100%);box-shadow:0 0 0 1px rgba(170,200,255,.9),0 0 12px rgba(150,200,255,.75),0 0 24px rgba(200,170,255,.4);animation:metalflow 3s ease-in-out infinite,platglow 2.4s ease-in-out infinite}
 .chip.dev::after{background:linear-gradient(100deg,transparent,rgba(255,255,255,1),transparent);animation-duration:2.2s}
 @keyframes metalflow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 @keyframes metalshine{0%{left:-60%}55%,100%{left:130%}}
 @keyframes platglow{0%,100%{box-shadow:0 0 0 1px rgba(170,200,255,.9),0 0 10px rgba(150,200,255,.6),0 0 20px rgba(200,170,255,.3)}50%{box-shadow:0 0 0 1px rgba(200,225,255,1),0 0 16px rgba(160,215,255,.95),0 0 30px rgba(210,180,255,.55)}}
-@media (prefers-reduced-motion:reduce){.chip.dev,.chip.admin,.chip.coach,.chip.dev::after,.chip.admin::after,.chip.coach::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.chip.dev,.chip.owner,.chip.owner::after,.chip.admin,.chip.coach,.chip.dev::after,.chip.admin::after,.chip.coach::after{animation:none}}
 .phlink{color:var(--brand-hi);font-weight:600;text-decoration:none;font-variant-numeric:tabular-nums}.prow2 .nm span .phlink{font-size:12px}
 .prline{display:flex;gap:10px;align-items:center}.prline input{flex:1}
 .prule{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px}.prule b{font:500 18px var(--display)}.prule p{margin:2px 0 0}
@@ -797,7 +798,7 @@ a.btn{text-decoration:none}
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=59" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=60" alt=""></button>
     <div class="tright"><button class="ibtn fsbtn" id="fsBtn" data-act="fullscreen" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fs-in" d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><path class="fs-out" d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/></svg></button><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -815,10 +816,10 @@ a.btn{text-decoration:none}
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script>window.RC_VER='1.2'</script>
-<script src="config.js?v=59"></script>
+<script>window.RC_VER='1.3'</script>
+<script src="config.js?v=60"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=59"></script>
+<script src="app.js?v=60"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

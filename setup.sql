@@ -441,3 +441,37 @@ create policy "rc demo insert" on public.rc_demo_access for insert to authentica
 create policy "rc demo delete" on public.rc_demo_access for delete to authenticated using (public.rc_is_dev());
 grant select, insert, delete on public.rc_demo_access to authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_demo_access; exception when duplicate_object then null; end $$;
+
+-- Owners: same powers as admins (they are also in rc_admins), plus giving or removing admin access.
+-- Only the developer can make or remove owners.
+create table if not exists public.rc_owners (
+  user_id     uuid primary key references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now()
+);
+alter table public.rc_owners enable row level security;
+drop policy if exists "rc owners read"   on public.rc_owners;
+drop policy if exists "rc owners insert" on public.rc_owners;
+drop policy if exists "rc owners delete" on public.rc_owners;
+create policy "rc owners read"   on public.rc_owners for select to authenticated using (true);
+create policy "rc owners insert" on public.rc_owners for insert to authenticated with check (public.rc_is_dev());
+create policy "rc owners delete" on public.rc_owners for delete to authenticated using (public.rc_is_dev() and user_id <> auth.uid());
+grant select, insert, delete on public.rc_owners to authenticated;
+
+create or replace function public.rc_is_owner() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_owners where user_id = auth.uid());
+$$;
+revoke all on function public.rc_is_owner() from public;
+grant execute on function public.rc_is_owner() to authenticated;
+
+-- Admin access: the developer or an owner can give it; taking it away never touches the developer, an owner
+-- (unless the developer does it) or yourself.
+drop policy if exists "rc admins insert" on public.rc_admins;
+drop policy if exists "rc admins delete" on public.rc_admins;
+create policy "rc admins insert" on public.rc_admins for insert to authenticated with check (public.rc_is_dev() or public.rc_is_owner());
+create policy "rc admins delete" on public.rc_admins for delete to authenticated
+  using ((public.rc_is_dev() or public.rc_is_owner())
+         and user_id <> auth.uid()
+         and not exists (select 1 from public.rc_developers d where d.user_id = rc_admins.user_id)
+         and (public.rc_is_dev() or not exists (select 1 from public.rc_owners o where o.user_id = rc_admins.user_id)));
+grant insert, delete on public.rc_admins to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_owners; exception when duplicate_object then null; end $$;

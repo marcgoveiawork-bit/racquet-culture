@@ -196,7 +196,7 @@ const LIVE=window.RC_LIVE||{};
 const APP_VER=window.RC_VER||'1',PREVIEW=!!window.RC_PREVIEW;
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),owners:(d.owners||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -214,12 +214,12 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
- async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];d.admins=d.admins.filter(x=>x!==id);if(role==='admin')d.admins.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
+ async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];d.admins=d.admins.filter(x=>x!==id);d.owners=(d.owners||[]).filter(x=>x!==id);if(role==='admin'||role==='owner')d.admins.push(id);if(role==='owner')d.owners.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async setDemoAcc(id,on){const d=get();d.demoAcc=(d.demoAcc||[]).filter(x=>x!==id);if(on)d.demoAcc.push(id);put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs','demoAcc'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs','owners','demoAcc'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'||k==='coaches'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -251,7 +251,7 @@ const Live={
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers','rc_demo_access'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers','rc_owners','rc_demo_access'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -275,14 +275,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da,ow]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id',null,'user_id'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
-   devs:dv.map(x=>x.user_id),demoAcc:da.map(x=>x.user_id),
+   devs:dv.map(x=>x.user_id),owners:ow.map(x=>x.user_id),demoAcc:da.map(x=>x.user_id),
    coaches:Object.fromEntries(co.map(x=>[x.user_id,{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
@@ -304,7 +304,9 @@ const Live={
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
  async setRole(id,role,coach){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
-  if(role==='admin'){chk(await sb.from('rc_admins').upsert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id));return}
+  if(role==='admin'||role==='owner'){if(!isAdmin(id))chk(await sb.from('rc_admins').insert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id));
+   if(role==='owner'&&!isOwner(id))chk(await sb.from('rc_owners').insert({user_id:id}));if(role==='admin'&&isOwner(id))chk(await sb.from('rc_owners').delete().eq('user_id',id));return}
+  if(isOwner(id))chk(await sb.from('rc_owners').delete().eq('user_id',id));
   if(isAdmin(id))chk(await sb.from('rc_admins').delete().eq('user_id',id));
   if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))},
  async setDemoAcc(id,on){const r=on?await sb.from('rc_demo_access').insert({user_id:id}):await sb.from('rc_demo_access').delete().eq('user_id',id);if(r.error&&r.error.code!=='23505'){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}},
@@ -481,22 +483,22 @@ function buildDemo(you,rank='dev'){
  const lateOne=pool2[12];if(lateOne)conduct.push({id:'dc_x',user:lateOne.id,kind:'late',sport:lateOne.sports[0],report:'drp_x',by:surya.id,at:ago(24*9)});
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(rank==='dev'||rank==='admin'?[you.id]:[]),caelan.id,surya.id],devs:rank==='dev'?[you.id]:[],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,coach:coach1.id};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id]:[]),caelan.id,surya.id],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id]:[]),surya.id],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id,adm:caelan.id,own:surya.id,coach:coach1.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
-const DEMO_AS=[['dev','Developer'],['admin','Admin'],['coach','Coach'],['player','Player']];
+const DEMO_AS=[['dev','Developer'],['owner','Owner'],['admin','Admin'],['coach','Coach'],['player','Player']];
 /* Demo accounts go up to the person's real role: players see the player view, coaches up to coach, admins up to admin, the developer all four */
-const DEMO_RANK={player:0,coach:1,admin:2,dev:3};
+const DEMO_RANK={player:0,coach:1,admin:2,owner:3,dev:4};
 const demoRank=()=>demoPrev&&demoPrev.rank||'player',demoOk=r=>DEMO_RANK[r]<=DEMO_RANK[demoRank()],demoAs=()=>DEMO_AS.filter(([k])=>demoOk(k));
-const demoId=r=>{const d=Demo.d;return r==='player'?d.alt:r==='admin'?d.adm:r==='coach'?d.coach:d.you};
-const demoRole=()=>{const d=Demo.d;return!d?'dev':S.uid===d.alt?'player':S.uid===d.adm?'admin':S.uid===d.coach?'coach':'dev'};
+const demoId=r=>{const d=Demo.d;return r==='player'?d.alt:r==='owner'?d.own:r==='admin'?d.adm:r==='coach'?d.coach:d.you};
+const demoRole=()=>{const d=Demo.d;return!d?'dev':S.uid===d.alt?'player':S.uid===d.adm?'admin':S.uid===d.own?'owner':S.uid===d.coach?'coach':'dev'};
 async function demoSwitch(to){const d=Demo.d;if(!d||!demoOk(to))return;const next=demoId(to);if(next===S.uid)return;S.uid=next;await reload();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
- window.scrollTo(0,0);render();celebrate('Now viewing as '+(to==='admin'?'an admin':to==='dev'?'the developer':'a '+to))}
+ window.scrollTo(0,0);render();celebrate('Now viewing as '+(to==='admin'?'an admin':to==='owner'?'an owner':to==='dev'?'the developer':'a '+to))}
 /* Pick how to see the demo: as an ordinary player or as an admin */
 function demoChooser(){
- const info={player:'Book courts, add scores, confirm games, climb the rankings',coach:'Everything a player does, plus blocking court time for coaching',admin:'Confirms bookings, reviews scores and reports, posts club news, switches players and coaches',dev:'Everything an admin does, plus giving or removing admin access'};
- const rank=roleOf(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','dev'].filter(ok);
+ const info={player:'Book courts, add scores, confirm games, climb the rankings',coach:'Everything a player does, plus blocking court time for coaching',admin:'Confirms bookings, reviews scores and reports, posts club news, switches players and coaches',owner:'Everything an admin does, plus giving or removing admin access',dev:'Everything an owner does, plus making owners and giving or removing admin access'};
+ const rank=roleOf(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','owner','dev'].filter(ok);
  openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched.${list.length>1?' You can switch between the demo accounts at any time from the bar at the top.':''}</p>
   <div class="demopick">${list.map((k,i)=>`<button type="button" class="btn ${i?'ghost':'brand'} wide" data-act="demoGo" data-v="${k}"><b>${lbl(DEMO_AS,k)}</b><span>${info[k]}</span></button>`).join('')}</div>`)}
 async function startDemo(role){
@@ -513,22 +515,22 @@ async function exitDemo(){
  if(PREVIEW){location.href='../';return}
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[],demoAcc:[]});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[],owners:[],demoAcc:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},devs:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},devs:[],owners:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
 const isAdmin=id=>S.admins.includes(id||S.uid);
 /* Coaches: can block slots for coaching. Admins choose whether those blocks go straight through or need confirming */
 /* Developer: an admin who can also make other people admins */
-const isDev=id=>(S.devs||[]).includes(id||S.uid),canDemo=id=>isDev(id)||(S.demoAcc||[]).includes(id||S.uid);
+const isDev=id=>(S.devs||[]).includes(id||S.uid),isOwner=id=>!isDev(id)&&(S.owners||[]).includes(id||S.uid),canAdminRole=()=>isDev()||isOwner(),canDemo=id=>isDev(id)||(S.demoAcc||[]).includes(id||S.uid);
 const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
-const roleOf=id=>isDev(id)?'dev':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
+const roleOf=id=>isDev(id)?'dev':isOwner(id)?'owner':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
 const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
-const coachLine=id=>isDev(id)?'':isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
+const coachLine=id=>isDev(id)?'':isOwner(id)?`<p class="coachline"><span>👑</span>Owner at Racquet Culture</p>`:isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -567,7 +569,7 @@ function relButtons(id,small){
 const REACT=[['kudos','👍','Kudos','sent you a kudos 👍'],['gg','❤️','Good game','says good game ❤️'],['luck','🍀','Better luck next time','says better luck next time 🍀'],['fire','🔥','You were on fire','says you were on fire 🔥'],['wall','🧱','Brick wall at the net','says you were a brick wall at the net 🧱'],['lob','🌈','Lob of the day','loved your lob of the day 🌈']];
 const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
-async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],demoAcc:d.demoAcc||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:d.matches||[],bookings:d.bookings||[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],conduct:d.conduct||[],phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],owners:d.owners||[],demoAcc:d.demoAcc||[],msgs:(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -1101,7 +1103,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns">${demoAs().length>1?`<span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span>`:''}<button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${r==='dev'?'the developer':r==='owner'?'an owner':r==='admin'?'an admin':'a '+r}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns">${demoAs().length>1?`<span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span>`:''}<button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -1113,7 +1115,7 @@ function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm(
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
-const adminChip=id=>isDev(id)?' <span class="chip dev">Developer</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
+const adminChip=id=>isDev(id)?' <span class="chip dev">Developer</span>':isOwner(id)?' <span class="chip owner">Owner</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
@@ -1627,7 +1629,7 @@ function msgView(g){
    return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
   case 'demo_access':return{i:MI.shield,t:d.on?'You have demo access':'Demo access removed',p:d.on?'You’ve been given access to demo mode. You can switch to it in Settings to see new updates before they go live.':`${esc(fn)} removed your demo access.`,a:d.on?'<button class="btn ghost sm" data-act="go" data-v="settings">Open Settings</button>':''};
-  case 'role':return{i:MI.shield,t:d.role==='coach'?'You’re now a coach':d.role==='admin'?'You’re now a club admin':'Your account is now a player account',p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
+  case 'role':return{i:MI.shield,t:d.role==='coach'?'You’re now a coach':d.role==='owner'?'You’re now a club owner':d.role==='admin'?'You’re now a club admin':'Your account is now a player account',p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='owner'?`${esc(fn)} made you an owner. You can do everything an admin does, and give or remove admin access.`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
    const whenTxt=src?`played ${esc(playedWhen(src))}`:bb?`on ${esc(dateLabel(bb.date))}, ${slotRange(bb.start,bb.len)}`:d.date?`on ${esc(dateLabel(d.date))}`:'';
@@ -1936,12 +1938,15 @@ const GWORD={male:'men',female:'women'};
 function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="muted">Not ranked yet: no games played</span>';
  return `<b class="num">#${rk.pos}</b> <span class="muted">of ${rk.of}${g&&g!=='all'?' '+GWORD[g]:''} in ${TIER_NAME[rk.tier]} ${SPORTS[sp].name.toLowerCase()}</span>`}
 /* Admins only: change what an account can do */
-function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id);
- const dev=isDev();
- if(r==='dev'||(r==='admin'&&!dev))return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">Admin · account type</span><p style="margin-top:8px"><b>${r==='dev'?`${esc(first(p))} is a Developer`:`${esc(first(p))} is Admin at Racquet Culture`}</b></p></div>`;
- return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${dev?'Developer':'Admin'} · account type</span>
-  <div style="margin-top:10px">${seg('role','Account type',dev?[['player','Player'],['coach','Coach'],['admin','Admin']]:[['player','Player'],['coach','Coach']],r,'roleSet')}</div>
-  <p class="small muted" style="margin-top:8px">${r==='admin'?`${esc(first(p))} is Admin at Racquet Culture: they can confirm bookings, set prices, block slots, review scores and make players coaches.`:r==='coach'?`${esc(first(p))} plays as normal and can also block slots for coaching.`:`${esc(first(p))} can book, play and add scores.`}</p>
+const ROLE_NAME={dev:'Developer',owner:'Owner',admin:'Admin',coach:'Coach',player:'Player'},ROLE_RANK={player:0,coach:1,admin:2,owner:3,dev:4};
+/* who can set which account types: the developer up to owner, owners up to admin, admins between player and coach */
+const roleChoices=()=>isDev()?['player','coach','admin','owner']:isOwner()?['player','coach','admin']:isAdmin()?['player','coach']:[];
+function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id),opts=roleChoices(),me_=roleOf(S.uid);
+ if(!opts.includes(r)||ROLE_RANK[r]>=ROLE_RANK[me_])return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[me_]} · account type</span><p style="margin-top:8px"><b>${r==='dev'?`${esc(first(p))} is a Developer`:`${esc(first(p))} is ${ROLE_NAME[r]} at Racquet Culture`}</b></p></div>`;
+ const what={owner:`${esc(first(p))} is Owner at Racquet Culture: everything an admin can do, plus giving or removing admin access.`,admin:`${esc(first(p))} is Admin at Racquet Culture: they can confirm bookings, set prices, block slots, review scores and make players coaches.`,coach:`${esc(first(p))} plays as normal and can also block slots for coaching.`,player:`${esc(first(p))} can book, play and add scores.`};
+ return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[me_]} · account type</span>
+  <div style="margin-top:10px">${seg('role','Account type',opts.map(k=>[k,ROLE_NAME[k]]),r,'roleSet')}</div>
+  <p class="small muted" style="margin-top:8px">${what[r]}</p>
   ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
    <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
 function demoRow(id){if(!isDev()||isDev(id))return'';const on=canDemo(id);
@@ -1951,8 +1956,8 @@ async function setDemoAcc(id){const on=!canDemo(id);
  S.demoAcc=(S.demoAcc||[]).filter(x=>x!==id);if(on)S.demoAcc.push(id);
  notify([{to:id,kind:'demo_access',data:{on}}]);playerSheet(id);toast(on?`${first(prof(id))} now has demo access`:`Demo access removed for ${first(prof(id))}`)}
 async function applyRole(id,role,coach,quiet){
- try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?(role==='admin'||isAdmin(id)?'Only the developer can change admin access.':'Only admins can change accounts.'):'Could not save. Check your connection.');return false}
- delete S.coaches[id];S.admins=S.admins.filter(x=>x!==id);if(role==='admin')S.admins.push(id);if(role==='coach')S.coaches[id]=coach;
+ try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?(role==='owner'||isOwner(id)?'Only the developer can change owner access.':role==='admin'||isAdmin(id)?'Only the developer or an owner can change admin access.':'Only admins can change accounts.'):'Could not save. Check your connection.');return false}
+ delete S.coaches[id];S.admins=S.admins.filter(x=>x!==id);S.owners=(S.owners||[]).filter(x=>x!==id);if(role==='admin'||role==='owner')S.admins.push(id);if(role==='owner')S.owners.push(id);if(role==='coach')S.coaches[id]=coach;
  if(!quiet)notify([{to:id,kind:'role',data:{role,title:role==='coach'?coachTitle(id):'',auto:!!(coach&&coach.auto)}}]);
  playerSheet(id);return true}
 function playerSheet(id){
@@ -2119,9 +2124,9 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
- async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isDev(id)||v===roleOf(id))return;if(!isDev()&&(isAdmin(id)||!['player','coach'].includes(v)))return;if(!['player','coach','admin'].includes(v))return;const p=prof(id);
+ async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isDev(id)||v===roleOf(id))return;const opts=roleChoices();if(!opts.includes(v)||!opts.includes(roleOf(id)))return;const p=prof(id);
   const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null;
-  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':'Now a player');toast(`${first(p)} has been told.`)}},
+  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':v==='owner'?'Now an owner':'Now a player');toast(`${first(p)} has been told.`)}},
  async coachSport(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(x=>x!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
   if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true))tick()},
  async coachAuto(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
