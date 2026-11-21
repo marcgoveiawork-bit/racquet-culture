@@ -998,7 +998,7 @@ function matchRow(m,opts={}){
  return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',!aw)}
   <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(whenOf(m))}${st&&st!=='confirmed'?` · <span class="stx st-${st}">${ST_LABEL[st]}</span>`:''}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
   ${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
-  <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}</div></div>`;
+  <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}${Array.isArray(m.extra)?`<div class="xset" title="Extra set, played for fun after the match was decided"><span>${+m.extra[0]}</span><span>${+m.extra[1]}</span></div>`:''}</div></div>`;
 }
 function vHome(){
  const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>regsOf(m).includes(S.uid));
@@ -1114,10 +1114,10 @@ function slotHTML(t,i){
 function teamHead(label,slots,mine){return `<div class="sh${mine?' mine':''}"><em>${esc(label)}</em><span class="avs">${(slots||[]).filter(Boolean).map(slotAv).join('')}</span><b>${esc(teamNames(slots)||'–')}</b></div>`}
 function scoreGrid(sport,rows,key,heads,mineCol){const S_=SPORTS[sport];
  return `<div class="scorehead"><span></span>${heads[0]}<i></i>${heads[1]}</div><div class="sets">${rows.map((s,r)=>`<div class="setrow"><span class="eyebrow">${S_.setName} ${r+1}</span>${[0,1].map(c=>`<input class="${c===mineCol?'mine':''}" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, ${c?'right':'left'} team" data-${key}="${r},${c}" value="${esc(s[c])}" placeholder="–">`).join('<i>–</i>')}</div>`).join('')}</div>`}
-function bindGrid(key,rows,onChange){qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');rows[+r][+c]=el.value.replace(/\D/g,'').slice(0,2);if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
+function bindGrid(key,rows,onChange,sport){const mx=MAX_GAMES[sport]||99;qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');let v=el.value.replace(/\D/g,'').slice(0,2);if(v!==''&&+v>mx){v=String(mx);toast(sport==='padel'?'A padel set has at most 7 games.':'That is too many points.')}rows[+r][+c]=v;if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
 function vAdd(){
  if(!A)A=newA();fitFormat();const S_=SPORTS[A.sport],days=Array.from({length:30},(_,k)=>addDays(today(),-k));
- after=()=>{bindGrid('set',A.sets,paintFair);paintFair();const d=document.querySelector('.dstrip .dchip[aria-pressed="true"]');if(d&&d.scrollIntoView)d.parentElement.scrollLeft=d.offsetLeft-d.parentElement.clientWidth/2+d.offsetWidth/2};
+ after=()=>{bindGrid('set',A.sets,paintFair,A.sport);paintFair();const d=document.querySelector('.dstrip .dchip[aria-pressed="true"]');if(d&&d.scrollIntoView)d.parentElement.scrollLeft=d.offsetLeft-d.parentElement.clientWidth/2+d.offsetWidth/2};
  return `<div class="hd"><div><p class="eyebrow">After the game</p><h1>Add score</h1></div></div>
  <div class="card rv">
   ${addSports().length>1?seg('as','Sport',addSports().map(k=>[k,SPORTS[k].name]),A.sport,'aSport'):`<p class="eyebrow">${S_.name}</p>`}
@@ -1135,8 +1135,9 @@ function vAdd(){
   <span class="vs">VS</span>
   <div class="team"><p class="eyebrow">${A.format==='singles'?'Opponent':'Opponents'}</p>${A.b.map((_,i)=>slotHTML('b',i)).join('')}</div>
  </div><p class="small muted" style="margin-top:12px">Members' levels fill in on their own. For anyone without an account, you enter their level so the points stay fair.</p></div>
- <div class="card rv"><h3>Score</h3><p class="small muted" style="margin:-4px 0 14px">Games won by each team. ${A.sport==='padel'?'Leave the third set empty if you played two.':'Add each game you played.'}</p>
+ <div class="card rv"><h3>Score</h3><p class="small muted" style="margin:-4px 0 14px">Games won by each team. ${A.sport==='padel'?'Best of 3 sets. Leave the third set empty if you played two.':'Games to 11, win by 2. Best of 3 games.'}</p>
   ${scoreGrid(A.sport,A.sets,'set',[teamHead(A.format==='singles'?'You':'Your team',A.a,1),teamHead(A.format==='singles'?'Opponent':'Opponents',A.b,0)],0)}
+  <div id="s3note"></div>
   <p class="ssum" id="ssum"></p></div>
  <div class="card fair rv" id="fair"></div>
  <p class="ferr" id="aErr2" role="alert"></p>
@@ -1167,14 +1168,32 @@ function timeSheet(){
   <div id="tsGrid" style="margin-top:6px"></div><div class="tsbar"><span id="tsSum"></span><button class="btn brand sm" id="tsDone">Done</button></div>`,bg=>{
   paint();bg.querySelector('#tsDone').onclick=()=>{if(!st.sel)return;A.time=st.sel[0];A.len=st.sel[1]-st.sel[0]+1;closeSheet();tick();render()}});
 }
+/* Real set rules.
+   Padel: a set ends 6–0 to 6–4, 7–5 or 7–6 (tiebreak). Nothing higher.
+   Pickleball: a game goes to 11 (or 15 or 21), win by 2; past the target it ends exactly 2 ahead (12–10, 13–11).
+   Best of 3: once one side has won the first two, the match is over. A third set played after that is kept as a
+   friendly "extra" set: it is saved and shown, but it does not change the winner or anyone's level. */
+const MAX_GAMES={padel:7,pickleball:30};
+function setError(sport,a,b,name){
+ const w=Math.max(a,b),l=Math.min(a,b);
+ if(sport==='padel'){if((w===6&&l<=4)||(w===7&&(l===5||l===6)))return'';return`${name} ${a}–${b} isn't a padel score. A set ends 6–0 to 6–4, 7–5 or 7–6.`}
+ for(const T of [11,15,21]){if((w===T&&l<=T-2)||(w>T&&w-l===2&&l>=T-1))return''}
+ return`${name} ${a}–${b} isn't a pickleball score. A game goes to 11 and you must win by 2 (for example 11–7 or 12–10).`;
+}
+const decidedAfter2=rows=>{const f=r=>rows[r]&&rows[r][0]!==''&&rows[r][1]!==''&&+rows[r][0]!==+rows[r][1]?(+rows[r][0]>+rows[r][1]?'a':'b'):null;const x=f(0),y=f(1);return x&&x===y?x:null};
 function readSetsOf(sport,rows){
- const S_=SPORTS[sport],out=[];
- for(let r=0;r<rows.length;r++){const [x,y]=rows[r];if(x===''&&y==='')continue;if(x===''||y==='')return{err:`Fill in both scores for ${S_.setName.toLowerCase()} ${r+1}.`};
-  const a=+x,b=+y;if(a===b)return{err:`${S_.setName} ${r+1} can't be a draw.`};
-  if(sport==='padel'&&r<2&&(Math.max(a,b)>7||Math.max(a,b)<6))return{err:`Set ${r+1} looks unusual. A padel set ends at 6 or 7 games.`};out.push([a,b])}
+ const S_=SPORTS[sport],out=[];let extra=null;
+ const dec=decidedAfter2(rows);
+ for(let r=0;r<rows.length;r++){const [x,y]=rows[r];if(x===''&&y==='')continue;const nm=`${S_.setName} ${r+1}`;
+  if(x===''||y==='')return{err:`Fill in both scores for ${S_.setName.toLowerCase()} ${r+1}.`};
+  const a=+x,b=+y;if(a===b)return{err:`${nm} can't be a draw.`};
+  if(a>MAX_GAMES[sport]||b>MAX_GAMES[sport])return{err:sport==='padel'?`${nm}: the most games anyone can win in a padel set is 7 (7–5 or 7–6).`:`${nm} has too many points.`};
+  const e=setError(sport,a,b,nm);if(e)return{err:e};
+  if(r===2&&dec){extra=[a,b];continue}
+  out.push([a,b])}
  if(!out.length)return{err:'Enter the score.'};
- const wa=out.filter(s=>s[0]>s[1]).length,wb=out.length-wa;if(wa===wb)return{err:`Sets are level at ${wa}–${wb}. Add the deciding ${S_.setName.toLowerCase()}.`};
- return{sets:out,winner:wa>wb?'a':'b',wa,wb};
+ const wa=out.filter(s=>s[0]>s[1]).length,wb=out.length-wa;if(wa===wb)return{err:`${S_.setName}s are level at ${wa}–${wb}. Add the deciding ${S_.setName.toLowerCase()}.`};
+ return{sets:out,winner:wa>wb?'a':'b',wa,wb,extra};
 }
 const readSets=()=>readSetsOf(A.sport,A.sets);
 function draft(){
@@ -1182,7 +1201,16 @@ function draft(){
  const c=s=>s.uid?{uid:s.uid,level:+fmtL(slotLevel(s))}:{name:s.name,level:+fmtL(s.level,1)};
  return{sport:A.sport,format:A.format,date:A.date,time:A.time,len:A.len,court:A.courtNo,a:A.a.map(c),b:A.b.map(c)};
 }
+function paintSet3(){
+ const nt=$('s3note');if(!nt)return;const dec=decidedAfter2(A.sets),sn=SPORTS[A.sport].setName.toLowerCase(),ins=qsa('[data-set^="2,"]');
+ if(!dec){A.extra3=false;ins.forEach(el=>el.disabled=false);nt.innerHTML='';return}
+ if(!A.extra3){A.sets[2]=['',''];ins.forEach(el=>{el.value='';el.disabled=true});
+  nt.innerHTML=`<div class="s3ask"><p class="small">Looks like ${dec==='a'?'you won':'you lost'} the first 2 ${sn}s, so the match is decided. Did you carry on and play another ${sn}?</p><button type="button" class="btn ghost sm" data-act="aExtra3" data-v="1">Yes, add ${sn} 3</button></div>`;return}
+ ins.forEach(el=>el.disabled=false);
+ nt.innerHTML=`<div class="s3ask on"><p class="small">${SPORTS[A.sport].setName} 3 is saved as an extra ${sn} for fun. It doesn't change who won or anyone's level.</p><button type="button" class="btn link small" data-act="aExtra3" data-v="0">Remove ${sn} 3</button></div>`;
+}
 function paintFair(){
+ paintSet3();
  const rs=readSets(),sum=$('ssum');
  if(sum){const filled=A.sets.some(s=>s[0]!==''||s[1]!=='');sum.className='ssum'+(rs.sets?rs.winner==='a'?' win':' lose':'');
   sum.textContent=rs.sets?(rs.winner==='a'?`Your team wins ${rs.wa}–${rs.wb}`:`Your opponents win ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games'):filled?rs.err:''}
@@ -1207,7 +1235,7 @@ async function submitMatch(){
  const m=draft();if(!m)return err('Add every player, with a level for anyone who does not have one yet.');
  const ids=regsOf(m);if(new Set(ids).size!==ids.length)return err('The same player is in the game twice.');
  const rs=readSets();if(rs.err)return err(rs.err);
- const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});if(A.booking)rec.booking=A.booking;
+ const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});if(rs.extra)rec.extra=rs.extra;if(A.booking)rec.booking=A.booking;
  const btn=document.querySelector('[data-act="submitMatch"]');btn.disabled=true;btn.textContent='Saving…';
  try{await Store.addMatch(rec)}catch(e){btn.disabled=false;btn.textContent='Save score';return err('Could not save the score. Check your connection and try again.')}
  S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
@@ -1272,7 +1300,7 @@ function disputeSheet(mid,msgId){
   <div style="margin-top:14px">${scoreGrid(m.sport,rows,'ds',[teamHead('Team 1',m.a,mc===0),teamHead('Team 2',m.b,mc===1)],mc)}</div>
   <label for="dNote">What happened? <span class="muted">(optional)</span></label><input id="dNote" maxlength="140" placeholder="e.g. We won the third set 6–4">
   <p class="ferr" id="dErr"></p><button class="btn brand wide" id="dSave">Send to the admins</button>`,bg=>{
-  bindGrid('ds',rows);
+  bindGrid('ds',rows,null,m.sport);
   bg.querySelector('#dSave').onclick=async()=>{const rs=readSetsOf(m.sport,rows);if(rs.err){$('dErr').textContent=rs.err;return}
    if(setsStr(rs.sets)===setsStr(m.sets)){$('dErr').textContent='That is the same as the score already added. Change it, or confirm it instead.';return}
    const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'dispute',sets:rs.sets,winner:rs.winner,note:$('dNote').value.trim(),at:new Date().toISOString()};
@@ -1291,7 +1319,7 @@ function reviewSheet(mid){
   <div style="margin-top:14px">${scoreGrid(m.sport,rows,'rv',[teamHead('Team 1',m.a,false),teamHead('Team 2',m.b,false)],-1)}</div>
   <p class="ferr" id="rvErr"></p>
   <div class="cta">${disp.length?'<button class="btn ghost" id="rvKeep" style="flex:1">Keep the added score</button>':''}<button class="btn brand" id="rvSave" style="flex:1">Save final score</button></div>`,bg=>{
-  bindGrid('rv',rows);
+  bindGrid('rv',rows,null,m.sport);
   qsa('[data-use]',bg).forEach(x=>x.onclick=()=>{const c=disp.find(y=>y.id===x.dataset.use);[0,1,2].forEach(i=>{rows[i]=c.sets[i]?c.sets[i].map(String):['',''];[0,1].forEach(k=>{const el=bg.querySelector(`[data-rv="${i},${k}"]`);if(el)el.value=rows[i][k]})});tick()});
   const done=async keep=>{const rs=keep?{sets:m.sets,winner:m.winner}:readSetsOf(m.sport,rows);if(rs.err){$('rvErr').textContent=rs.err;return}
    const nm=Object.assign({},m,{sets:rs.sets,winner:rs.winner,review:{by:S.uid,at:new Date().toISOString(),prev:m.sets,kept:!!keep||setsStr(rs.sets)===setsStr(m.sets)}});
@@ -1527,7 +1555,8 @@ const ACT={
  player(v){playerSheet(v)},
  closeSheet(){closeSheet()},
  pf(v){const [k,x]=v.split('|'),val=k==='inv'?true:x;view.pf[k]=view.pf[k]===val?(k==='inv'?false:''):val;qsa('.fchip[data-act="pf"]').forEach(b=>{const [kk,xx]=b.dataset.v.split('|');b.setAttribute('aria-pressed',String(view.pf[kk]===(kk==='inv'?true:xx)))});tick();paintPlayers()},
- aSport(v){A.sport=v;if(v==='padel')A.format='doubles';A.sets=[['',''],['',''],['','']];['a','b'].forEach(t=>A[t]=A[t].map(s=>s&&s.uid?{uid:s.uid}:null));render()},
+ aExtra3(v){A.extra3=v==='1';if(!A.extra3)A.sets[2]=['',''];paintFair();if(A.extra3){const el=document.querySelector('[data-set="2,0"]');if(el)el.focus()}},
+ aSport(v){A.sport=v;A.extra3=false;if(v==='padel')A.format='doubles';A.sets=[['',''],['',''],['','']];['a','b'].forEach(t=>A[t]=A[t].map(s=>s&&s.uid?{uid:s.uid}:null));render()},
  aFormat(v){A.format=v;render()},
  pick(v){openPicker(v)},
  pickMember(id){if(lvlOf(A.sport,id)==null)return askMemberLevel(id);A[pickT.t][pickT.i]={uid:id};closeSheet();render()},
