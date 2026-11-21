@@ -307,6 +307,15 @@ create policy "rc conduct delete" on public.rc_conduct for delete to authenticat
 grant select, insert, delete on public.rc_conduct to authenticated;
 do $$ begin alter publication supabase_realtime add table public.rc_conduct; exception when duplicate_object then null; end $$;
 
+-- Inbox safety: only admins can send club news (community), admin replies and conduct notices.
+-- Everyone else can still send their normal messages (score checks, invites, kudos, messages to the admins).
+drop policy if exists "rc msg insert" on public.rc_messages;
+create policy "rc msg insert" on public.rc_messages for insert to authenticated with check (
+  auth.uid() = from_user
+  and (kind not in ('community','admin_reply','conduct') or public.rc_is_admin())
+  and length(coalesce(data->>'text','')) <= case when public.rc_is_admin() then 600 else 160 end
+);
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
