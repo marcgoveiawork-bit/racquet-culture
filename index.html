@@ -520,7 +520,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .bdate{flex:none;width:48px;height:52px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--brand-hi),var(--brand));color:#fff;font-size:11px;font-weight:600}
 .bdate b{font:500 19px var(--display);line-height:1}
 .invt{color:var(--ball)}
-.prow2{display:flex;align-items:center;gap:12px;padding:8px 4px}.prow2 .nm{flex:1;min-width:0}
+.prow2{display:flex;align-items:center;gap:12px;padding:8px 4px}.prow2 .nm{flex:1;min-width:0;overflow:hidden}.prow2 .nm b{display:block;line-height:1.25;overflow-wrap:anywhere}.prow2 .nm>span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.prow2 .nm>span{font-size:12.5px;color:var(--muted);margin-top:1px}.prow2 .btn{flex-shrink:0}
 /* Inbox */
 .msg{display:flex;gap:14px;align-items:flex-start}
 .msg .mi{flex:none;width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-hi)}
@@ -720,7 +720,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=19" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=20" alt=""></button>
     <div class="tright"><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -738,8 +738,8 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=19"></script>
+<script src="config.js?v=20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=19"></script>
+<script src="app.js?v=20"></script>
 </body>
 </html>
