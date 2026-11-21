@@ -716,6 +716,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .tbox{position:relative}.tbox textarea{resize:vertical;min-height:84px;line-height:1.45;padding-bottom:26px}.tcount{position:absolute;right:12px;bottom:8px}.tcount.near{color:var(--bad)}
 .ibtool{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding:14px 16px}.ibtool p{margin:2px 0 0}.ibtool .btn{flex:none}
 .phrow{display:flex;gap:8px}.phrow .ccsel{flex:0 0 116px;padding-right:6px}.phrow input{flex:1;min-width:0}
+.prow2.tap{cursor:pointer;border-radius:14px;transition:background .25s ease}.prow2.tap:hover,.prow2.tap:focus-visible{background:rgba(var(--wr),.06);outline:none}.prow2 .go{color:var(--muted);font-size:20px;line-height:1;margin-left:-4px}
 .phlink{color:var(--brand-hi);font-weight:600;text-decoration:none;font-variant-numeric:tabular-nums}.prow2 .nm span .phlink{font-size:12px}
 .prline{display:flex;gap:10px;align-items:center}.prline input{flex:1}
 .prule{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px}.prule b{font:500 18px var(--display)}.prule p{margin:2px 0 0}
@@ -775,7 +776,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=45" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=46" alt=""></button>
     <div class="tright"><button class="ibtn fsbtn" id="fsBtn" data-act="fullscreen" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fs-in" d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><path class="fs-out" d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/></svg></button><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -793,9 +794,9 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=45"></script>
+<script src="config.js?v=46"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=45"></script>
+<script src="app.js?v=46"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
