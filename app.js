@@ -1335,6 +1335,7 @@ function vInbox(){
  after=()=>{const un=S.msgs.filter(g=>!g.read);if(!un.length)return;setTimeout(()=>{un.forEach(g=>{g.read=true;Store.updateMsg(g).catch(()=>{})});paintBadge()},1500)};
  return `<div class="hd"><div><p class="eyebrow">Messages</p><h1>Inbox</h1></div></div>
   ${seg('ib','Show',[['all','All'],['todo',`To do${todo.length?' · '+todo.length:''}`],['up',`Upcoming${up.length?' · '+up.length:''}`]],f,'ibTab')}
+  ${homeCard()}
   ${f==='up'?`<div class="list" style="margin-top:14px">${up.map(bookingRow).join('')||`<div class="card empty rv"><b>No upcoming games</b>Book a court or accept an invite and your games show here.</div>`}</div><button class="btn ball wide" style="margin-top:14px" data-act="go" data-v="book">Book a court</button>`:`<div class="list" style="margin-top:14px">${list.map(g=>{const v=msgView(g);return`<div class="card msg rv${g.read?'':' unread'}${v.warn?' warn':''}"><span class="mi">${v.i}</span><div class="mb"><b class="mt">${v.t}</b><p>${v.p}</p><span class="tiny muted">${esc(timeAgo(g.at))}</span>${v.a?`<div class="cta">${v.a}</div>`:''}</div></div>`}).join('')
    ||`<div class="card empty rv"><b>${f==='todo'?'All done':'No messages yet'}</b>${f==='todo'?'Nothing needs you right now.':'Invites, scores to confirm and updates from admins arrive here.'}</div>`}</div>`}`;
 }
@@ -1426,6 +1427,8 @@ function vSettings(){
  <p class="eyebrow period">Appearance</p>
  <div class="card rv">${row(themeNow()==='light'?ICON.sun:ICON.moon,themeNow()==='light'?'spin':'rock','Theme',th==='device'?'Follows your phone or computer':th==='light'?'Light':'Dark, the club look')}
   <div class="seg full themeseg" data-key="theme" role="radiogroup" aria-label="Theme" style="margin-top:12px">${[['device','Device',ICON.device,'pop'],['light','Light',ICON.sun,'spin'],['dark','Dark',ICON.moon,'rock']].map(([v,n,ic,a])=>`<button type="button" role="radio" aria-checked="${th===v}" data-act="theme" data-v="${v}"><span class="ti" data-a="${a}">${ic}</span>${n}</button>`).join('')}</div></div>
+ <p class="eyebrow period">App</p>
+ <div class="card rv">${row(ICON.phone,'shake','Add to Home Screen',isInstalled()?'Done. You’re using Racquet Culture from your Home Screen.':'Put the app icon on your phone so it opens full screen, like a normal app.',isInstalled()?'<span class="chip st-confirmed">Added</span>':`<button class="btn brand sm" data-act="${installEvt?'hsInstall':'hsHow'}">${installEvt?'Add':'Show me'}</button>`)}</div>
  <p class="eyebrow period">Notifications and feedback</p>
  <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, an invite is sent and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
  <p class="eyebrow period">Friends</p>
@@ -1537,12 +1540,40 @@ function fsPaint(){const b=$('fsBtn');if(!b)return;const on=!!fsEl();b.classList
 async function fsToggle(){
  if(fsEl()){try{await(document.exitFullscreen||document.webkitExitFullscreen).call(document)}catch(e){}return}
  if(fsCan()){const d=document.documentElement;try{await(d.requestFullscreen||d.webkitRequestFullscreen).call(d,{navigationUI:'hide'})}catch(e){toast('Full screen is not available here')}return}
- openSheet(`<h2>Full screen on iPhone</h2><p class="muted" style="margin:6px 0 14px">iPhone doesn't let websites go full screen on their own. Add the app to your Home Screen instead. It then opens full screen every time, like a normal app.</p>
-  <ol style="margin:0 0 16px;padding-left:20px;line-height:1.9"><li>Tap the <b>Share</b> button in Safari (the square with an arrow).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>, then open Racquet Culture from your Home Screen.</li></ol>
-  <button class="btn ghost wide" data-act="closeSheet">Got it</button>`);
+ homeSheet(true);
+}
+/* ---------- Add to Home Screen ---------- */
+const UA=navigator.userAgent||'';
+const isIOS=/iPad|iPhone|iPod/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const isAndroid=/Android/i.test(UA);
+const isInstalled=()=>matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches||navigator.standalone===true;
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(view&&view.tab==='inbox')render()});
+window.addEventListener('appinstalled',()=>{installEvt=null;ls.set('rc_installed',1);closeSheet();toast('Racquet Culture is on your Home Screen');if(view&&view.tab==='inbox')render()});
+/* Shown at the top of the inbox on phones until the app is added (or hidden for a week) */
+function homeCard(){
+ if(isInstalled()||ls.get('rc_installed',0)||!(isIOS||isAndroid))return'';
+ if(Date.now()<ls.get('rc_hs_hide',0))return'';
+ return`<div class="card msg hscard rv" style="margin-top:14px"><span class="mi">${ICON.phone}</span><div class="mb"><b class="mt">Add Racquet Culture to your Home Screen</b><p>Get the app icon on your phone. It opens full screen like a normal app, and you'll never need to find the link again.</p><div class="cta">${installEvt?'<button class="btn ball sm" data-act="hsInstall">Add to Home Screen</button>':'<button class="btn ball sm" data-act="hsHow">Show me how</button>'}<button class="btn ghost sm" data-act="hsHide">Not now</button></div></div></div>`;
+}
+const HS_IOS=`<ol class="hsteps"><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow pointing up).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. The Racquet Culture icon appears on your Home Screen.</li></ol>`;
+const HS_AND=`<ol class="hsteps"><li>Open this page in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li><li>Tap <b>Install</b> or <b>Add</b>. The Racquet Culture icon appears on your Home Screen.</li></ol>`;
+function homeSheet(fromFs){
+ const head=fromFs?`<h2>Full screen on iPhone</h2><p class="muted" style="margin:6px 0 4px">iPhone doesn't let websites go full screen on their own. Add the app to your Home Screen instead. It then opens full screen every time, like a normal app.</p>`
+  :`<h2>Add to your Home Screen</h2><p class="muted" style="margin:6px 0 4px">You get the Racquet Culture icon on your phone. It opens full screen, like an app from the App Store or Google Play, and you'll always have it even if you lose the link.</p>`;
+ const ios=`<p class="hsplat">iPhone and iPad</p>${HS_IOS}`,and=`<p class="hsplat">Android</p>${installEvt?'<button class="btn ball wide" style="margin-bottom:14px" data-act="hsInstall">Add to Home Screen</button><p class="small muted" style="margin:-6px 0 10px">Or do it yourself:</p>':''}${HS_AND}`;
+ openSheet(`${head}${fromFs?HS_IOS:isAndroid?and+ios:ios+and}<button class="btn ghost wide" data-act="closeSheet">Got it</button>`);
+}
+async function hsInstall(){
+ if(!installEvt)return homeSheet();const e=installEvt;
+ try{await e.prompt();const r=await e.userChoice;if(r&&r.outcome==='accepted'){installEvt=null;ls.set('rc_installed',1)}}catch(err){homeSheet()}
+ render();
 }
 const ACT={
  fullscreen(){fsToggle()},
+ hsHow(){homeSheet()},
+ hsInstall(){hsInstall()},
+ hsHide(){ls.set('rc_hs_hide',Date.now()+7*864e5);toast('Hidden for a week. You can add it any time from Settings.');render()},
  authMode(v){if(v===authMode)return;authMode=v;paintAuth(v==='up'?1:-1)},
  async forgot(){
   if(Store.mode!=='live')return aerr('In preview mode, accounts live on this device only, so there is no reset email. Create a new account instead.',true);
