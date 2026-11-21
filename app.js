@@ -513,7 +513,7 @@ const isDev=id=>(S.devs||[]).includes(id||S.uid);
 const coachOf=id=>S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
 const roleOf=id=>isDev(id)?'dev':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
 const coachTitle=id=>{const c=coachOf(id);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at Racquet Culture'};
-const coachLine=id=>isDev(id)?`<p class="coachline"><span>🛠️</span>Developer at Racquet Culture</p>`:isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
+const coachLine=id=>isDev(id)?`<p class="coachline devline"><span>🛠️</span>Developer at Racquet Culture</p>`:isAdmin(id)?`<p class="coachline"><span>🛡️</span>Admin at Racquet Culture</p>`:isCoach(id)?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>`:'';
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -1093,7 +1093,7 @@ function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm(
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
-const adminChip=id=>isDev(id)?' <span class="chip admin">Developer</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
+const adminChip=id=>isDev(id)?' <span class="chip dev">Developer</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
