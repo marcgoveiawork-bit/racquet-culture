@@ -480,14 +480,14 @@ function totals(sets){let a=0,b=0;(sets||[]).forEach(s=>{a+=+s[0]||0;b+=+s[1]||0
 function applyMatch(R,m,ensure){
  const sp=SPORTS[m.sport];if(!sp)return null;
  const lv=s=>s.uid?(R[s.uid]||ensure(s.uid,clampL(m.sport,+s.level||avg(sp.bands.intermediate)))).r:clampL(m.sport,+s.level||sp.min);
- const ta=avg(m.a.map(lv)),tb=avg(m.b.map(lv)),ea=1/(1+Math.pow(10,(tb-ta)/sp.scale)),sa=m.winner==='a'?1:0;
+ const ta=avg(m.a.map(lv)),tb=avg(m.b.map(lv)),ea=1/(1+Math.pow(10,(tb-ta)/sp.scale)),sa=m.winner==='a'?1:m.winner==='draw'?.5:0;
  const [ga,gb]=totals(m.sets),share=ga+gb?ga/(ga+gb):.5,mult=.8+.8*Math.abs(share-.5);
  const out={};
  [[m.a,sa,ea],[m.b,1-sa,1-ea]].forEach(([team,s,e])=>team.forEach(sl=>{if(!sl.uid)return;const E=R[sl.uid],k=sp.K*(E.n<5?2:E.n<15?1.4:1),before=E.r;
-  E.r=clampL(m.sport,E.r+k*mult*(s-e));const d=E.r-before;E.n++;if(s)E.w++;else E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
+  E.r=clampL(m.sport,E.r+k*mult*(s-e));const d=E.r-before;E.n++;if(s===1)E.w++;else if(s===0)E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
  return{d:out,ea,ta,tb};
 }
-const okMatch=m=>m&&SPORTS[m.sport]&&Array.isArray(m.a)&&Array.isArray(m.b)&&m.a.length&&m.b.length&&(m.winner==='a'||m.winner==='b');
+const okMatch=m=>m&&SPORTS[m.sport]&&Array.isArray(m.a)&&Array.isArray(m.b)&&m.a.length&&m.b.length&&(m.winner==='a'||m.winner==='b'||m.winner==='draw');
 const byWhen=(x,y)=>(x.date||'').localeCompare(y.date||'')||((x.time??99)-(y.time??99))||(x.at||'').localeCompare(y.at||'');
 const regsOf=m=>[...m.a,...m.b].filter(s=>s&&s.uid).map(s=>s.uid);
 /* pending: waiting for the other players; confirmed; disputed: someone asked for a change; reviewed: an admin set the score */
@@ -995,12 +995,12 @@ function slotName(s){if(!s)return'';if(s.uid){const p=prof(s.uid);if(!p)return'F
 function slotAv(s){if(s&&s.uid){const p=prof(s.uid);if(p)return avHTML(p)}return avHTML({name:s&&s.name||'G'})}
 const ST_LABEL={pending:'Awaiting confirmation',disputed:'Under review',reviewed:'Score set by an admin',confirmed:'Confirmed'};
 function matchRow(m,opts={}){
- const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
+ const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',bw=m.winner==='b',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
  const team=(t,w)=>`<div class="tm${w?' win':''}"><span class="avs">${m[t].map(slotAv).join('')}</span><span>${m[t].map(s=>esc(slotName(s))).join(' & ')}</span></div>`;
  const acts=[];if(isAdmin())acts.push(`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">${st==='disputed'?'Review score':'Edit score'}</button>`);
  if(regsOf(m).includes(S.uid)&&regsOf(m).length>1)acts.unshift(`<button class="btn link small" data-act="kudos" data-v="${esc(m.id)}">Send kudos 👍</button>`);
  if(opts.del&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
- return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',!aw)}
+ return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',bw)}
   <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(whenOf(m))}${st&&st!=='confirmed'?` · <span class="stx st-${st}">${ST_LABEL[st]}</span>`:''}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
   ${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
   <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}${Array.isArray(m.extra)?`<div class="xset" title="Extra set, played for fun after the match was decided"><span>${+m.extra[0]}</span><span>${+m.extra[1]}</span></div>`:''}</div></div>`;
@@ -1060,13 +1060,14 @@ const FACTS=[
  ['🔥','Warm up first','A 5–10 minute warm-up before you play gets your body ready and helps prevent injuries.']
 ];
 const myGames=()=>S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen);
-const iWon=m=>m[m.winner].some(x=>x&&x.uid===S.uid);
+const iWon=m=>m.winner!=='draw'&&m[m.winner].some(x=>x&&x.uid===S.uid);
+const iLost=m=>m.winner!=='draw'&&!iWon(m);
 /* Short personal nudges, built only from the player's real games and levels */
 function nudges(){
  const out=[],gs=myGames(),last=gs[gs.length-1],fr=friendIds();
  if(!gs.length)out.push(['🎾','Your first game is waiting','Book a court, play, and add the score here to get your level moving.']);
  else{
-  let w=0,l=0;for(let i=gs.length-1;i>=0&&iWon(gs[i]);i--)w++;for(let i=gs.length-1;i>=0&&!iWon(gs[i]);i--)l++;
+  let w=0,l=0;for(let i=gs.length-1;i>=0&&iWon(gs[i]);i--)w++;for(let i=gs.length-1;i>=0&&iLost(gs[i]);i--)l++;
   if(w>=2)out.push(['🏆',`You've won your last ${w} games`,'You’re on a roll. Ready for another win?']);
   else if(w===1)out.push(['🏆','You won your last game','Keep the momentum going. Book your next one.']);
   else if(l>=2)out.push(['💥',`${l} tough results in a row`,'Every great player has them. The best way to bounce back is your next game.']);
@@ -1179,26 +1180,30 @@ function timeSheet(){
    Best of 3: once one side has won the first two, the match is over. A third set played after that is kept as a
    friendly "extra" set: it is saved and shown, but it does not change the winner or anyone's level. */
 const MAX_GAMES={padel:7,pickleball:25};
+/* Pickleball: a game that reaches the 25-point cap without a 2-point lead (25–24 or 25–25) is a drawn game */
+const PB_CAP=25,isDrawGame=(sport,a,b)=>sport==='pickleball'&&Math.max(a,b)===PB_CAP&&Math.abs(a-b)<=1;
 function setError(sport,a,b,name){
  const w=Math.max(a,b),l=Math.min(a,b);
  if(sport==='padel'){if((w===6&&l<=4)||(w===7&&(l===5||l===6)))return'';return`${name} ${a}–${b} isn't a padel score. A set ends 6–0 to 6–4, 7–5 or 7–6.`}
  for(const T of [11,15,21]){if((w===T&&l<=T-2)||(w>T&&w-l===2&&l>=T-1))return''}
+ if(isDrawGame(sport,a,b))return'';
  return`${name} ${a}–${b} isn't a pickleball score. A game goes to 11 and you must win by 2 (for example 11–7 or 12–10).`;
 }
-const decidedAfter2=rows=>{const f=r=>rows[r]&&rows[r][0]!==''&&rows[r][1]!==''&&+rows[r][0]!==+rows[r][1]?(+rows[r][0]>+rows[r][1]?'a':'b'):null;const x=f(0),y=f(1);return x&&x===y?x:null};
+const decidedAfter2=rows=>{const f=r=>rows[r]&&rows[r][0]!==''&&rows[r][1]!==''&&Math.abs(+rows[r][0]-+rows[r][1])>(Math.max(+rows[r][0],+rows[r][1])===PB_CAP?1:0)?(+rows[r][0]>+rows[r][1]?'a':'b'):null;const x=f(0),y=f(1);return x&&x===y?x:null};
 function readSetsOf(sport,rows){
  const S_=SPORTS[sport],out=[];let extra=null;
  const dec=decidedAfter2(rows);
  for(let r=0;r<rows.length;r++){const [x,y]=rows[r];if(x===''&&y==='')continue;const nm=`${S_.setName} ${r+1}`;
   if(x===''||y==='')return{err:`Fill in both scores for ${S_.setName.toLowerCase()} ${r+1}.`};
-  const a=+x,b=+y;if(a===b)return{err:`${nm} can't be a draw.`};
+  const a=+x,b=+y;if(a===b&&!isDrawGame(sport,a,b))return{err:`${nm} can't be a draw.`+(sport==='pickleball'?` A game only ends level if it reaches ${PB_CAP}–${PB_CAP}.`:'')};
   if(a>MAX_GAMES[sport]||b>MAX_GAMES[sport])return{err:sport==='padel'?`${nm}: the most games anyone can win in a padel set is 7 (7–5 or 7–6).`:`${nm} has too many points.`};
   const e=setError(sport,a,b,nm);if(e)return{err:e};
   if(r===2&&dec){extra=[a,b];continue}
   out.push([a,b])}
  if(!out.length)return{err:'Enter the score.'};
- const wa=out.filter(s=>s[0]>s[1]).length,wb=out.length-wa;if(wa===wb)return{err:`${S_.setName}s are level at ${wa}–${wb}. Add the deciding ${S_.setName.toLowerCase()}.`};
- return{sets:out,winner:wa>wb?'a':'b',wa,wb,extra};
+ const dr=out.filter(s=>isDrawGame(sport,s[0],s[1])).length,wa=out.filter(s=>s[0]>s[1]&&!isDrawGame(sport,s[0],s[1])).length,wb=out.length-wa-dr;
+ if(wa===wb){if(!dr)return{err:`${S_.setName}s are level at ${wa}–${wb}. Add the deciding ${S_.setName.toLowerCase()}.`};return{sets:out,winner:'draw',wa,wb,dr,extra}}
+ return{sets:out,winner:wa>wb?'a':'b',wa,wb,dr,extra};
 }
 const readSets=()=>readSetsOf(A.sport,A.sets);
 function draft(){
@@ -1217,15 +1222,15 @@ function paintSet3(){
 function paintFair(){
  paintSet3();
  const rs=readSets(),sum=$('ssum');
- if(sum){const filled=A.sets.some(s=>s[0]!==''||s[1]!=='');sum.className='ssum'+(rs.sets?rs.winner==='a'?' win':' lose':'');
-  sum.textContent=rs.sets?(rs.winner==='a'?`Your team wins ${rs.wa}–${rs.wb}`:`Your opponents win ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games'):filled?rs.err:''}
+ if(sum){const filled=A.sets.some(s=>s[0]!==''||s[1]!=='');sum.className='ssum'+(rs.sets?rs.winner==='a'?' win':rs.winner==='draw'?'':' lose':'');
+  sum.textContent=rs.sets?(rs.winner==='draw'?`It's a draw, ${rs.wa}–${rs.wb} in games won (${rs.dr} drawn at the ${PB_CAP}-point cap)`:(rs.winner==='a'?`Your team wins ${rs.wa}–${rs.wb}`:`Your opponents win ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games')):filled?rs.err:''}
  const el=$('fair');if(!el)return;const m=draft();
  if(!m){el.innerHTML=`<h3>Fair points</h3><p class="small muted">Add all the players to see how many points this game is worth for each of you.</p>`;return}
  const ta=avg(m.a.map(s=>s.level)),tb=avg(m.b.map(s=>s.level)),ea=1/(1+Math.pow(10,(tb-ta)/SPORTS[m.sport].scale));
  let rows;
  if(rs.sets){const pv=preview(Object.assign({},m,{sets:rs.sets,winner:rs.winner}));
   rows=[...m.a,...m.b].filter(s=>s.uid).map(s=>`<div class="prow"><span>${s.uid===S.uid?'You':esc(slotName(s))}</span><span class="delta ${dcls(pv.d[s.uid])}">${fmtD(pv.d[s.uid])}</span></div>`).join('');
-  rows=`<p class="small" style="margin:10px 0 4px"><b>${rs.winner==='a'?'Your team wins.':'Your opponents win.'}</b> Points from this result:</p>${rows}`}
+  rows=`<p class="small" style="margin:10px 0 4px"><b>${rs.winner==='a'?'Your team wins.':rs.winner==='draw'?'A draw.':'Your opponents win.'}</b> Points from this result:</p>${rows}`}
  else{const w=preview(Object.assign({},m,{sets:[[1,0]],winner:'a'})),l=preview(Object.assign({},m,{sets:[[0,1]],winner:'b'}));
   rows=`<div class="prow"><span>If you win</span><span class="delta up">${fmtD(w.d[S.uid])}</span></div><div class="prow"><span>If you lose</span><span class="delta down">${fmtD(l.d[S.uid])}</span></div><p class="tiny muted" style="margin-top:6px">Bigger wins move the number a little more.</p>`}
  el.innerHTML=`<h3>Fair points</h3><p class="small muted">Your team averages <b class="num">${fmtL(ta)}</b>, your opponents <b class="num">${fmtL(tb)}</b>. ${Math.abs(ta-tb)<.15?'An even match.':ta>tb?'You are the favourites, so a win earns less and a loss costs more.':'You are the underdogs, so a win earns more and a loss costs less.'}</p>
