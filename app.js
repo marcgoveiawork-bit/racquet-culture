@@ -1529,7 +1529,20 @@ function confirmSheet(title,text,okLabel,act,v){
 }
 
 /* ================= Actions ================= */
+/* ---------- Full screen ---------- */
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+const fsCan=()=>{const d=document.documentElement;return !!(d.requestFullscreen||d.webkitRequestFullscreen)};
+function fsPaint(){const b=$('fsBtn');if(!b)return;const on=!!fsEl();b.classList.toggle('on',on);b.setAttribute('aria-label',on?'Exit full screen':'Full screen');b.title=on?'Exit full screen':'Full screen'}
+['fullscreenchange','webkitfullscreenchange'].forEach(ev=>document.addEventListener(ev,fsPaint));
+async function fsToggle(){
+ if(fsEl()){try{await(document.exitFullscreen||document.webkitExitFullscreen).call(document)}catch(e){}return}
+ if(fsCan()){const d=document.documentElement;try{await(d.requestFullscreen||d.webkitRequestFullscreen).call(d,{navigationUI:'hide'})}catch(e){toast('Full screen is not available here')}return}
+ openSheet(`<h2>Full screen on iPhone</h2><p class="muted" style="margin:6px 0 14px">iPhone doesn't let websites go full screen on their own. Add the app to your Home Screen instead. It then opens full screen every time, like a normal app.</p>
+  <ol style="margin:0 0 16px;padding-left:20px;line-height:1.9"><li>Tap the <b>Share</b> button in Safari (the square with an arrow).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>, then open Racquet Culture from your Home Screen.</li></ol>
+  <button class="btn ghost wide" data-act="closeSheet">Got it</button>`);
+}
 const ACT={
+ fullscreen(){fsToggle()},
  authMode(v){if(v===authMode)return;authMode=v;paintAuth(v==='up'?1:-1)},
  async forgot(){
   if(Store.mode!=='live')return aerr('In preview mode, accounts live on this device only, so there is no reset email. Create a new account instead.',true);
