@@ -191,7 +191,7 @@ async function sha(s){
 const LIVE=window.RC_LIVE||{};
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid)}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice()}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
@@ -206,9 +206,10 @@ function memStore(mode,get,put){return{mode,
  async unfollow(to){const d=get();d.follows=(d.follows||[]).filter(f=>!(f.follower===S.uid&&f.followee===to));put(d)},
  async addReq(r){const d=get();d.reqs=d.reqs||[];d.reqs.push(r);put(d)},
  async updateReq(r){const d=get();upsert(d.reqs,r);put(d)},
- async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)}
+ async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
+ async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -262,12 +263,15 @@ const Live={
   /* tables added in the bookings update: if setup.sql has not been run again yet, the rest of the app keeps working */
   const opt=p=>p.then(x=>x,e=>{if(missing(e)){S.needSql=true;return[]}throw e});
   S.needSql=false;
-  const [p,m,b,c,a,g,f,q]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  /* level feedback is newer still: if its table is missing, feedback is simply not shown */
+  const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
+  const [p,m,b,c,a,g,f,q,v]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
-   follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at}))};
+   follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
+   votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at}))};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
@@ -283,7 +287,8 @@ const Live={
  async unfollow(to){const {error}=await sb.from('rc_follows').delete().eq('follower',S.uid).eq('followee',to);if(error)throw error},
  async addReq(r){const {error}=await sb.from('rc_friend_requests').insert({id:r.id,to_user:r.to,status:r.status,responded_at:r.resp||null});if(error){if(error.code==='42501')throw errc('cooldown');throw error}},
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
- async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')}
+ async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
+ async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
 };
 let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
 
@@ -407,7 +412,10 @@ function buildDemo(you){
  if(withA[0])msgs.push({id:'dg_ak',to:arjun.id,from:caelan.id,kind:'kudos',data:{match:withA[0].id,k:'fire'},read:false,at:ago(30)});
  follows.push({follower:you.id,followee:arjun.id,at:ago(300)},{follower:arjun.id,followee:you.id,at:ago(300)});
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
- return{profiles:all.map(clean),matches:ms,bookings:[],confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,you:you.id,alt:arjun.id};
+ /* level feedback from people who played them: leans the way their real skill differs from their level */
+ const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
+  const gap=P._skill[m.sport]-P.levels[m.sport].start,x=r()+gap*.8,vote=x>.85?'higher':x<.2?'lower':'right';votes.push({id:'dv_'+k+'_'+t,voter,target:t,sport:m.sport,match:m.id,vote,at:m.at})})});
+ return{profiles:all.map(clean),matches:ms,bookings:[],confs,admins:[you.id,caelan.id,surya.id],msgs,follows,reqs,votes,you:you.id,alt:arjun.id};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -427,11 +435,11 @@ async function startDemo(role){
 async function exitDemo(){
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
- else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[]});rate();showAuth()}
+ else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[]});rate();showAuth()}
 }
 
 /* ---------- App state ---------- */
-const S={uid:null,profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
+const S={uid:null,profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
@@ -468,7 +476,7 @@ const andList=a=>a.length<2?a.join(''):a.slice(0,-1).join(', ')+' and '+a[a.leng
 const sentKudos=()=>ls.get('rc_kudos_'+S.uid,{});
 /* Courts are booked on Hudle now: old in-app bookings and their invite messages stay in the database but are not shown */
 const OLD_BOOKING_MSGS=['invite','invite_reply','cancelled'];
-async function reload(){const d=await Store.load();Object.assign(S,{profiles:d.profiles||[],matches:d.matches||[],bookings:[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],msgs:(d.msgs||[]).filter(g=>!OLD_BOOKING_MSGS.includes(g.kind)).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
+async function reload(){const d=await Store.load();Object.assign(S,{profiles:d.profiles||[],matches:d.matches||[],bookings:[],confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:d.votes||[],msgs:(d.msgs||[]).filter(g=>!OLD_BOOKING_MSGS.includes(g.kind)).sort((a,b)=>(b.at||'').localeCompare(a.at||''))});rate()}
 
 /* ---------- Ratings ----------
    Every match is replayed in date order from each player's starting level, so everyone sees the same numbers.
@@ -484,7 +492,7 @@ function applyMatch(R,m,ensure){
  const [ga,gb]=totals(m.sets),share=ga+gb?ga/(ga+gb):.5,mult=.8+.8*Math.abs(share-.5);
  const out={};
  [[m.a,sa,ea],[m.b,1-sa,1-ea]].forEach(([team,s,e])=>team.forEach(sl=>{if(!sl.uid)return;const E=R[sl.uid],k=sp.K*(E.n<5?2:E.n<15?1.4:1),before=E.r;
-  E.r=clampL(m.sport,E.r+k*mult*(s-e));const d=E.r-before;E.n++;if(s===1)E.w++;else if(s===0)E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
+  E.r=clampL(m.sport,E.r+k*mult*(s-e));if(E.cap!=null&&E.r>E.cap)E.r=E.cap;const d=E.r-before;E.n++;if(s===1)E.w++;else if(s===0)E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
  return{d:out,ea,ta,tb};
 }
 const okMatch=m=>m&&SPORTS[m.sport]&&Array.isArray(m.a)&&Array.isArray(m.b)&&m.a.length&&m.b.length&&(m.winner==='a'||m.winner==='b'||m.winner==='draw');
@@ -500,11 +508,28 @@ function statusMap(){
   st[m.id]=ok.length>=need.length?{st:'confirmed'}:{st:'pending',need,ok}});
  return st;
 }
+/* Manual level changes: a player can drop to a lower tier. They are saved on the player's profile and replayed in order
+   with the games. After a drop the level is capped just below the next tier, so they never move back up on their own:
+   when they get within LV_CLOSE of the next tier they are offered the choice to move up, to the bottom of that tier. */
+const TIER_KEYS=['beginner','intermediate','pro'],LV_CLOSE=0.1;
+const r2=x=>Math.round(x*100)/100;
+const capFor=(sp,t)=>{const i=TIER_KEYS.indexOf(t);return i<2?r2(SPORTS[sp].cut[i]-.01):null};
+const dropTo=(sp,t)=>r2(SPORTS[sp].bands[t][1]-.2);
+function levelEvents(){const ev=[];S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];((L&&Array.isArray(L.adj))?L.adj:[]).forEach(a=>{if(a&&isFinite(+a.r)&&a.at)ev.push({sp,id:p.id,r:+a.r,cap:a.cap==null?null:+a.cap,at:a.at,kind:a.kind,date:isoIST(Date.parse(a.at))})})}));return ev.sort((x,y)=>x.at.localeCompare(y.at))}
+/* The tier a player was in before their latest drop (they can never be capped below a tier they never left) */
+function dropFrom(sp,id){const p=prof(id),L=p&&p.levels&&p.levels[sp];const d=((L&&L.adj)||[]).filter(a=>a.kind==='drop').pop();return d?d.from:null}
+/* Offer to move up: only for a capped player who is within LV_CLOSE of the next tier and hasn't just said stay */
+function moveUpOffer(sp){const E=S.R[sp]&&S.R[sp][S.uid];if(!E||E.cap==null)return null;const t=tierOf(sp,E.r),i=TIER_KEYS.indexOf(t);if(i>1)return null;
+ const next=SPORTS[sp].cut[i];if(E.r<next-LV_CLOSE-1e-9)return null;if(ls.get('rc_lvstay_'+S.uid+'_'+sp,-1)===E.n)return null;return{sp,t,nt:TIER_KEYS[i+1],next,r:E.r}}
 function rate(){
  const R={},D={};SP_KEYS.forEach(sp=>R[sp]={});S.ST=statusMap();
  const mk=(sp,id,l)=>R[sp][id]={r:l,start:l,n:0,w:0,l:0,hist:[],last:0};
  S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(L&&isFinite(+L.start))mk(sp,p.id,clampL(sp,L.start))}));
- S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
+ const ev=levelEvents();let ei=0;
+ const evFirst=(e,m)=>e.date<(m.date||'')||(e.date===m.date&&e.at<=(m.at||''));
+ const applyEv=e=>{const E=R[e.sp][e.id];if(!E)return;const before=E.r;E.r=clampL(e.sp,e.r);E.cap=e.cap;E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
+ S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{while(ei<ev.length&&evFirst(ev[ei],m))applyEv(ev[ei++]);D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
+ while(ei<ev.length)applyEv(ev[ei++]);
  S.R=R;S.D=D;
 }
 /* What a result would do, without saving it */
@@ -936,7 +961,7 @@ function wGo(delta){W.dir=delta;W.i+=delta;window.scrollTo({top:0,behavior:calm(
 function wPickThenNext(){if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock=false;const s=wStep(wSteps()[W.i]);if(s.valid)wGo(1)},380)}
 async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
- Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]={start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()}});
+ Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]=Object.assign({start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
  const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true,gender:d.gender||p.gender||''});
  const btn=$('wiz').querySelector('[data-act="wNext"]');if(btn){btn.disabled=true;btn.textContent='Saving…'}
  try{await Store.saveProfile(np)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}return toast('Could not save. Check your connection and try again.')}
@@ -989,7 +1014,7 @@ function levelCard(sp,id){
  const t=tierOf(sp,e.r),rk=rankOf(sp,id);
  return `<div class="card lcard hov rv" role="button" tabindex="0" data-act="rankAt" data-v="${sp}"><div class="lhead"><span class="eyebrow">${S_.name}</span><span class="chip t-${t}">${TIER_NAME[t]}</span></div>
   <div class="lv num">${fmtL(e.r)}${e.n?`<small class="delta ${dcls(e.last)}">${fmtD(e.last)}</small>`:''}</div>
-  <p class="small muted">${rk?`#${rk.pos} of ${rk.of} in ${TIER_NAME[t]} · `:''}${e.n?`${e.w} won, ${e.l} lost`:'Play a match to get ranked'}</p>${spark(e.hist,sp)}</div>`;
+  <p class="small muted">${rk?`#${rk.pos} of ${rk.of} in ${TIER_NAME[t]} · `:''}${e.n?`${e.w} won, ${e.l} lost`:'Play a match to get ranked'}</p>${spark(e.hist,sp)}${(levelVotes(sp,id)||{}).html||''}</div>`;
 }
 function slotName(s){if(!s)return'';if(s.uid){const p=prof(s.uid);if(!p)return'Former member';const w=(p.name||'').trim().split(/\s+/).filter(x=>/^[\p{L}]/u.test(x));return first(p)+(w.length>1?' '+w[w.length-1][0]+'.':'')}return(s.name||'Guest')+' (guest)'}
 function slotAv(s){if(s&&s.uid){const p=prof(s.uid);if(p)return avHTML(p)}return avHTML({name:s&&s.name||'G'})}
@@ -1011,7 +1036,7 @@ function vHome(){
  const todo=S.msgs.filter(needsAction),disputes=S.matches.filter(m=>(S.ST[m.id]||{}).st==='disputed').length;
  return `<div class="card hero rv"><p class="eyebrow">${esc(greet())}</p><h1>${esc(first(p))}, ready to play?</h1>
   <p class="muted" style="margin-top:6px">${players} player${players===1?'':'s'} in the club · ${open} open to invites right now.</p>
-  <div class="cta">${hudleBtn()}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>
+  <div class="cta">${hudleBtn()}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${moveUpCard()}
   ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
    <div class="astats"><button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
   ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm and reviews in your inbox</span></span><span class="go">›</span></button>`:''}
@@ -1251,7 +1276,7 @@ async function submitMatch(){
  S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
  notify(ids.filter(u=>u!==S.uid).map(to=>({to,kind:'confirm',data:{match:rec.id}})));
  toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}. The other players are asked to confirm.`,4200);
- view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>kudosSheet(rec.id,true),900)},500);
+ view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>levelAsk(rec.id,()=>kudosSheet(rec.id,true)),900)},500);
 }
 
 /* ---------- Inbox ---------- */
@@ -1362,9 +1387,9 @@ function paintPlayers(){
 }
 /* ---------- My profile ---------- */
 function vMe(){
- const p=me(),mine=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse();
+ const p=me(),mg=view.mg||'all',all_=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse(),mine=mg==='all'?all_:all_.filter(m=>m.sport===mg);
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="phtools"><button class="gearbtn" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -1373,9 +1398,77 @@ function vMe(){
   <div class="sec"><h2>How you play</h2></div>
   <div class="card rv"><dl class="prefs"><dt>Sports</dt><dd>${(p.sports||[]).map(s=>SPORTS[s].name).join(' and ')||'–'}</dd><dt>Gender</dt><dd>${esc(lbl(GENDERS,p.gender))||'Not set yet. Tap Edit profile.'}</dd><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd></dl></div>
   <div class="sec"><h2>Your games</h2><span class="small muted">${mine.length}</span></div>
-  <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>No games yet</b>Your scores and points will show here.</div>`}</div>
+  <div style="margin-bottom:12px">${seg('mg','Show games',[['all',`All · ${all_.length}`],...SP_KEYS.map(k=>[k,`${SPORTS[k].name} · ${all_.filter(m=>m.sport===k).length}`])],mg,'mgTab')}</div>
+  <div class="list">${mine.map(m=>matchRow(m,{del:1})).join('')||`<div class="card empty rv"><b>${mg==='all'?'No games yet':'No '+SPORTS[mg].name.toLowerCase()+' games yet'}</b>Your scores and points will show here.</div>`}</div>
   <button class="card setlink hov rv" data-act="go" data-v="settings"><span class="sico" data-a="spin">${ICON.gear}</span><span><b>Settings</b><span class="small muted">Theme, notifications, sounds, pop-ups, friend requests and your account</span></span><span class="go">›</span></button>
   ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:14px" data-act="signOut">Sign out</button>`}`;
+}
+
+/* ---------- Level: drop a tier, or move back up when close ---------- */
+function lvSettingRow(sp){
+ const E=S.R[sp][S.uid],S_=SPORTS[sp];if(!E)return'';const t=tierOf(sp,E.r),i=TIER_KEYS.indexOf(t),off=moveUpOffer(sp);
+ const lower=TIER_KEYS.slice(0,i);
+ return `<div class="lvset"><div class="lvtop"><b>${S_.name}</b><span class="chip t-${t}">${TIER_NAME[t]} · <span class="num">${fmtL(E.r)}</span></span></div>
+  ${E.cap!=null?`<p class="small muted">You chose a lower level. You won't move up to ${TIER_NAME[TIER_KEYS[i+1]]} on your own: win games to get within ${LV_CLOSE.toFixed(1)} of ${fmtL(S_.cut[i],1)} and you can choose to move up.</p>`:''}
+  ${off?`<div class="cta" style="margin-top:8px"><button class="btn brand sm" data-act="lvUp" data-v="${sp}">Move up to ${TIER_NAME[off.nt]}</button></div>`:''}
+  ${lower.length?`<div class="cta" style="margin-top:8px">${lower.reverse().map(k=>`<button class="btn ghost sm" data-act="lvDrop" data-v="${sp}|${k}">Drop to ${TIER_NAME[k]}</button>`).join('')}</div>`:(E.cap==null?`<p class="small muted">You're in the first tier, so there's no lower level to drop to.</p>`:'')}</div>`;
+}
+function lvDropSheet(sp,k){
+ const E=S.R[sp][S.uid],S_=SPORTS[sp],t=tierOf(sp,E.r),to=dropTo(sp,k);
+ openSheet(`<h2>Drop to ${TIER_NAME[k]}?</h2><p class="muted">Your ${S_.name.toLowerCase()} level goes from <b class="num">${fmtL(E.r)}</b> (${TIER_NAME[t]}) to <b class="num">${fmtL(to)}</b> (${TIER_NAME[k]}).</p>
+  <div class="warnbox"><b>Are you sure?</b><p class="small" style="margin:6px 0 0">You can't switch back yourself, and you won't move back up automatically. You'll have to win games to earn it. When you get within ${LV_CLOSE.toFixed(1)} of ${TIER_NAME[TIER_KEYS[TIER_KEYS.indexOf(k)+1]]} (${fmtL(capFor(sp,k)+.01,1)}), you'll be asked if you want to move up.</p></div>
+  <button class="btn danger wide" style="margin-top:16px" data-act="lvDropYes" data-v="${sp}|${k}">Yes, drop to ${TIER_NAME[k]}</button>
+  <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`);
+}
+async function addLevelAdj(sp,a){
+ const p=JSON.parse(JSON.stringify(me()));p.levels=p.levels||{};const L=p.levels[sp]=p.levels[sp]||{};L.adj=(L.adj||[]).concat([a]);
+ await Store.saveProfile(p);upsert(S.profiles,p);rate();
+}
+async function lvDropYes(sp,k){
+ const E=S.R[sp][S.uid],from=TIER_KEYS[Math.max(TIER_KEYS.indexOf(tierOf(sp,E.r)),TIER_KEYS.indexOf(dropFrom(sp,S.uid)||'beginner'))];
+ try{await addLevelAdj(sp,{kind:'drop',at:new Date().toISOString(),r:dropTo(sp,k),cap:capFor(sp,k),from})}catch(e){return toast('Could not save. Check your connection and try again.')}
+ closeSheet();doneTick(`You're now ${TIER_NAME[k]}`);render();
+}
+function lvUpSheet(sp){
+ const off=moveUpOffer(sp);if(!off)return;const S_=SPORTS[sp];
+ openSheet(`<h2>You're close to ${TIER_NAME[off.nt]}</h2><p class="muted">Your ${S_.name.toLowerCase()} level is <b class="num">${fmtL(off.r)}</b>, right at the top of ${TIER_NAME[off.t]}. Do you want to stay, or move up to the bottom of ${TIER_NAME[off.nt]} (<b class="num">${fmtL(off.next,1)}</b>)?</p>
+  <button class="btn brand wide" style="margin-top:16px" data-act="lvUpYes" data-v="${sp}">Move up to ${TIER_NAME[off.nt]}</button>
+  <button class="btn ghost wide" style="margin-top:10px" data-act="lvStay" data-v="${sp}">Stay in ${TIER_NAME[off.t]} for now</button>`);
+}
+async function lvUpYes(sp){
+ const off=moveUpOffer(sp);if(!off)return;const from=dropFrom(sp,S.uid),ni=TIER_KEYS.indexOf(off.nt);
+ const cap=from&&ni<TIER_KEYS.indexOf(from)?capFor(sp,off.nt):null;
+ try{await addLevelAdj(sp,{kind:'up',at:new Date().toISOString(),r:off.next,cap,from})}catch(e){return toast('Could not save. Check your connection and try again.')}
+ closeSheet();doneTick(`Welcome to ${TIER_NAME[off.nt]}`);render();
+}
+const moveUpCard=()=>mySports().map(moveUpOffer).filter(Boolean).map(o=>`<button class="card upcard hov rv" data-act="lvUpAsk" data-v="${o.sp}"><span class="sico" data-a="pop">⬆️</span><span><b>You're close to ${TIER_NAME[o.nt]} in ${SPORTS[o.sp].name.toLowerCase()}</b><span class="small muted">Stay in ${TIER_NAME[o.t]} or move up. Tap to choose.</span></span><span class="go">›</span></button>`).join('');
+
+/* ---------- Level feedback: after adding a score, say whether each other player's level looks right ---------- */
+const VOTE_TXT={higher:'should be higher',lower:'should be lower',right:'is about right'};
+function levelVotes(sp,id){
+ const since=new Date(Date.now()-120*864e5).toISOString(),last={};
+ (S.votes||[]).filter(v=>v.target===id&&v.sport===sp&&v.voter!==id&&(v.at||'')>=since).sort((a,b)=>(a.at||'').localeCompare(b.at||'')).forEach(v=>last[v.voter]=v.vote);
+ const vs=Object.values(last).filter(v=>VOTE_TXT[v]),n=vs.length;if(n<3)return null;
+ const c={higher:0,right:0,lower:0};vs.forEach(v=>c[v]++);const ord=['right','higher','lower'].sort((a,b)=>c[b]-c[a]),top=ord[0],share=c[top]/n;
+ if(c[ord[1]]===c[top])return{top:'split',n,k:c[top],html:`<p class="lvvote v-split"><span aria-hidden="true">⚖️</span><span>Players who played them are split on this level <span class="muted">· ${n} said</span></span></p>`};
+ const who=share>=.75?'Most':share>=.5?'Lots of':'A few';
+ return{top,n,k:c[top],html:`<p class="lvvote v-${top}"><span aria-hidden="true">${top==='higher'?'⬆️':top==='lower'?'⬇️':'✅'}</span><span>${who} players who played them say this level ${VOTE_TXT[top]} <span class="muted">· ${c[top]} of ${n}</span></span></p>`};
+}
+function levelAsk(mid,then){
+ const m=S.matches.find(x=>x.id===mid);if(!m)return then&&then();
+ const others=regsOf(m).filter(u=>u!==S.uid&&prof(u)&&lvlOf(m.sport,u)!=null);let i=0;
+ const step=()=>{if(i>=others.length){closeSheet(true);return then&&then()}
+  const u=others[i],p=prof(u),lv=lvlOf(m.sport,u),t=tierOf(m.sport,lv);
+  openSheet(`<p class="eyebrow">Player ${i+1} of ${others.length} · ${SPORTS[m.sport].name}</p><div style="text-align:center"><div class="avbig" style="width:80px;height:80px;margin-top:8px">${avHTML(p,80)}</div>
+   <h2 style="margin-top:10px">Is ${esc(first(p))}'s level right?</h2><p style="margin:6px 0"><b class="num" style="font-size:22px">${fmtL(lv)}</b> <span class="chip t-${t}">${TIER_NAME[t]}</span></p>
+   <p class="small muted">From the game you just played. Only a summary is shown, never who said what.</p></div>
+   <div class="lvask"><button type="button" class="btn ghost" data-lv="higher">⬆️ Should be higher</button><button type="button" class="btn brand" data-lv="right">✅ About right</button><button type="button" class="btn ghost" data-lv="lower">⬇️ Should be lower</button></div>
+   <button type="button" class="btn link small wide" style="margin-top:8px" data-lv="skip">Skip</button>`,bg=>qsa('[data-lv]',bg).forEach(b=>b.onclick=async()=>{
+    const v=b.dataset.lv;qsa('[data-lv]',bg).forEach(x=>x.disabled=true);
+    if(v!=='skip'){const rec={id:'lv_'+rid(),voter:S.uid,target:u,sport:m.sport,match:m.id,vote:v,at:new Date().toISOString()};try{await Store.addVote(rec);S.votes.push(rec);tick()}catch(e){}}
+    i++;step()}));
+ };
+ if(!others.length)return then&&then();step();
 }
 
 /* ---------- Settings ---------- */
@@ -1395,6 +1488,8 @@ function vSettings(){
  <div class="card rv">${row(ICON.phone,'shake','Add to Home Screen',isInstalled()?'Done. You’re using Racquet Culture from your Home Screen.':'Put the app icon on your phone so it opens full screen, like a normal app.',isInstalled()?'<span class="chip st-confirmed">Added</span>':`<button class="btn brand sm" data-act="${installEvt?'hsInstall':'hsHow'}">${installEvt?'Add':'Show me'}</button>`)}</div>
  <p class="eyebrow period">Notifications and feedback</p>
  <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, an invite is sent and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
+ <p class="eyebrow period">Your level</p>
+ <div class="card rv">${mySports().map(sp=>lvSettingRow(sp)).join('')||'<p class="small muted">Set your level from your profile first.</p>'}</div>
  <p class="eyebrow period">Friends</p>
  <div class="card rv">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
   <div style="margin-top:12px">${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}</div></div>
@@ -1466,7 +1561,7 @@ function playerSheet(id){
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
-   return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p></div>`}).join('')}</div>
+   return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}${rk?' · #'+rk.pos:''}</span><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to invites':'Not right now'}</dd><dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
@@ -1608,6 +1703,8 @@ const ACT={
  aCourt(v){A.courtNo=+v;render()},
  aTime(){timeSheet()},
  kudos(v){kudosSheet(v)},
+ mgTab(v){view.mg=v;render()},lvDrop(v){const [sp,k]=v.split('|');lvDropSheet(sp,k)},lvDropYes(v){const [sp,k]=v.split('|');lvDropYes(sp,k)},
+ lvUpAsk(v){lvUpSheet(v)},lvUp(v){lvUpSheet(v)},lvUpYes(v){lvUpYes(v)},lvStay(v){const E=S.R[v][S.uid];ls.set('rc_lvstay_'+S.uid+'_'+v,E?E.n:0);closeSheet();toast('Staying put. We’ll ask again after your next game.');render()},
  async addFriend(id){const p=prof(id),r=relWith(id);if(r.st==='incoming')return ACT.reqAccept(r.r.id);if(r.st!=='none')return;
   const open=p.friends==='open',now=new Date().toISOString(),q={id:'q_'+rid(),from:S.uid,to:id,status:open?'accepted':'pending',at:now,resp:open?now:null};
   try{await Store.addReq(q)}catch(e){return toast(e.code==='cooldown'?'You can send a new request 5 days after a rejection.':'Could not send the request. Check your connection.')}

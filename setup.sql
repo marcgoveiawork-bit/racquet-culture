@@ -228,6 +228,29 @@ alter table public.rc_friend_requests replica identity full;
 do $$ begin alter publication supabase_realtime add table public.rc_follows;         exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table public.rc_friend_requests; exception when duplicate_object then null; end $$;
 
+-- Level feedback: after a game, a player can say whether each other player's level looks right.
+-- Profiles only show a summary (for example "Most players say this level is about right"), never who voted.
+create table if not exists public.rc_level_votes (
+  id          text primary key,
+  voter       uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  target      uuid not null references auth.users(id) on delete cascade,
+  sport       text not null check (sport in ('padel','pickleball')),
+  match_id    text not null,
+  vote        text not null check (vote in ('higher','right','lower')),
+  created_at  timestamptz not null default now(),
+  unique (voter, target, match_id),
+  check (voter <> target)
+);
+alter table public.rc_level_votes enable row level security;
+drop policy if exists "rc level votes read"   on public.rc_level_votes;
+drop policy if exists "rc level votes insert" on public.rc_level_votes;
+create policy "rc level votes read"   on public.rc_level_votes for select to authenticated using (true);
+-- only players who were in that game can vote on it
+create policy "rc level votes insert" on public.rc_level_votes for insert to authenticated with check (
+  auth.uid() = voter and exists (select 1 from public.rc_matches m where m.id = match_id
+    and (m.data::text like '%' || auth.uid()::text || '%') and (m.data::text like '%' || target::text || '%')));
+grant select, insert on public.rc_level_votes to authenticated;
+
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.
 -- insert into public.rc_admins (user_id) select id from public.rc_profiles where lower(username) = lower('USERNAME') on conflict do nothing;
