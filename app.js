@@ -1548,13 +1548,11 @@ const isIOS=/iPad|iPhone|iPod/.test(UA)||(navigator.platform==='MacIntel'&&navig
 const isAndroid=/Android/i.test(UA);
 const isInstalled=()=>matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches||navigator.standalone===true;
 let installEvt=null;
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;if(view&&view.tab==='inbox')render()});
-window.addEventListener('appinstalled',()=>{installEvt=null;ls.set('rc_installed',1);closeSheet();toast('Racquet Culture is on your Home Screen');if(view&&view.tab==='inbox')render()});
-/* Shown at the top of the inbox on phones until the app is added (or hidden for a week) */
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e});
+window.addEventListener('appinstalled',()=>{installEvt=null;ls.set('rc_installed',1);closeSheet();toast('Racquet Culture is on your Home Screen')});
+/* Always shown at the top of the inbox */
 function homeCard(){
- if(isInstalled()||ls.get('rc_installed',0)||!(isIOS||isAndroid))return'';
- if(Date.now()<ls.get('rc_hs_hide',0))return'';
- return`<div class="card msg hscard rv" style="margin-top:14px"><span class="mi">${ICON.phone}</span><div class="mb"><b class="mt">Add Racquet Culture to your Home Screen</b><p>Get the app icon on your phone. It opens full screen like a normal app, and you'll never need to find the link again.</p><div class="cta">${installEvt?'<button class="btn ball sm" data-act="hsInstall">Add to Home Screen</button>':'<button class="btn ball sm" data-act="hsHow">Show me how</button>'}<button class="btn ghost sm" data-act="hsHide">Not now</button></div></div></div>`;
+ return`<div class="card msg hscard rv" style="margin-top:14px"><span class="mi">${ICON.phone}</span><div class="mb"><b class="mt">Add Racquet Culture to your Home Screen</b><p>Get the app icon on your phone. It opens full screen like a normal app, and you'll never need to find the link again.</p><div class="cta"><button class="btn ball sm" data-act="hsHow">Show me how</button></div></div></div>`;
 }
 const HS_IOS=`<ol class="hsteps"><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow pointing up).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. The Racquet Culture icon appears on your Home Screen.</li></ol>`;
 const HS_AND=`<ol class="hsteps"><li>Open this page in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li><li>Tap <b>Install</b> or <b>Add</b>. The Racquet Culture icon appears on your Home Screen.</li></ol>`;
@@ -1573,7 +1571,6 @@ const ACT={
  fullscreen(){fsToggle()},
  hsHow(){homeSheet()},
  hsInstall(){hsInstall()},
- hsHide(){ls.set('rc_hs_hide',Date.now()+7*864e5);toast('Hidden for a week. You can add it any time from Settings.');render()},
  authMode(v){if(v===authMode)return;authMode=v;paintAuth(v==='up'?1:-1)},
  async forgot(){
   if(Store.mode!=='live')return aerr('In preview mode, accounts live on this device only, so there is no reset email. Create a new account instead.',true);
