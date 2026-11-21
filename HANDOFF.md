@@ -13,6 +13,9 @@ I'm Marc. With my cousins Caelan DaCosta and Surya N, I run **Racquet Culture**,
 - **Cloud environment:** the "Racquet Culture" Claude cloud environment allows `api.supabase.com`, `snormmbkocezylbhzurh.supabase.co` and `cdn.jsdelivr.net`. It has my Supabase personal access token saved as a network secret for `api.supabase.com`, so you can run SQL with the Management API (`POST https://api.supabase.com/v1/projects/snormmbkocezylbhzurh/database/query` with body `{"query": "..."}`). The token expires on the date I chose, so if it fails, ask me for a new one with the secure credential form, never in chat. `github.io` and Google Maps are blocked from the cloud environment, so the live site and the map can't be checked from there.
 - **Old copy:** an older copy of the app sits in `naimbernard/Nai` under `racquet-culture/` on branch `claude/great-cori-wk4cmp`. That repo belongs to my collaborator Naim's JFM property app. Ignore that copy and don't touch the JFM files.
 
+## Court booking moved to Hudle (Nov 2026)
+The in-app booking system has been removed. Players book and pay on Hudle: https://hudle.in/venues/racquet-culture-chicalim/567082 (set in `config.js` as `hudle`). The app shows **Book on Hudle** buttons (home, the dock's Book tab, and a card under Our locations). Score entry still records the date, court and start and end time for admin tracking. The `rc_bookings` table is still in the database but the app no longer reads or writes it, and old booking invite messages are hidden.
+
 ## Database (all set up and live)
 `setup.sql` has been run, and it's safe to re-run. Tables, all with row-level security:
 - `rc_profiles`: id = auth user id, username, name, `data` jsonb holding the rest of the profile.
