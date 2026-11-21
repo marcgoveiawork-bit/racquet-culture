@@ -231,7 +231,7 @@ function memStore(mode,get,put){return{mode,
  async delReq(id){const d=get();d.reqs=(d.reqs||[]).filter(r=>r.id!==id);put(d)},
  async addVote(v){const d=get();d.votes=d.votes||[];d.votes.push(v);put(d)},
  async saveCfg(k,v){const d=get();d.cfg=d.cfg||{};d.cfg[k]=v;put(d)},
- async setRole(id,role,coach){const d=get();d.coaches=d.coaches||{};delete d.coaches[id];d.admins=d.admins.filter(x=>x!==id);d.owners=(d.owners||[]).filter(x=>x!==id);if(role==='admin'||role==='owner')d.admins.push(id);if(role==='owner')d.owners.push(id);if(role==='coach')d.coaches[id]=coach;put(d)},
+ async setRole(id,role,coach,v=VID){const d=get(),k=id+'@'+v;d.coaches=d.coaches||{};delete d.coaches[k];d.admins=d.admins.filter(x=>x!==k);d.owners=(d.owners||[]).filter(x=>x!==k);if(role==='admin'||role==='owner')d.admins.push(k);if(role==='owner')d.owners.push(k);if(role==='coach')d.coaches[k]=coach;put(d)},
  async savePhone(r){const d=get();d.phones=d.phones||{};d.phones[S.uid]=r;put(d)},
  async setDemoAcc(id,on){const d=get();d.demoAcc=(d.demoAcc||[]).filter(x=>x!==id);if(on)d.demoAcc.push(id);put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
@@ -293,14 +293,14 @@ const Live={
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
   const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da,ow]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
-   opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id',null,'user_id')),
+   opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id,venue',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id',null,'user_id'))]);
-  return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id),msgs:g.map(gRow),
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,venue,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id,venue',null,'user_id'))]);
+  return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id+'@'+(x.venue||'rc')),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
-   devs:dv.map(x=>x.user_id),owners:ow.map(x=>x.user_id),demoAcc:da.map(x=>x.user_id),
-   coaches:Object.fromEntries(co.map(x=>[x.user_id,{sports:x.sports||[],auto:!!x.auto}])),
+   devs:dv.map(x=>x.user_id),owners:ow.map(x=>x.user_id+'@'+(x.venue||'rc')),demoAcc:da.map(x=>x.user_id),
+   coaches:Object.fromEntries(co.map(x=>[x.user_id+'@'+(x.venue||'rc'),{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
@@ -320,12 +320,13 @@ const Live={
  async updateReq(r){const {data,error}=await sb.from('rc_friend_requests').update({status:r.status,responded_at:r.resp}).eq('id',r.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delReq(id){const {data,error}=await sb.from('rc_friend_requests').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async saveCfg(k,v){const {data,error}=await sb.from('rc_settings').upsert({key:k,data:v,updated_at:new Date().toISOString()}).select('key');if(error){if(missing(error))throw errc('nosql');if(error.code==='42501')throw errc('denied');throw error}if(!data||!data.length)throw errc('denied')},
- async setRole(id,role,coach){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
-  if(role==='admin'||role==='owner'){if(!isAdmin(id))chk(await sb.from('rc_admins').insert({user_id:id}));chk(await sb.from('rc_coaches').delete().eq('user_id',id));
-   if(role==='owner'&&!isOwner(id))chk(await sb.from('rc_owners').insert({user_id:id}));if(role==='admin'&&isOwner(id))chk(await sb.from('rc_owners').delete().eq('user_id',id));return}
-  if(isOwner(id))chk(await sb.from('rc_owners').delete().eq('user_id',id));
-  if(isAdmin(id))chk(await sb.from('rc_admins').delete().eq('user_id',id));
-  if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await sb.from('rc_coaches').delete().eq('user_id',id))},
+ async setRole(id,role,coach,v=VID){const chk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}return r};
+  const del=t=>sb.from(t).delete().eq('user_id',id).eq('venue',v).select('user_id');
+  if(role==='admin'||role==='owner'){if(!S.admins.includes(rk(id,v)))chk(await sb.from('rc_admins').insert({user_id:id,venue:v}));chk(await del('rc_coaches'));
+   if(role==='owner'&&!isOwner(id,v))chk(await sb.from('rc_owners').insert({user_id:id,venue:v}));if(role==='admin'&&isOwner(id,v))chk(await del('rc_owners'));return}
+  if(isOwner(id,v))chk(await del('rc_owners'));
+  if(S.admins.includes(rk(id,v))){const r=chk(await del('rc_admins'));if(!r.data||!r.data.length)throw errc('denied')}
+  if(role==='coach')chk(await sb.from('rc_coaches').upsert({user_id:id,venue:v,sports:coach.sports,auto:!!coach.auto,updated_at:new Date().toISOString()}));else chk(await del('rc_coaches'))},
  async setDemoAcc(id,on){const r=on?await sb.from('rc_demo_access').insert({user_id:id}):await sb.from('rc_demo_access').delete().eq('user_id',id);if(r.error&&r.error.code!=='23505'){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
@@ -542,8 +543,8 @@ function buildDemo(you,rank='dev'){
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- coaches[sCoach.id]={sports:['padel'],auto:true};
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id]:[]),caelan.id,surya.id,sOwner.id,sAdmin.id],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id]:[]),surya.id,sOwner.id],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id}}};
+ Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id}}};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -558,11 +559,11 @@ async function demoSwitch(to){const d=Demo.d;if(!d||!demoOk(to))return;const nex
 /* Pick how to see the demo: as an ordinary player or as an admin */
 function demoChooser(){
  const info={player:'Book courts, add scores, confirm games, climb the rankings',coach:'Everything a player does, plus blocking court time for coaching',admin:'Confirms bookings, reviews scores and reports, posts club news, switches players and coaches',owner:'Everything an admin does, plus giving or removing admin access',dev:'Everything an owner does, plus making owners and giving or removing admin access'};
- const rank=homeRole(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','owner','dev'].filter(ok);
+ const rank=topRole(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','owner','dev'].filter(ok);
  openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched.${list.length>1?' You can switch between the demo accounts at any time from the bar at the top.':''}</p>
   <div class="demopick">${list.map((k,i)=>`<button type="button" class="btn ${i?'ghost':'brand'} wide" data-act="demoGo" data-v="${k}"><b>${lbl(DEMO_AS,k)}</b><span>${info[k]}</span></button>`).join('')}</div>`)}
 async function startDemo(role){
- const rank=me()?homeRole(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
+ const rank=me()?topRole(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you,rank);Store=Demo;S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
@@ -583,7 +584,7 @@ async function exitDemo(){
 /* ---------- Switching clubs ----------
    One account works at every club. The first time someone opens a club they haven't joined, they sign in there
    with the same email and password; after that they switch freely. */
-async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=homeOf();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
+async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=firstClub();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
 async function setVenue(vid){
  VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});
  await reload();window.scrollTo(0,0);splash(VEN().name,'Welcome to',VEN());render();
@@ -595,10 +596,10 @@ async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};
  const np=Object.assign({},p,{venues:[...new Set([...venuesOf(p),vid])],vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
  try{await Store.saveProfile(np)}catch(e){if(!quiet)toast('Could not join. Check your connection and try again.');return false}
  upsert(S.profiles,np);return true}
-function venueSignIn(vid){const v=venueOf(vid),home=homeName(),demo=Store.mode==='demo';
+function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo';
  openSheet(`<div class="vjoin" data-venue="${esc(vid)}"><div class="vjhead">${vMark(v,'big')}</div>
   <p class="eyebrow" style="text-align:center;margin-top:14px">Sign in</p><h2 style="text-align:center">${esc(v.name)}</h2>
-  <p class="muted small" style="text-align:center;margin:6px 0 4px">Use the same email and password as your ${esc(home)} account. Your profile, friends and messages come with you. ${esc(v.short)} has its own rankings, and your level there starts from the level you have now.</p>
+  <p class="muted small" style="text-align:center;margin:6px 0 4px">Use the same email and password you always use on My Padel. Your profile, friends and messages come with you. ${esc(v.short)} has its own rankings, and your level there starts from the level you have now.</p>
   <form id="vjForm" novalidate>
    <label for="vjEmail">Email</label><input id="vjEmail" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(S.email||'')}"${S.email&&!demo?' readonly':''} placeholder="you@example.com">
    <label for="vjPass">Password</label><div class="pw"><input id="vjPass" type="password" autocomplete="current-password"><button type="button" class="pwtoggle" id="vjT">Show</button></div>
@@ -611,7 +612,7 @@ function venueSignIn(vid){const v=venueOf(vid),home=homeName(),demo=Store.mode==
    if(!demo&&!EMAIL_RE.test(em))return err('Enter the email you signed up with.');if(!pw)return err('Enter your password.');
    const b=$('vjBtn');b.disabled=true;b.textContent='Signing in…';
    try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
-   catch(x){b.disabled=false;b.textContent=`Sign in to ${v.short}`;return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones as your '+home+' account.')}
+   catch(x){b.disabled=false;b.textContent=`Sign in to ${v.short}`;return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
    if(!await joinVenue(vid)){b.disabled=false;b.textContent=`Sign in to ${v.short}`;return}
    await setVenue(vid);doneTick('Welcome to '+v.short)}});
 }
@@ -621,28 +622,32 @@ const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},devs:[],owners:[],profi
 let view={tab:'home',rs:null,rt:null,pf:{q:'',sport:'',inv:false,time:''},ib:'all'};
 const me=()=>S.profiles.find(p=>p.id===S.uid)||null;
 const prof=id=>S.profiles.find(p=>p.id===id)||null;
-/* Clubs: every player has a home club (where they signed up) and can join others with the same account.
-   Owner, admin and coach powers only count at the home club; elsewhere they play as normal players.
-   The developer keeps every power at every club. */
-const homeOf=id=>{const p=prof(id||S.uid);return p&&p.home||'rc'};
+/* Clubs: one account works at every club. Everyone starts as a player; roles are given per club.
+   Someone can be owner, admin or coach at one club and a normal player at another, until someone with power there promotes them.
+   Roles are stored as "userId@club" keys. The developer keeps every power at every club. */
+const firstClub=id=>{const p=prof(id||S.uid);return p&&p.home||'rc'};
 const venuesOf=p=>p?[...new Set([p.home||'rc',...(p.venues||[])])].filter(v=>VENUES.some(x=>x.id===v)):[];
 const inVenue=(p,vid=VID)=>venuesOf(p).includes(vid);
 const isMember=(id,vid=VID)=>inVenue(prof(id||S.uid),vid);
-const atHome=id=>homeOf(id)===VID;
-const hasAdmin=id=>S.admins.includes(id||S.uid),hasOwner=id=>(S.owners||[]).includes(id||S.uid),hasCoach=id=>!!S.coaches[id||S.uid];
+const rk=(id,v=VID)=>(id||S.uid)+'@'+v;
 const isDev=id=>(S.devs||[]).includes(id||S.uid);
-const isAdmin=id=>isDev(id)||(hasAdmin(id)&&atHome(id));
-const vAdmins=()=>[...new Set([...S.admins,...(S.devs||[])])].filter(a=>isAdmin(a)&&prof(a));
-/* Coaches: can block slots for coaching. Admins choose whether those blocks go straight through or need confirming */
-const isOwner=id=>!isDev(id)&&hasOwner(id)&&atHome(id),canAdminRole=()=>isDev()||isOwner(),canDemo=id=>isDev(id)||(S.demoAcc||[]).includes(id||S.uid);
-const coachOf=id=>atHome(id)&&S.coaches[id||S.uid]||null,isCoach=id=>!!coachOf(id),canBlock=()=>isAdmin()||isCoach();
-const roleOf=id=>isDev(id)?'dev':isOwner(id)?'owner':isAdmin(id)?'admin':isCoach(id)?'coach':'player';
-/* The role someone has at their home club, wherever they are now */
-const homeRole=id=>isDev(id)?'dev':hasOwner(id)?'owner':hasAdmin(id)?'admin':hasCoach(id)?'coach':'player';
-const homeName=id=>venueOf(homeOf(id)).name;
-const coachTitle=id=>{const c=S.coaches[id||S.uid];if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at '+homeName(id)};
-const coachLine=id=>{const r=homeRole(id),away=!atHome(id)&&r!=='dev'&&r!=='player'?`<p class="awaynote">A normal player at ${esc(VEN().short)}</p>`:'';
- return r==='owner'?`<p class="coachline"><span>👑</span>Owner at ${esc(homeName(id))}</p>${away}`:r==='admin'?`<p class="coachline"><span>🛡️</span>Admin at ${esc(homeName(id))}</p>${away}`:r==='coach'?`<p class="coachline"><span>🎾</span>${esc(coachTitle(id))}</p>${away}`:''};
+const isAdmin=(id,v=VID)=>isDev(id)||S.admins.includes(rk(id,v));
+const isOwner=(id,v=VID)=>!isDev(id)&&(S.owners||[]).includes(rk(id,v));
+const coachOf=(id,v=VID)=>S.coaches[rk(id,v)]||null,isCoach=(id,v)=>!!coachOf(id,v),canBlock=()=>isAdmin()||isCoach();
+const canAdminRole=()=>isDev()||isOwner(),canDemo=id=>isDev(id)||(S.demoAcc||[]).includes(id||S.uid);
+const roleAt=(id,v=VID)=>isDev(id)?'dev':isOwner(id,v)?'owner':S.admins.includes(rk(id,v))?'admin':coachOf(id,v)?'coach':'player';
+const roleOf=id=>roleAt(id,VID);
+/* their highest role at any club (decides which demo accounts they can try) */
+const topRole=id=>isDev(id)?'dev':VENUES.map(v=>roleAt(id,v.id)).sort((a,b)=>ROLE_RANK[b]-ROLE_RANK[a])[0]||'player';
+/* this club's admins (and the developer), who get admin messages */
+const vAdmins=()=>[...new Set([...S.admins.filter(k=>k.endsWith('@'+VID)).map(k=>k.slice(0,-VID.length-1)),...(S.devs||[])])].filter(a=>prof(a));
+const coachTitle=(id,v=VID)=>{const c=coachOf(id,v);if(!c)return'';const sp=(c.sports&&c.sports.length?c.sports:['padel']).filter(x=>SPORTS[x]).map(x=>SPORTS[x].name);return(sp.length>1?sp[0]+' and '+sp[1].toLowerCase():sp[0])+' coach at '+venueOf(v).name};
+/* Every club they play at, with their role at each: "Admin at Racquet Culture", "Player at Sunday" */
+const clubsOf=id=>VENUES.map(v=>v.id).filter(v=>isMember(id,v)||roleAt(id,v)!=='player');
+const ROLE_ICON={owner:'👑',admin:'🛡️',coach:'🎾',player:'🏓'};
+function clubLines(id){if(isDev(id))return'';const cs=clubsOf(id);if(!cs.length)return'';
+ if(cs.every(v=>roleAt(id,v)==='player'))return`<p class="small muted clubsline">Plays at ${esc(andList(cs.map(v=>venueOf(v).name)))}</p>`;
+ return`<div class="clublines">${cs.map(v=>{const r=roleAt(id,v);return`<p class="coachline${r==='player'?' plain':''}"><span>${ROLE_ICON[r]}</span>${r==='coach'?esc(coachTitle(id,v)):ROLE_NAME[r]+' at '+esc(venueOf(v).name)}</p>`}).join('')}</div>`}
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -910,7 +915,6 @@ function paintAuthVenue(){const v=VEN(),el=$('aVenue');
  const lg=document.querySelector('#auth .alogo');if(lg){lg.src=v.splash;lg.alt=v.name;lg.style.width=v.mark==='round'?'min(200px,56%)':''}
  const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>${esc(v.name)}</b>${esc(v.area)} · ${esc(v.courts)}. Sign in with your My Padel account, the same one at every club.`;
  const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='My Padel · '+v.short}
-const clubsLine=id=>{const p=prof(id),vs=venuesOf(p);return vs.length?`<p class="small muted clubsline">Plays at ${esc(andList(vs.map(v=>venueOf(v).short)))}</p>`:''};
 function paintAuth(dir){
  qsa('#authSeg>button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===authMode)));
  const up=authMode==='up';
@@ -1058,7 +1062,7 @@ async function enter(fresh){
  /* players who joined before the Men and Women rankings: ask once for gender */
  if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);return startWiz('gender')}
  if(!inVenue(p)){if(fresh&&Store.mode!=='demo')await joinVenue(VID,true);else await ensureVenue()}
- if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(homeRole(S.uid));return previewLocked()}
+ if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(topRole(S.uid));return previewLocked()}
  if(fresh)splash(first(p),greet());
  showApp();maybeAskNotif();
 }
@@ -1231,8 +1235,9 @@ function paintVenues(){const el=$('vswitch');if(!el)return;
  el.innerHTML=VENUES.map(v=>{const on=v.id===VID,n=on?0:unreadAt(v.id);return`<button type="button" class="vbtn${on?' on':''}" data-act="venue" data-v="${v.id}" aria-label="${esc(v.name)}${on?', you are here':n?', new messages':''}"${on?' aria-current="true"':''} title="${esc(v.name)}">${vMark(v)}${n?'<span class="vdot" aria-hidden="true"></span>':''}</button>`}).join('');
  const cur=el.querySelector('.vbtn.on');if(cur&&el.scrollWidth>el.clientWidth)el.scrollLeft=Math.max(0,cur.offsetLeft-8)}
 /* "an admin at Racquet Culture", or "an admin at Racquet Culture, a player here" when they are at another club */
-function roleWords(){const h=homeRole(S.uid),w=k=>k==='dev'?'the developer':k==='owner'?'an owner':k==='admin'?'an admin':'a '+k;
- return h==='dev'?w(h)+' (every power at every club)':h==='player'?'a player at '+VEN().short:atHome()?w(h)+' at '+VEN().short:w(h)+' at '+homeName()+', a player here'}
+/* "an admin at Sunday", "a player at Racquet Culture": their role at the club they are looking at */
+function roleWords(){const r=roleOf(S.uid),w=k=>k==='dev'?'the developer':k==='owner'?'an owner':k==='admin'?'an admin':'a '+k;
+ return r==='dev'?w(r)+' (every power at every club)':w(r)+' at '+VEN().short}
 function render(){
  if(!me())return showAuth();
  after=()=>{};const t=view.tab,html=(VIEWS[t]||VIEWS.home)();
@@ -1778,7 +1783,7 @@ function msgView(g){
    return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
   case 'demo_access':return{i:MI.shield,t:d.on?'You have demo access':'Demo access removed',p:d.on?'You’ve been given access to demo mode. You can switch to it in Settings to see new updates before they go live.':`${esc(fn)} removed your demo access.`,a:d.on?'<button class="btn ghost sm" data-act="go" data-v="settings">Open Settings</button>':''};
-  case 'role':return{i:MI.shield,t:d.role==='coach'?'You’re now a coach':d.role==='owner'?'You’re now a club owner':d.role==='admin'?'You’re now a club admin':'Your account is now a player account',p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='owner'?`${esc(fn)} made you an owner. You can do everything an admin does, and give or remove admin access.`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
+  case 'role':return{i:MI.shield,t:(d.role==='coach'?'You’re now a coach':d.role==='owner'?'You’re now an owner':d.role==='admin'?'You’re now an admin':'You’re now a player')+' at '+esc(venueOf(vidOf(g)).short),p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='owner'?`${esc(fn)} made you an owner. You can do everything an admin does, and give or remove admin access.`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
    const whenTxt=src?`played ${esc(playedWhen(src))}`:bb?`on ${esc(dateLabel(bb.date))}, ${slotRange(bb.start,bb.len)}`:d.date?`on ${esc(dateLabel(d.date))}`:'';
@@ -1914,7 +1919,7 @@ function paintPlayers(){
 function vMe(){
  const p=me(),mg=view.mg||'all',all_=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(S.uid)).sort(byWhen).reverse(),mine=mg==='all'?all_:all_.filter(m=>m.sport===mg);
  const sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" data-act="pref" data-v="${k}" aria-label="${t}"></button></div>`;
- return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${coachLine(p.id)}${clubsLine(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
+ return `<div class="card phead rv"><div class="phtools"><button class="gearbtn hot" data-act="go" data-v="settings" aria-label="Settings" title="Settings"><span class="g">${ICON.gear}</span></button>${Store.mode==='demo'?'':`<button class="gearbtn out" data-act="signOut" aria-label="Sign out" title="Sign out">${ICON.logout}</button>`}</div><div class="avbig" style="width:112px;height:112px">${avHTML(p,112)}</div><h1 style="margin-top:12px">${esc(p.name)}</h1><p class="muted">@${esc(p.username)}${adminChip(S.uid)}</p>${clubLines(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><button data-act="pvGo" data-v="friends"><b class="num">${friendIds().length}</b>friends</button><span><b class="num">${followerN(S.uid)}</b>followers</span><button data-act="pvGo" data-v="following"><b class="num">${followingN(S.uid)}</b>following</button></div>
   <div class="cta" style="justify-content:center"><button class="btn ghost sm" data-act="editProfile">Edit profile</button><button class="btn ghost sm" data-act="go" data-v="inbox">Inbox${unread()?' · '+unread():''}</button></div></div>
   ${isAdmin()?`<div class="card admincard rv" style="margin-top:12px"><b>Admin tools</b><p class="small muted" style="margin:4px 0 12px">You can review, edit or delete any score, including the date and time it was played.</p><div class="cta" style="margin-top:0"><button class="btn ghost sm" data-act="ibTodo">Scores to review</button></div></div>`:''}
@@ -2089,30 +2094,33 @@ function rankText(sp,id,g){const rk=rankOf(sp,id,g);if(!rk)return'<span class="m
 /* Admins only: change what an account can do */
 const ROLE_NAME={dev:'Developer',owner:'Owner',admin:'Admin',coach:'Coach',player:'Player'},ROLE_RANK={player:0,coach:1,admin:2,owner:3,dev:4};
 /* who can set which account types: the developer up to owner, owners up to admin, admins between player and coach */
-const roleChoices=()=>isDev()?['player','coach','admin','owner']:isOwner()?['player','coach','admin']:isAdmin()?['player','coach']:[];
-function roleCard(id){const r=roleOf(id),c=coachOf(id)||{sports:[],auto:false},p=prof(id),opts=roleChoices(),me_=roleOf(S.uid);
- if(!atHome(id)&&!isDev(id))return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[me_]} · account type</span><p style="margin-top:8px"><b>${esc(first(p))}’s home club is ${esc(homeName(id))}</b></p><p class="small muted" style="margin-top:4px">${homeRole(id)==='player'?'They play here as a player.':`They are ${ROLE_NAME[homeRole(id)]} at ${esc(homeName(id))}, and play here as a normal player.`} Account types are set at a player’s home club.</p></div>`;
- if(!opts.includes(r)||ROLE_RANK[r]>=ROLE_RANK[me_])return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[me_]} · account type</span><p style="margin-top:8px"><b>${r==='dev'?`${esc(first(p))} is a Developer`:`${esc(first(p))} is ${ROLE_NAME[r]} at ${esc(VEN().name)}`}</b></p></div>`;
- const what={owner:`${esc(first(p))} is Owner at ${esc(VEN().name)}: everything an admin can do, plus giving or removing admin access.`,admin:`${esc(first(p))} is Admin at ${esc(VEN().name)}: they can confirm bookings, set prices, block slots, review scores and make players coaches.`,coach:`${esc(first(p))} plays as normal and can also block slots for coaching.`,player:`${esc(first(p))} can book, play and add scores.`};
- return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[me_]} · account type</span>
-  <div style="margin-top:10px">${seg('role','Account type',opts.map(k=>[k,ROLE_NAME[k]]),r,'roleSet')}</div>
-  <p class="small muted" style="margin-top:8px">${what[r]}</p>
-  ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}">${SPORTS[sp].name}</button>`).join('')}</div>
-   <label>Their coaching blocks</label>${seg('cauto','Coaching blocks',[['1','Go straight through'],['0','Need admin OK']],c.auto?'1':'0','coachAuto')}`:''}</div>`}
+const roleChoices=(v=VID)=>isDev()?['player','coach','admin','owner']:isOwner(S.uid,v)?['player','coach','admin']:isAdmin(S.uid,v)?['player','coach']:[];
+/* One row per club. The developer sees every club; an owner or admin only the club they run */
+function roleCard(id){const p=prof(id),clubs=isDev()?VENUES.map(v=>v.id):[VID];
+ const row=v=>{const r=roleAt(id,v),c=coachOf(id,v)||{sports:[],auto:false},opts=roleChoices(v),me_=roleAt(S.uid,v),vn=venueOf(v);
+  const head=`<div class="rchead">${vMark(vn,'sm')}<b>${esc(vn.name)}</b></div>`;
+  if(!opts.includes(r)||ROLE_RANK[r]>=ROLE_RANK[me_])return`<div class="rcclub">${head}<p class="small" style="margin-top:6px">${r==='dev'?`${esc(first(p))} is the Developer`:`${esc(first(p))} is ${ROLE_NAME[r]} here`}</p></div>`;
+  const what={owner:'Everything an admin can do here, plus giving or removing admin access.',admin:'Confirms bookings, reviews scores and reports, posts club news and makes players coaches here.',coach:'Plays as normal and can block court time for coaching here.',player:isMember(id,v)?'Plays here as a normal player.':'Hasn’t played here yet. Any role you give applies only here.'};
+  return`<div class="rcclub">${head}<div style="margin-top:10px">${seg('role_'+v,'Account type at '+vn.name,opts.map(k=>[k+'|'+v,ROLE_NAME[k]]),r+'|'+v,'roleSet')}</div>
+   <p class="small muted" style="margin-top:8px">${what[r]}</p>
+   ${r==='coach'?`<label>Coaches</label><div class="chips">${SP_KEYS.map(sp=>`<button type="button" class="fchip${(c.sports||[]).includes(sp)?' on':''}" aria-pressed="${(c.sports||[]).includes(sp)}" data-act="coachSport" data-v="${sp}|${v}">${SPORTS[sp].name}</button>`).join('')}</div>
+    ${vn.book.kind==='slots'?`<label>Their coaching blocks</label>${seg('cauto_'+v,'Coaching blocks',[['1|'+v,'Go straight through'],['0|'+v,'Need admin OK']],(c.auto?'1':'0')+'|'+v,'coachAuto')}`:''}`:''}</div>`};
+ return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[roleOf(S.uid)]} · account type</span>
+  <p class="small muted" style="margin-top:6px">Everyone starts as a player. A role only counts at the club it's given for.</p>${clubs.map(row).join('')}</div>`}
 function demoRow(id){if(!isDev()||isDev(id))return'';const on=canDemo(id);
  return `<div class="card rolecard democard" style="margin-top:12px"><span class="eyebrow">Developer · demo mode</span><div class="setline" style="margin-top:10px"><div><b>Demo access</b><p class="small muted">${on?`${esc(first(prof(id)))} can open demo mode from Settings to try new updates before they go live.`:'Let them try new updates in demo mode before they go live.'}</p></div><button class="switch" role="switch" aria-checked="${on}" data-act="demoAcc" data-v="${id}" aria-label="Demo access"></button></div></div>`}
 async function setDemoAcc(id){const on=!canDemo(id);
  try{await Store.setDemoAcc(id,on)}catch(e){return toast(e.code==='nosql'?'Demo access needs the latest SQL in Supabase first (demo-access.sql).':e.code==='denied'?'Only the developer can change demo access.':'Could not save. Check your connection and try again.')}
  S.demoAcc=(S.demoAcc||[]).filter(x=>x!==id);if(on)S.demoAcc.push(id);
  notify([{to:id,kind:'demo_access',data:{on}}]);playerSheet(id);toast(on?`${first(prof(id))} now has demo access`:`Demo access removed for ${first(prof(id))}`)}
-async function applyRole(id,role,coach,quiet){
- try{await Store.setRole(id,role,coach)}catch(e){toast(e.code==='nosql'?'Coach accounts need the latest SQL in Supabase first (coaches.sql).':e.code==='denied'?(role==='owner'||isOwner(id)?'Only the developer can change owner access.':role==='admin'||isAdmin(id)?'Only the developer or an owner can change admin access.':'Only admins can change accounts.'):'Could not save. Check your connection.');return false}
- delete S.coaches[id];S.admins=S.admins.filter(x=>x!==id);S.owners=(S.owners||[]).filter(x=>x!==id);if(role==='admin'||role==='owner')S.admins.push(id);if(role==='owner')S.owners.push(id);if(role==='coach')S.coaches[id]=coach;
- if(!quiet)notify([{to:id,kind:'role',data:{role,title:role==='coach'?coachTitle(id):'',auto:!!(coach&&coach.auto)}}]);
+async function applyRole(id,role,coach,quiet,v=VID){
+ try{await Store.setRole(id,role,coach,v)}catch(e){toast(e.code==='nosql'?'Club roles need the latest SQL in Supabase first (club-roles.sql).':e.code==='denied'?(role==='owner'||isOwner(id,v)?'Only the developer can change owner access.':role==='admin'||isAdmin(id,v)?'Only the developer or this club’s owner can change admin access.':'Only this club’s admins can change accounts.'):'Could not save. Check your connection.');return false}
+ const k=rk(id,v);delete S.coaches[k];S.admins=S.admins.filter(x=>x!==k);S.owners=(S.owners||[]).filter(x=>x!==k);if(role==='admin'||role==='owner')S.admins.push(k);if(role==='owner')S.owners.push(k);if(role==='coach')S.coaches[k]=coach;
+ if(!quiet)notify([{to:id,kind:'role',data:{role,venue:v,title:role==='coach'?coachTitle(id,v):'',auto:!!(coach&&coach.auto)}}]);
  playerSheet(id);return true}
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${coachLine(p.id)}${clubsLine(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
+ openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>${clubLines(p.id)}${joinedLine(p)}${reliaHTML(p.id)}
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>${!hasSlots()||!inVenue(p)?'':(p.invites||isFriend(id))?`<button class="btn ball wide" style="margin-top:10px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:12px">${esc(first(p))} is not taking game invites right now.</p>`}`}
   ${GWORD[p.gender]&&(p.sports||[]).some(sp=>S.R[sp][id]&&S.R[sp][id].n)?`<div class="rkg" role="radiogroup" aria-label="Rank among"><span class="small muted">Rank among</span><button type="button" role="radio" aria-checked="true" data-rkg="all">All</button><button type="button" role="radio" aria-checked="false" data-rkg="${p.gender}">${p.gender==='male'?'Men':'Women'}</button></div>`:''}
@@ -2277,12 +2285,12 @@ const ACT={
   const c=Object.assign({},priceCfg());c.rules=[...(c.rules||[]),r];if(await savePrices(c,'Price added')){priceSheet();if(view.tab==='book')paintSlots()}},
  async priceDel(v){const c=Object.assign({},priceCfg());c.rules=(c.rules||[]).filter(r=>r.id!==v);if(await savePrices(c,'Price removed')){priceSheet();if(view.tab==='book')paintSlots()}},
  commOpen(){commSheet()},
- async roleSet(v){const id=playerSheet.open;if(!id||!isAdmin()||id===S.uid||isDev(id)||v===roleOf(id))return;const opts=roleChoices();if(!opts.includes(v)||!opts.includes(roleOf(id)))return;const p=prof(id);
-  const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null;
-  if(await applyRole(id,v,coach)){doneTick(v==='coach'?'Now a coach':v==='admin'?'Now an admin':v==='owner'?'Now an owner':'Now a player');toast(`${first(p)} has been told.`)}},
- async coachSport(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(x=>x!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
-  if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true))tick()},
- async coachAuto(v){const id=playerSheet.open,c=coachOf(id);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
+ async roleSet(x){const [v,club]=x.split('|'),id=playerSheet.open;if(!id||id===S.uid||isDev(id)||!VENUES.some(c=>c.id===club)||v===roleAt(id,club))return;const opts=roleChoices(club);if(!opts.includes(v)||!opts.includes(roleAt(id,club)))return;const p=prof(id);
+  const coach=v==='coach'?{sports:(p.sports&&p.sports.length?p.sports:['padel']).slice(0,2),auto:false}:null,cn=venueOf(club).short;
+  if(await applyRole(id,v,coach,false,club)){doneTick(v==='player'?'Now a player at '+cn:'Now '+(v==='admin'||v==='owner'?'an ':'a ')+v+' at '+cn);toast(`${first(p)} has been told.`)}},
+ async coachSport(x){const [v,club]=x.split('|'),id=playerSheet.open,c=coachOf(id,club);if(!c)return;let sp=(c.sports||[]).includes(v)?c.sports.filter(y=>y!==v):[...(c.sports||[]),v];if(!sp.length)return toast('A coach needs at least one sport.');
+  if(await applyRole(id,'coach',Object.assign({},c,{sports:SP_KEYS.filter(k=>sp.includes(k))}),true,club))tick()},
+ async coachAuto(x){const [v,club]=x.split('|'),id=playerSheet.open,c=coachOf(id,club);if(!c)return;if(await applyRole(id,'coach',Object.assign({},c,{auto:v==='1'}),true,club))toast(v==='1'?`${first(prof(id))}’s coaching blocks now go straight through.`:`An admin now confirms ${first(prof(id))}’s coaching blocks.`)},
  phEdit(){const r=myPhone(),cc=r?r.phone.split(' ')[0]:'+91',num=r?r.phone.split(' ').slice(1).join(''):'';
   openSheet(`<h2>${r?'Change your phone number':'Add your phone number'}</h2><p class="muted small">${esc(lbl(PH_WHO,r?r.vis:'admins'))} can see it. You can change who sees it in Settings.</p>
    <label for="phN">Phone number</label><div class="phrow">${ccSelect('phCC',CCS.some(x=>x[0]===cc)?cc:'+91')}<input id="phN" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="18" value="${esc(num)}" placeholder="98765 43210"></div>
