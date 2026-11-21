@@ -76,6 +76,6 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - More courts or locations: add them to `COURT_NOS` and `VENUES`. The `court` check in `setup.sql` only allows `padel` and `pickleball`, and bookings don't store a court number yet.
 
 ## Release workflow (from V1.1 on)
-- The live app (repo root) is **V1.1** (released 21 Nov 2026; V1 before that). New work goes only into `preview/`, served at https://marcgoveiawork-bit.github.io/racquet-culture/preview/ and labelled e.g. `V1.1demo` (set by `window.RC_VER` in `preview/index.html`; `window.RC_PREVIEW=true` there).
+- The live app (repo root) is **V1.2** (V1.1 and V1.2 released 21 Nov 2026; V1.2 went straight live at Marc's request). New work goes only into `preview/`, served at https://marcgoveiawork-bit.github.io/racquet-culture/preview/ and labelled e.g. `V1.1demo` (set by `window.RC_VER` in `preview/index.html`; `window.RC_PREVIEW=true` there).
 - `preview/` always opens in demo mode with made-up data. Only the developer and players given **Demo access** (rc_demo_access) can get in.
 - When Marc confirms a demo version, copy `preview/app.js` and `preview/index.html` to the root, set the root's `RC_VER` to the release number (e.g. `1.1`) and `RC_PREVIEW` to false (or remove that line), bump `v=`, and merge. Never change the root without Marc's OK.
