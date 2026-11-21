@@ -172,7 +172,11 @@ function mapCard(v){
   <a class="btn brand wide" href="${esc(v.url)}" target="_blank" rel="noopener" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Open in Google Maps</span></a></div>`} /* add numbers here when a second court opens */
 const durLabel=n=>{const h=Math.floor(n/2),m=n%2*30;return (h?h+' h':'')+(h&&m?' ':'')+(m?m+' min':'')};
 const slotLabel=i=>{const m=OPEN_H*60+i*30,h=Math.floor(m/60)%24,mm=m%60;return `${h%12||12}:${pad(mm)} ${h<12?'am':'pm'}`};
-const slotRange=(s,len)=>`${slotLabel(s)} – ${slotLabel(s+len)}`;
+const slotRange=(s,len)=>{const a=slotLabel(s),b=slotLabel(s+len),[ta,pa]=a.split(' '),[tb,pb]=b.split(' ');return pa===pb?`${ta}–${tb} ${pb}`:`${a} – ${b}`};
+/* For sentences: "today from 8:30 to 10:00 am", "yesterday at 6:00 pm", "on Sat, 14 Nov from 7:00 to 8:30 pm" */
+function playedWhen(m){const t=today(),day=m.date===t?'today':m.date===addDays(t,-1)?'yesterday':'on '+dateLabel(m.date);if(m.time==null)return day;
+ if(!m.len)return `${day} at ${slotLabel(m.time)}`;const a=slotLabel(m.time),b=slotLabel(m.time+m.len),[ta,pa]=a.split(' '),[tb,pb]=b.split(' ');
+ return pa===pb?`${day} from ${ta} to ${tb} ${pb}`:`${day} from ${a} to ${b}`}
 const slotDate=(date,i)=>{const [y,m,d]=date.split('-').map(Number);return new Date(Date.UTC(y,m-1,d)+(OPEN_H*60+i*30)*60000-IST)};
 const isoDay=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const addDays=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return isoDay(d)};
@@ -1309,14 +1313,14 @@ function msgView(g){
  const gone={i:MI.flag,t:'No longer available',p:'This game has since been removed.'};
  switch(g.kind){
   case 'confirm':{if(!m)return gone;const c=myConf(m.id);
-   return{i:MI.check,t:'Is this score right?',p:`${esc(fn)} added your ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))}.${score}`,
+   return{i:MI.check,t:'Is this score right?',p:`${esc(fn)} added the score of your ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}.${score}`,
     a:m.review?'<span class="chip st-reviewed">An admin has set this score</span>':c?`<span class="chip ${c.verdict==='ok'?'st-confirmed':'st-disputed'}">${c.verdict==='ok'?'You confirmed it':'You asked for a change'}</span>`
      :`<button class="btn brand sm" data-act="cfOk" data-v="${g.id}">Yes, confirm</button><button class="btn ghost sm" data-act="cfChange" data-v="${g.id}">Change score</button>`}}
   case 'dispute':{if(!m)return gone;const c=S.confs.find(x=>x.id===d.conf),st=(S.ST[m.id]||{}).st;
-   return{i:MI.flag,warn:1,t:'Score disputed',p:`${esc(fn)} says ${esc(prof(m.by)?first(prof(m.by))+'\u2019s':'the')} score for this ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))} is wrong.${score}${c?`<span class="scoreline prop">Their score: ${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}`:''}`,
+   return{i:MI.flag,warn:1,t:'Score disputed',p:`${esc(fn)} says ${esc(prof(m.by)?first(prof(m.by))+'\u2019s':'the')} score for this ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}, is wrong.${score}${c?`<span class="scoreline prop">Their score: ${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}`:''}`,
     a:st==='disputed'?(isAdmin()?`<button class="btn brand sm" data-act="review" data-v="${esc(m.id)}">Review score</button>`:''):'<span class="chip st-reviewed">Reviewed</span>'}}
-  case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game on ${esc(whenOf(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
-  case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(fn)} (admin) ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game on ${esc(whenOf(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
+  case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game played ${esc(playedWhen(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
+  case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(fn)} (admin) ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
   case 'friend_req':{const r=S.reqs.find(x=>x.id===d.req);const st=r?r.status:'gone';
    return{i:MI.user,t:`${esc(fn)} wants to be friends`,p:from?`@${esc(from.username)} sent you a friend request.`:'',
     a:st==='pending'?`<button class="btn brand sm" data-act="reqAccept" data-v="${esc(r.id)}">Accept</button><button class="btn ghost sm" data-act="reqReject" data-v="${esc(r.id)}">Reject</button><button class="btn link small" data-act="player" data-v="${esc(g.from)}">View profile</button>`
@@ -1325,7 +1329,7 @@ function msgView(g){
   case 'friend_new':return{i:MI.user,t:`${esc(fn)} added you as a friend`,p:'Your account is open, so no request was needed.',a:`<button class="btn link small" data-act="player" data-v="${esc(g.from)}">View profile</button>`};
   case 'follow':return{i:MI.user,t:`${esc(fn)} started following you`,p:from?`@${esc(from.username)}`:'',a:following(g.from)?'<span class="chip st-confirmed">You follow them too</span>':`<button class="btn ghost sm" data-act="follow" data-v="${esc(g.from)}">Follow back</button>`};
   case 'kudos':{const x=REACT.find(y=>y[0]===d.k)||REACT[0];
-   return{i:`<span class="kemoji">${x[1]}</span>`,t:`${esc(from?'@'+from.username:fn)} ${x[3]}`,p:m?`For your ${SPORTS[m.sport].name.toLowerCase()} game with them on ${esc(whenOf(m))}.${score}`:'For your game with them.',
+   return{i:`<span class="kemoji">${x[1]}</span>`,t:`${esc(from?'@'+from.username:fn)} ${x[3]}`,p:m?`For your ${SPORTS[m.sport].name.toLowerCase()} game with them, played ${esc(playedWhen(m))}.${score}`:'For your game with them.',
     a:m&&regsOf(m).includes(S.uid)?`<button class="btn ghost sm" data-act="kudos" data-v="${esc(m.id)}">Send one back</button>`:''}}
  }
  return{i:MI.check,t:'Message',p:''};
