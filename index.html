@@ -387,6 +387,7 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 .dock{position:fixed;left:50%;bottom:calc(14px + var(--safe-b));transform:translateX(-50%);z-index:45;display:flex;gap:2px;padding:6px;border-radius:999px;background:rgba(23,17,43,.78);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--line2);box-shadow:0 18px 40px rgba(0,0,0,.45)}
 .dock>button{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;background:none;color:var(--muted);font:600 10.5px var(--body);padding:8px 12px;min-width:62px;border-radius:999px;cursor:pointer;transition:color .35s ease}
 .dock>button svg{width:22px;height:22px;transition:transform .45s var(--spring)}
+.dock>button .hudico{width:22px;height:22px;border-radius:6px;display:block}
 .dock>button[aria-current="page"]{color:#fff}
 .dock>button[aria-current="page"] svg{transform:translateY(-1px) scale(1.08)}
 /* Add score: a tennis ball that bounces and spins on hover, and squashes when tapped */
@@ -469,6 +470,8 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 @media (max-width:820px){.demobar,.banner{margin-left:12px;margin-right:12px}}
 /* Top bar: inbox and profile */
 .tright{display:flex;align-items:center;gap:10px}
+.hudlebtn{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}.hudlebtn img{width:22px;height:22px;border-radius:6px;flex:none}
+.hudlecard{display:flex;flex-direction:column;gap:12px;margin-top:12px}.hudlecard p{margin:4px 0 0}
 .hscard .mi{background:var(--ball);color:var(--on-ball)}.hscard{border-color:rgba(220,245,90,.35)}
 .hsteps{margin:0 0 14px;padding-left:20px;line-height:1.9}.hsteps li{padding-left:2px}
 .hsplat{margin:16px 0 6px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
@@ -734,7 +737,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <!-- The app -->
 <section id="app" hidden>
   <header class="top">
-    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=27" alt=""></button>
+    <button class="brandmark" data-act="go" data-v="home" aria-label="Racquet Culture, home"><img src="logo-sm.png?v=28" alt=""></button>
     <div class="tright"><button class="ibtn fsbtn" id="fsBtn" data-act="fullscreen" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fs-in" d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/><path class="fs-out" d="M9 4v4a1 1 0 0 1-1 1H4M20 9h-4a1 1 0 0 1-1-1V4M15 20v-4a1 1 0 0 1 1-1h4M4 15h4a1 1 0 0 1 1 1v4"/></svg></button><button class="ibtn" id="inboxBtn" data-act="go" data-v="inbox" data-a="ring" aria-label="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13l2.2-7.1A2 2 0 0 1 8.1 4.5h7.8a2 2 0 0 1 1.9 1.4L20 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 13h4.5l1.5 2.5h4l1.5-2.5H20"/></svg><span class="bcount" id="ibadge"></span></button>
     <button class="me-btn" id="meBtn" data-act="go" data-v="me" aria-label="Your profile"></button></div>
   </header>
@@ -742,7 +745,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
   <main id="main"></main>
   <nav class="dock" id="dock" aria-label="Main">
     <button data-act="go" data-v="home" data-a="bounce"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>Home</span></button>
-    <button data-act="go" data-v="book" data-a="pop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3v3H8z"/></svg><span>Book</span></button>
+    <button data-act="hudle" data-a="pop" aria-label="Book a court on Hudle"><img class="hudico" src="hudle.png" alt="" width="22" height="22"><span>Book</span></button>
     <button class="add" data-act="go" data-v="add" aria-label="Add score"><span class="tball" aria-hidden="true"><svg viewBox="0 0 48 48"><defs><radialGradient id="tbg" cx="34%" cy="28%" r="78%"><stop offset="0" stop-color="#f4ff9a"/><stop offset=".55" stop-color="#d9f24c"/><stop offset="1" stop-color="#9fbd22"/></radialGradient></defs><circle cx="24" cy="24" r="22" fill="url(#tbg)"/><g class="seam" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".95"><path d="M8.5 9.5C15 16 15 32 8.5 38.5"/><path d="M39.5 9.5C33 16 33 32 39.5 38.5"/></g><circle cx="24" cy="24" r="22" fill="none" stroke="rgba(0,0,0,.12)"/></svg></span><span>Add score</span></button>
     <button data-act="go" data-v="rank" data-a="bars"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 21V11H3v10zM15.5 21V4h-7v17zM21 21v-7h-5.5v7z"/></svg><span>Rankings</span></button>
     <button data-act="go" data-v="players" data-a="pop"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 14.6c2.6.1 4.6 1.8 5.4 5.4"/></svg><span>Players</span></button>
@@ -752,9 +755,9 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8b6fe6" stop-opacity=".45"/><stop offset="1" stop-color="#8b6fe6" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script src="config.js?v=27"></script>
+<script src="config.js?v=28"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
