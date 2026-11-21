@@ -146,6 +146,72 @@ create policy "rc msg update" on public.rc_messages for update to authenticated 
 create policy "rc msg delete" on public.rc_messages for delete to authenticated using (auth.uid() = to_user);
 grant select, insert, update, delete on public.rc_messages to authenticated;
 
+-- ============ Friends and following (added November 2026) ============
+
+-- Following: one-way, no approval needed
+create table if not exists public.rc_follows (
+  id          text primary key,
+  follower    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  followee    uuid not null references auth.users(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  unique (follower, followee),
+  check (follower <> followee)
+);
+alter table public.rc_follows enable row level security;
+drop policy if exists "rc follows read"   on public.rc_follows;
+drop policy if exists "rc follows insert" on public.rc_follows;
+drop policy if exists "rc follows delete" on public.rc_follows;
+create policy "rc follows read"   on public.rc_follows for select to authenticated using (true);
+create policy "rc follows insert" on public.rc_follows for insert to authenticated with check (auth.uid() = follower);
+create policy "rc follows delete" on public.rc_follows for delete to authenticated using (auth.uid() = follower);
+grant select, insert, delete on public.rc_follows to authenticated;
+
+-- Friend requests. Friends = an accepted request either way. Each player only sees their own requests.
+create table if not exists public.rc_friend_requests (
+  id            text primary key,
+  from_user     uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  to_user       uuid not null references auth.users(id) on delete cascade,
+  status        text not null default 'pending' check (status in ('pending','accepted','rejected')),
+  created_at    timestamptz not null default now(),
+  responded_at  timestamptz,
+  check (from_user <> to_user)
+);
+create index if not exists rc_friend_requests_pair on public.rc_friend_requests (from_user, to_user);
+alter table public.rc_friend_requests enable row level security;
+
+-- True if this player rejected a request from the signed-in player in the last 5 days
+create or replace function public.rc_recently_rejected(target uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.rc_friend_requests r
+    where r.from_user = auth.uid() and r.to_user = target and r.status = 'rejected'
+      and coalesce(r.responded_at, r.created_at) > now() - interval '5 days');
+$$;
+-- True if the player has an open account (anyone can add them as a friend without a request)
+create or replace function public.rc_is_open(target uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select data->>'friends' = 'open' from public.rc_profiles where id = target), false);
+$$;
+revoke all on function public.rc_recently_rejected(uuid) from public;
+revoke all on function public.rc_is_open(uuid) from public;
+grant execute on function public.rc_recently_rejected(uuid) to authenticated;
+grant execute on function public.rc_is_open(uuid) to authenticated;
+
+drop policy if exists "rc fr read"   on public.rc_friend_requests;
+drop policy if exists "rc fr insert" on public.rc_friend_requests;
+drop policy if exists "rc fr answer" on public.rc_friend_requests;
+drop policy if exists "rc fr delete" on public.rc_friend_requests;
+create policy "rc fr read" on public.rc_friend_requests for select to authenticated using (auth.uid() in (from_user, to_user));
+-- Send a request (or become friends straight away with an open account), but not within 5 days of being rejected
+create policy "rc fr insert" on public.rc_friend_requests for insert to authenticated
+  with check (auth.uid() = from_user and not public.rc_recently_rejected(to_user)
+              and (status = 'pending' or (status = 'accepted' and public.rc_is_open(to_user))));
+-- Only the person who received a request can accept or reject it
+create policy "rc fr answer" on public.rc_friend_requests for update to authenticated
+  using (auth.uid() = to_user) with check (auth.uid() = to_user and status in ('accepted','rejected'));
+-- Cancel a request or remove a friend. A rejection stays, so the 5-day wait can't be skipped.
+create policy "rc fr delete" on public.rc_friend_requests for delete to authenticated using (auth.uid() in (from_user, to_user) and status <> 'rejected');
+grant select, insert, update, delete on public.rc_friend_requests to authenticated;
+
 -- Send new games and profile changes to everyone who has the app open.
 alter table public.rc_profiles replica identity full;
 alter table public.rc_matches  replica identity full;
@@ -157,6 +223,10 @@ alter table public.rc_messages      replica identity full;
 do $$ begin alter publication supabase_realtime add table public.rc_bookings;      exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table public.rc_confirmations; exception when duplicate_object then null; end $$;
 do $$ begin alter publication supabase_realtime add table public.rc_messages;      exception when duplicate_object then null; end $$;
+alter table public.rc_follows         replica identity full;
+alter table public.rc_friend_requests replica identity full;
+do $$ begin alter publication supabase_realtime add table public.rc_follows;         exception when duplicate_object then null; end $$;
+do $$ begin alter publication supabase_realtime add table public.rc_friend_requests; exception when duplicate_object then null; end $$;
 
 -- ============ Making someone an admin ============
 -- Put their app username between the quotes, select just these lines and press Run.

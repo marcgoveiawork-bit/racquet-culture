@@ -97,6 +97,19 @@ It should say **Success. 1 row affected**. The person sees the admin tools the n
   If someone taps **Change score**, the admins and the other players are told, and the score is left out of the rankings until an admin sets the final score.
 - Messages arrive live while the app is open; the number on the inbox shows unread ones.
 
+## Friends, following and kudos
+
+- **Follow** anyone, no approval needed.
+- **Friends** are two-way. Each player chooses in Profile → Settings: *Ask me first* (they accept or reject each request) or *Open account* (anyone can add them straight away).
+  After a rejection, a new request to the same person can only be sent 5 days later. The database enforces this, not just the app.
+- When booking, players can invite up to 3 people, or **invite all their friends** at once. The first 3 to say yes get the spots.
+- After a game, players can send **kudos** to the others in it (👍 Kudos, ❤️ Good game, 🍀 Better luck next time, 🔥 On fire, 🧱 Brick wall at the net, 🌈 Lob of the day). It arrives in their inbox with the sender's username.
+
+## Adding a score
+
+Players pick the date, the court (only Court 1 for each sport for now, set in `COURT_NOS` in `app.js`), and the start and end time in 30-minute slots.
+Two games can't be logged on the same court at the same time, and a slot booked by other people or closed by an admin can't be used.
+
 ## How levels and rankings work
 
 - **Starting level.** During profile set-up each player picks Beginner, Intermediate or Expert, then answers 5 or 6 questions
