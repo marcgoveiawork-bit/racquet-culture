@@ -1494,7 +1494,7 @@ function askMemberLevel(id){
 function playerSheet(id){
  const p=prof(id);if(!p)return;const ms=S.matches.filter(okMatch).filter(m=>regsOf(m).includes(id)).sort(byWhen).reverse().slice(0,5);
  const inv=id===S.uid?'':(p.invites||isFriend(id))?`<button class="btn ball wide" style="margin-top:10px" data-act="invitePlayer" data-v="${id}">Invite ${esc(first(p))} to a game</button>`:`<p class="small muted" style="text-align:center;margin-top:12px">${esc(first(p))} is not taking game invites right now.</p>`;
- openSheet(`<div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>
+ openSheet(`<div class="sheetback"><button type="button" class="backbtn" data-act="closeSheet" aria-label="Back"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Back</button></div><div style="text-align:center"><div class="avbig" style="width:96px;height:96px;margin-top:6px">${avHTML(p,96)}</div><h2 style="margin-top:12px">${esc(p.name)}</h2><p class="muted small">@${esc(p.username)}${adminChip(id)}</p>
   <div class="fstats"><span><b class="num">${followerN(id)}</b>followers</span><span><b class="num">${followingN(id)}</b>following</span>${id===S.uid?`<span><b class="num">${friendIds().length}</b>friends</span>`:''}</div></div>
   ${id===S.uid?'':`<div class="cta relbtns">${relButtons(id)}</div>`}${inv}
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
