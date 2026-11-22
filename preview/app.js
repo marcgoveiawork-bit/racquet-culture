@@ -585,12 +585,12 @@ async function exitDemo(){
    One account works at every club. The first time someone opens a club they haven't joined, they sign in there
    with the same email and password; after that they switch freely. */
 async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=firstClub();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
-async function setVenue(vid){
- VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});
+async function setVenue(vid,tab){
+ VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:VIEWS[tab]?tab:'home',rs:null,rt:null,ib:'all',mg:'all'});
  await reload();window.scrollTo(0,0);splash(VEN().name,'Welcome to',VEN());render();
 }
 function switchVenue(vid){if(!VENUES.some(v=>v.id===vid))return;if(vid===VID)return go('home');tick();
- if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid)}
+ if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid,view.tab)}
 /* Join a club: their level there starts from the level they have now, so a strong player doesn't start from scratch */
 async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};(p.sports||[]).forEach(sp=>{const e=S.R[sp]&&S.R[sp][S.uid];if(e)vs[sp]=r2(e.r)});
  const np=Object.assign({},p,{venues:[...new Set([...venuesOf(p),vid])],vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
@@ -626,7 +626,7 @@ function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo',from=VEN
   try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
   catch(x){b.disabled=false;b.textContent='Sign in';return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
   if(!await joinVenue(vid)){b.disabled=false;b.textContent='Sign in';return}
-  el.hidden=true;$('app').hidden=false;await setVenue(vid);doneTick('Welcome to '+v.name)};
+  el.hidden=true;$('app').hidden=false;await setVenue(vid,view.tab);doneTick('Welcome to '+v.name)};
  setTimeout(()=>{const f=$(S.email&&!demo?'vjPass':'vjEmail');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
 }
 
@@ -658,9 +658,19 @@ const coachTitle=(id,v=VID)=>{const c=coachOf(id,v);if(!c)return'';const sp=(c.s
 /* Every club they play at, with their role at each: "Admin at Racquet Culture", "Player at Sunday" */
 const clubsOf=id=>VENUES.map(v=>v.id).filter(v=>isMember(id,v)||roleAt(id,v)!=='player');
 const ROLE_ICON={owner:'👑',admin:'🛡️',coach:'🎾',player:'🏓'};
+/* A player's best place in the rankings at a club (padel first), worked out from that club's matches only */
+let rankCache={};
+function rankAt(id,v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduct||[]).length+'|'+S.profiles.length;
+ if(!rankCache[key]){const sv={VID,matches:S.matches,conduct:S.conduct,R:S.R,D:S.D,ST:S.ST};
+  if(v!==VID){VID=v;S.matches=(S.allMatches||[]).filter(m=>vidOf(m)===v);S.conduct=(S.allConduct||[]).filter(c=>vidOf(c)===v);rate()}
+  const out={};S.profiles.forEach(p=>{for(const sp of ['padel','pickleball']){const r=S.R[sp]&&S.R[sp][p.id]&&rankOf(sp,p.id);if(r&&r.pos){out[p.id]={pos:r.pos,sp,tier:r.tier};break}}});
+  Object.assign(S,{matches:sv.matches,conduct:sv.conduct,R:sv.R,D:sv.D,ST:sv.ST});VID=sv.VID;rankCache={[key]:out}}
+ return rankCache[key][id]||null}
+/* One small chip per club: the club's logo, the player's rank there, and their role there if they have one */
 function clubLines(id){if(isDev(id))return'';const cs=clubsOf(id);if(!cs.length)return'';
- if(cs.every(v=>roleAt(id,v)==='player'))return`<p class="small muted clubsline">Plays at ${esc(andList(cs.map(v=>venueOf(v).name)))}</p>`;
- return`<div class="clublines">${cs.map(v=>{const r=roleAt(id,v);return`<p class="coachline${r==='player'?' plain':''}"><span>${ROLE_ICON[r]}</span>${r==='coach'?esc(coachTitle(id,v)):ROLE_NAME[r]+' at '+esc(venueOf(v).name)}</p>`}).join('')}</div>`}
+ return`<div class="clubchips">${cs.map(v=>{const r=roleAt(id,v),V=venueOf(v),k=rankAt(id,v),sp=k&&SPORTS[k.sp];
+  const tip=V.name+(k?` · #${k.pos} in ${lbl(TIERS,k.tier)} ${sp?sp.name:''}`:' · not ranked yet')+(r!=='player'?' · '+(r==='coach'?coachTitle(id,v):ROLE_NAME[r]):'');
+  return`<button class="clubchip" data-act="clubRank" data-v="${v}" title="${esc(tip)}" aria-label="${esc(tip)}"><span class="vmark sm v-${v}"><img src="${esc(V.logo)}" alt=""></span><b>${k?'#'+k.pos:'–'}</b>${k&&k.sp==='pickleball'?'<i>PB</i>':''}${r!=='player'?`<span class="crole">${ROLE_ICON[r]} ${r==='coach'?'Coach':ROLE_NAME[r]}</span>`:''}</button>`}).join('')}</div>`}
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -704,7 +714,7 @@ const GLOBAL_KINDS=['friend_req','friend_ok','follow','demo_access'];
 const tagV=m=>GLOBAL_KINDS.includes(m.kind)||(m.data&&m.data.venue)?m:Object.assign({},m,{data:Object.assign({},m.data||{},{venue:VID})});
 const msgVenue=g=>GLOBAL_KINDS.includes(g.kind)?null:vidOf(g);
 async function reload(){const d=await Store.load(),inV=x=>vidOf(x)===VID,allM=d.matches||[],mids=new Set(allM.filter(inV).map(m=>m.id));
- S.allMsgs=(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''));S.allMatches=allM;
+ S.allMsgs=(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''));S.allMatches=allM;S.allConduct=d.conduct||[];rankCache={};
  Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:allM.filter(inV),bookings:(d.bookings||[]).filter(inV),confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:(d.votes||[]).filter(v=>!v.match||mids.has(v.match)),conduct:(d.conduct||[]).filter(inV),phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],owners:d.owners||[],demoAcc:d.demoAcc||[],msgs:S.allMsgs.filter(g=>{const v=msgVenue(g);return!v||v===VID})});rate()}
 /* Unread messages waiting at another club, for the dot on the club switcher */
 const unreadAt=vid=>(S.allMsgs||[]).filter(g=>!g.read&&msgVenue(g)===vid).length;
@@ -2238,6 +2248,7 @@ async function hsInstall(){
  render();
 }
 const ACT={
+ clubRank(v){closeSheet(true);if(v===VID)return go('rank');if(!isMember(S.uid,v)){view.tab='rank';return venueSignIn(v)}tick();setVenue(v,'rank')},
  /* clubs */
  venue(v){switchVenue(v)},
  authVenue(v){if(!VENUES.some(x=>x.id===v)||v===VID)return;VID=v;ls.set('rc_venue',v);applyVenue();tick();paintAuthVenue()},
