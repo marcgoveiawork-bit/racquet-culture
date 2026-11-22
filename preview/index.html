@@ -774,6 +774,16 @@ a.btn{text-decoration:none}
 :root[data-venue="sunday"]:not([data-theme="light"]){--bg:#070a1c;--bg2:#0b1028;--card:#0f1534;--card2:#151d45;--ink:#f2f4ff;--muted:#9da6cf;--faint:#646d9c;--brand-soft:rgba(107,105,255,.16)}
 :root[data-venue="sunday"][data-theme="light"]{--bg:#f3f5fe;--bg2:#e8ebfb;--card2:#eef0fc;--wr:24,30,110;--ink:#121633;--muted:#545b80;--faint:#868cab;--brand-soft:rgba(46,43,199,.1)}
 .vjoin[data-venue="sunday"]{--brand:#2e2bc7;--brand-hi:#6b69ff;--br-rgb:46,43,199;--hi-rgb:107,105,255;--g1:#3d3ad6;--g2:#2e2bc7;--g3:#1d1b8f}
+:root[data-venue="floresta"]{--brand:#00703f;--brand-hi:#2fb26a;--br-rgb:0,112,63;--hi-rgb:242,120,75;--brand-pale:#bfe5cf;--brand-hi2:#e5683a;--g1:#0a8048;--g2:#005e36;--g3:#003d23;--sh1:#0f2a1d;--sh2:#081a11;--splash-d:#033a22;--splash-l:#dff2e6;--pop-rgb:12,36,24;--bg-rgb:5,17,11;--dock-rgb:10,30,20;--bgl-rgb:242,248,244;--ln-rgb:10,70,40}
+:root[data-venue="floresta"]:not([data-theme="light"]){--bg:#05110b;--bg2:#091a11;--card:#0d2217;--card2:#122c1e;--ink:#f1f7f3;--muted:#9bb8a6;--faint:#5f7d6b;--brand-soft:rgba(242,120,75,.16)}
+:root[data-venue="floresta"][data-theme="light"]{--brand-hi:#0b8a4a;--hi-rgb:226,96,50;--bg:#f2f8f4;--bg2:#e6f1ea;--card2:#ecf5ef;--wr:10,60,34;--ink:#10261a;--muted:#4d6a59;--faint:#80998a;--brand-soft:rgba(0,112,63,.1)}
+.vjoin[data-venue="floresta"]{--brand:#00703f;--brand-hi:#2fb26a;--br-rgb:0,112,63;--hi-rgb:242,120,75;--g1:#0a8048;--g2:#005e36;--g3:#003d23}
+.vmark.v-floresta{padding:3px 22px;background:linear-gradient(135deg,#0a7a45,#005e36 60%,#004a2a)}.vmark.v-floresta img{height:40px}
+.vmark.big.v-floresta img{height:64px}
+.vmark.sm.v-floresta{padding:2px 10px}.vmark.sm.v-floresta img{height:24px}.clubchip .vmark.sm.v-floresta img{height:24px}
+.wmark.w-floresta{padding:0 16px;background:linear-gradient(135deg,#0a7a45,#005e36 60%,#004a2a)}.wmark.w-floresta img{height:40px}
+.splash .v-floresta img{width:min(260px,64vw)}
+.lbtxt{font-style:normal;font-weight:800;font-size:13px;letter-spacing:.02em;color:#1b1b1b}
 /* the club switcher in the top bar: swipe left and right, tap a club to go there */
 .vswitch{display:flex;align-items:center;gap:8px;min-width:0;max-width:calc(100vw - 170px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none;padding:4px 6px 4px 2px;margin:-4px 0;-webkit-mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent)}
 .vswitch::-webkit-scrollbar{display:none}
@@ -793,7 +803,7 @@ a.btn{text-decoration:none}
 .vjhead{display:flex;justify-content:center;margin-top:8px}
 .awaynote{margin:4px 0 0;font-size:12.5px;font-weight:600;color:var(--muted)}
 .linkbook{gap:10px}.lbico{display:inline-grid;place-items:center;height:26px;padding:0 9px;border-radius:8px;background:#fff}.lbico img{height:13px;width:auto;display:block}
-.bookcard .bc-courts{display:flex;gap:10px;margin:14px 0 16px}.bookcard .bc-courts span{flex:1;padding:12px;border-radius:14px;background:rgba(var(--wr),.05);border:1px solid var(--line);text-align:center;font-size:13px;color:var(--muted)}
+.bookcard .bc-courts{display:flex;gap:10px;margin:14px 0 16px}.bc-courts:empty{display:none}.bookcard .bc-courts span{flex:1;padding:12px;border-radius:14px;background:rgba(var(--wr),.05);border:1px solid var(--line);text-align:center;font-size:13px;color:var(--muted)}
 .bookcard .bc-courts b{display:block;font:500 26px var(--display);color:var(--ink)}
 .vlist{display:grid;gap:10px}
 .vrow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
@@ -898,7 +908,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=64"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=69"></script>
+<script src="app.js?v=71"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
