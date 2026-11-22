@@ -167,7 +167,11 @@ const VENUES=[
  {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
-  url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'}
+  url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'},
+ {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'Padel, pickleball, badminton and table tennis',
+  courtNos:{},also:'Badminton and table tennis',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
+  book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
+  url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'}
 ];
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
@@ -180,7 +184,7 @@ const COURTS={padel:'Padel · Court 1',pickleball:'Pickleball · Court 1'};
 const courtNos=sp=>VEN().courtNos[sp]||[1];
 const rupees=n=>'₹'+Number(n).toLocaleString('en-IN');
 const hudleBtn=(cls='btn ball')=>`<a class="${cls} hudlebtn" href="${HUDLE_URL}" target="_blank" rel="noopener"><img src="hudle.png" alt="" width="22" height="22">Book on Hudle</a>`;
-const bookLinkBtn=(v=VEN(),cls='btn ball wide')=>`<a class="${cls} linkbook" href="${esc(v.book.url)}" target="_blank" rel="noopener"><span class="lbico"><img src="${esc(v.book.icon)}" alt=""></span>Book on ${esc(v.book.name)}</a>`;
+const bookLinkBtn=(v=VEN(),cls='btn ball wide')=>`<a class="${cls} linkbook" href="${esc(v.book.url)}" target="_blank" rel="noopener"><span class="lbico">${v.book.icon?`<img src="${esc(v.book.icon)}" alt="">`:`<i class="lbtxt">${esc(v.book.name)}</i>`}</span>Book on ${esc(v.book.name)}</a>`;
 const vMark=(v,cls='')=>`<span class="vmark ${v.mark} v-${v.id} ${cls}"><img src="${esc(v.logo)}" alt=""></span>`;
 function mapCard(v){const q=v.map?encodeURIComponent(v.map):v.lat+','+v.lng;
  return `<div class="card mapcard rv"><div class="maptop"><span class="pinico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg></span><span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span></div>
@@ -524,6 +528,46 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(sunAll),b=pick(sunAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  sunAll.slice(4,12).forEach((p,i)=>reqs.push({id:'ds_f'+i,from:sPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...sms);ms.sort(byWhen);all.push(...sunP);
+ /* Clube De Floresta: a third club built the same way. Padel and pickleball are ranked; badminton and table tennis are booked on Hudle.
+    Some Racquet Culture and Sunday players play here too. */
+ const floP=[],mkFlo=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
+  const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
+  const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.4?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
+  const p={id:'df_'+floP.length,username:un,name,gender,setup:true,demo:true,avatar:null,sports,hand:r()<.85?'right':'left',invites:r()<.7,times,side:pick(['left','right','either']),levels,_skill:skill,_grow:grow,home:'floresta',venues:['floresta'],created:new Date(now-(DAYS+1+Math.floor(r()*200))*864e5).toISOString()};floP.push(p);return p};
+ const fOwner=mkFlo('Rohan Menezes','male',['padel','pickleball'],{padel:5.2,pickleball:4.4}),fAdmin=mkFlo('Inês Correia','female',['padel','pickleball'],{padel:4.3,pickleball:4.1}),
+  fCoach=mkFlo('Diego Furtado','male',['padel'],{padel:5.7}),fPlayer=mkFlo('Aditi Naik','female',['padel','pickleball'],{padel:3.2,pickleball:3.5});
+ fPlayer.friends='request';
+ while(floP.length<50){const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;const x=r();mkFlo(name,D_FEM.has(fn)?'female':'male',x<.55?['padel','pickleball']:x<.9?['padel']:['pickleball'])}
+ 
+ const both2=[...ps.filter(p=>![caelan.id,surya.id,arjun.id].includes(p.id)).slice(18,34),...sunP.slice(20,28)];
+ both2.forEach(p=>{p.venues=[...new Set([...(p.venues||[p.home||'rc']),'floresta'])];p.vstart=Object.assign(p.vstart||{},{floresta:{}});p.sports.forEach(sp=>p.vstart.floresta[sp]=Math.round(clampL(sp,sk(p,sp,.6))*100)/100)});
+ const floAll=[...floP,...both2],fms=[],focc={};
+ for(let k=0;k<330;k++){
+  const t=k/330,sp=r()<.65?'padel':'pickleball',pool=floAll.filter(p=>p._skill[sp]!=null),singles=sp==='pickleball'&&r()<.15,n=singles?2:4,anchor=pick(pool);
+  const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t))),cand=r()<.8?near.slice(0,12):near;if(cand.length<n-1)continue;
+  const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
+  const A_=grp.slice(0,n/2),B_=grp.slice(n/2),ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa,slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=1,lane=Math.floor(r()*3);
+  if(date===T&&nowSlot()-len<0)date=addDays(T,-1);const hi=date===T?Math.min(NSLOT-len,nowSlot()-len):NSLOT-len,u=focc[date+sp+lane]=focc[date+sp+lane]||[];let st=null;
+  for(let q=0;q<40&&st==null;q++){const c=clamp(r()<.6?20+Math.floor(r()*14):Math.floor(r()*(hi+1)),0,hi);if(!u.some(([a,b])=>c<b&&a<c+len))st=c}if(st==null)continue;u.push([st,st+len]);
+  fms.push({id:'fm_'+k,demo:true,venue:'floresta',sport:sp,format:singles?'singles':'doubles',date,time:st,len,court,a:A_.map(slot),b:B_.map(slot),sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+ }
+ fms.sort(byWhen);const fregs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
+ fms.forEach(m=>fregs(m).filter(u=>u!==m.by).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
+ 
+ const fkG=fms.filter(m=>m.date>=addDays(T,-5)&&m.format==='doubles'&&!fregs(m).includes(fPlayer.id)).pop();
+ if(fkG){const i=fkG.b.findIndex(x=>x.uid!==fkG.by);fkG.b[i]={uid:fPlayer.id,level:+fmtL(fPlayer._skill[fkG.sport])};confs.splice(0,confs.length,...confs.filter(c=>!(c.match===fkG.id&&c.user===fPlayer.id)));msgs.push({id:'df_c',to:fPlayer.id,from:fkG.by,kind:'confirm',data:{match:fkG.id,venue:'floresta'},read:false,at:ago(4)})}
+ const fD=fms.filter(m=>m!==fkG&&m.date>=addDays(T,-4)&&m.format==='doubles').pop();
+ if(fD){const loser=(fD.winner==='a'?fD.b:fD.a).find(s=>s.uid!==fD.by);if(loser){for(let i=confs.length-1;i>=0;i--)if(confs[i].match===fD.id)confs.splice(i,1);
+  const prop=fD.sets.map(s=>s.slice()),j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];if(prop.length===2)prop.push(fD.sport==='padel'?(fD.winner==='a'?[4,6]:[6,4]):(fD.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_flo',match:fD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
+  [fOwner.id,fAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'df_d'+i,to,from:loser.uid,kind:'dispute',data:{match:fD.id,conf:c.id,venue:'floresta'},read:false,at:c.at}))}}
+ const fAsk=floP[12];if(fAsk){const data={thread:'dth_f1',topic:'court',text:'Could we get a few more pickleball paddles at the front desk for people trying it out?',player:fAsk.id,venue:'floresta'};[fOwner.id,fAdmin.id,you.id,fAsk.id].forEach(t=>msgs.push({id:'df_am'+t,to:t,from:fAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
+ const fNews=[{text:'Welcome to Clube De Floresta on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Floresta rankings.',link:'',lt:''},{text:'Padel and pickle social under the trees this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
+ fNews.forEach((nw,k)=>[...floP,...both2].forEach(p=>msgs.push({id:'df_cm'+k+p.id,to:p.id,from:k?fAdmin.id:fOwner.id,kind:'community',data:Object.assign({venue:'floresta'},nw),read:k===0,at:ago(40-k*30)})));
+ for(let k=0;k<160;k++){const a=pick(floAll),b=pick(floAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
+ floAll.slice(4,12).forEach((p,i)=>reqs.push({id:'df_f'+i,from:fPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
+ ms.push(...fms);ms.sort(byWhen);all.push(...floP);
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
@@ -543,8 +587,8 @@ function buildDemo(you,rank='dev'){
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id}}};
+ Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id}}};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -1469,6 +1513,7 @@ function paintSlots(){const g=$('slotGrid');if(g)g.innerHTML=slotsHTML();mountBa
 function bookCard(small){const v=VEN(),n=sp=>(v.courtNos[sp]||[]).length;
  return `<div class="card bookcard rv"><b>${small?'Book your court on '+esc(v.book.name):esc(v.short)+' books courts on '+esc(v.book.name)}</b><p class="small muted" style="margin-top:4px">${small?'Then come back and add the score to climb the '+esc(v.short)+' rankings.':'Pick a time and pay on '+esc(v.book.name)+', the way you always have. After your game, add the score here to climb the '+esc(v.short)+' rankings.'}</p>
   ${small?'':`<div class="bc-courts">${SP_KEYS.filter(sp=>n(sp)).map(sp=>`<span><b class="num">${n(sp)}</b>${SPORTS[sp].name} court${n(sp)===1?'':'s'}</span>`).join('')}</div>`}
+  ${!small&&v.also?`<p class="small muted" style="margin:${SP_KEYS.some(sp=>n(sp))?0:10}px 0 14px">${esc(v.also)} are on ${esc(v.book.name)} too. Rankings here are for padel and pickleball.</p>`:''}
   <div style="margin-top:${small?12:0}px">${bookLinkBtn(v)}</div></div>`}
 function otherClubs(){const o=VENUES.filter(v=>v.id!==VID);if(!o.length)return'';
  return `<div class="sec"><h2>More clubs on My Padel</h2><span class="small muted">${o.length}</span></div><div class="vlist">${o.map(v=>`<button class="card vrow hov rv" data-act="venue" data-v="${v.id}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span><span class="small muted">${isMember(S.uid,v.id)?'Switch':'Sign in'} ›</span></button>`).join('')}</div>`}
@@ -1627,8 +1672,8 @@ function vAdd(){
   ${A.sport==='pickleball'?`<div style="margin-top:10px">${seg('af','Format',[['doubles','Doubles'],['singles','Singles']],A.format,'aFormat')}</div>`:''}
   <label>Date played</label>
   <div class="dstrip" role="group" aria-label="Date played">${days.map(d=>{const dt=new Date(d+'T12:00:00'),k=d===today()?'Today':d===addDays(today(),-1)?'Yesterday':dt.toLocaleDateString('en-IN',{weekday:'short'});return`<button type="button" class="dchip" aria-pressed="${d===A.date}" data-act="aDate" data-v="${d}"><span>${k}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
-  <label>Court</label>
-  <div class="chips">${courtNos(A.sport).map(n=>`<button type="button" class="fchip${n===A.courtNo?' on':''}" aria-pressed="${n===A.courtNo}" data-act="aCourt" data-v="${n}">${S_.name} · Court ${n}</button>`).join('')}</div>
+  ${VEN().courtNos[A.sport]?`<label>Court</label>
+  <div class="chips">${courtNos(A.sport).map(n=>`<button type="button" class="fchip${n===A.courtNo?' on':''}" aria-pressed="${n===A.courtNo}" data-act="aCourt" data-v="${n}">${S_.name} · Court ${n}</button>`).join('')}</div>`:''}
   <label>Time played</label>
   <button type="button" class="timepick${A.time==null?' empty':''}" data-act="aTime"><span class="tp-i">${MI.clock}</span><span class="tp-t">${A.time==null?'<b>Choose start and end time</b><span>Tap the slots you were on court</span>':`<b>${slotRange(A.time,A.len)}</b><span>${durLabel(A.len)} · ${esc(dateLabel(A.date))}</span>`}</span><span class="tp-c">›</span></button>
  </div>
@@ -1648,6 +1693,8 @@ function vAdd(){
 }
 /* Which court slots are already used on this day by another logged game */
 function usedSlot(i){
+ /* A club that hasn't listed its courts can run games side by side, so nothing is marked taken */
+ if(!VEN().courtNos[A.sport])return'';
  const g=S.matches.find(m=>m.sport===A.sport&&(m.court||1)===A.courtNo&&m.date===A.date&&m.time!=null&&i>=m.time&&i<m.time+(m.len||2));
  if(g)return'Taken';
  return'';
@@ -1666,7 +1713,7 @@ function timeSheet(){
     if(i>=a&&i<=z){if(a===z)st.sel=null;else if(i===a)st.sel=[a+1,z];else if(i===z)st.sel=[a,z-1];else st.sel=[i,i]}
     else{const na=Math.min(a,i),nz=Math.max(z,i);st.sel=nz-na+1<=8&&free(na,nz)?[na,nz]:[i,i]}}
    tick();paint()})};
- openSheet(`<h2>When did you play?</h2><p class="muted small">${SPORTS[A.sport].name} · Court ${A.courtNo} · ${esc(dateLabel(A.date))}. Tap the first and last half hour you were on court. Two games can't share the same court and time.</p>
+ openSheet(`<h2>When did you play?</h2><p class="muted small">${SPORTS[A.sport].name}${VEN().courtNos[A.sport]?' · Court '+A.courtNo:''} · ${esc(dateLabel(A.date))}. Tap the first and last half hour you were on court. Two games can't share the same court and time.</p>
   <div id="tsGrid" style="margin-top:6px"></div><div class="tsbar"><span id="tsSum"></span><button class="btn brand sm" id="tsDone">Done</button></div>`,bg=>{
   paint();bg.querySelector('#tsDone').onclick=()=>{if(!st.sel)return;A.time=st.sel[0];A.len=st.sel[1]-st.sel[0]+1;closeSheet();tick();render()}});
 }
