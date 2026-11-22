@@ -586,11 +586,11 @@ async function exitDemo(){
    with the same email and password; after that they switch freely. */
 async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=firstClub();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
 async function setVenue(vid,tab){
- VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:tab||'home',rs:null,rt:null,ib:'all',mg:'all'});
+ VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:VIEWS[tab]?tab:'home',rs:null,rt:null,ib:'all',mg:'all'});
  await reload();window.scrollTo(0,0);splash(VEN().name,'Welcome to',VEN());render();
 }
 function switchVenue(vid){if(!VENUES.some(v=>v.id===vid))return;if(vid===VID)return go('home');tick();
- if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid)}
+ if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid,view.tab)}
 /* Join a club: their level there starts from the level they have now, so a strong player doesn't start from scratch */
 async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};(p.sports||[]).forEach(sp=>{const e=S.R[sp]&&S.R[sp][S.uid];if(e)vs[sp]=r2(e.r)});
  const np=Object.assign({},p,{venues:[...new Set([...venuesOf(p),vid])],vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
@@ -626,7 +626,7 @@ function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo',from=VEN
   try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
   catch(x){b.disabled=false;b.textContent='Sign in';return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
   if(!await joinVenue(vid)){b.disabled=false;b.textContent='Sign in';return}
-  el.hidden=true;$('app').hidden=false;await setVenue(vid);doneTick('Welcome to '+v.name)};
+  el.hidden=true;$('app').hidden=false;await setVenue(vid,view.tab);doneTick('Welcome to '+v.name)};
  setTimeout(()=>{const f=$(S.email&&!demo?'vjPass':'vjEmail');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
 }
 
@@ -2248,7 +2248,7 @@ async function hsInstall(){
  render();
 }
 const ACT={
- clubRank(v){closeSheet(true);if(v===VID)return go('rank');if(!isMember(S.uid,v))return venueSignIn(v);tick();setVenue(v,'rank')},
+ clubRank(v){closeSheet(true);if(v===VID)return go('rank');if(!isMember(S.uid,v)){view.tab='rank';return venueSignIn(v)}tick();setVenue(v,'rank')},
  /* clubs */
  venue(v){switchVenue(v)},
  authVenue(v){if(!VENUES.some(x=>x.id===v)||v===VID)return;VID=v;ls.set('rc_venue',v);applyVenue();tick();paintAuthVenue()},
