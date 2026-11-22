@@ -168,8 +168,8 @@ const VENUES=[
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'},
- {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'Padel, pickleball, badminton and table tennis',
-  courtNos:{},also:'Badminton and table tennis',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
+ {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
+  courtNos:{padel:[1],pickleball:[1]},also:'1 badminton court and 1 table tennis table',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
   url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'}
 ];
@@ -547,7 +547,7 @@ function buildDemo(you,rank='dev'){
   const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t))),cand=r()<.8?near.slice(0,12):near;if(cand.length<n-1)continue;
   const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
   const A_=grp.slice(0,n/2),B_=grp.slice(n/2),ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa,slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
-  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=1,lane=Math.floor(r()*3);
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=1,lane=0;
   if(date===T&&nowSlot()-len<0)date=addDays(T,-1);const hi=date===T?Math.min(NSLOT-len,nowSlot()-len):NSLOT-len,u=focc[date+sp+lane]=focc[date+sp+lane]||[];let st=null;
   for(let q=0;q<40&&st==null;q++){const c=clamp(r()<.6?20+Math.floor(r()*14):Math.floor(r()*(hi+1)),0,hi);if(!u.some(([a,b])=>c<b&&a<c+len))st=c}if(st==null)continue;u.push([st,st+len]);
   fms.push({id:'fm_'+k,demo:true,venue:'floresta',sport:sp,format:singles?'singles':'doubles',date,time:st,len,court,a:A_.map(slot),b:B_.map(slot),sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
