@@ -176,7 +176,12 @@ const VENUES=[
   courtNos:{padel:[1],pickleball:[1]},logo:'venues/aer.png',splash:'venues/aer-big.png',mark:'wide',color:'#111111',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
   insta:'https://www.instagram.com/theaerclub/',
-  url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'}
+  url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'},
+ {id:'coplay',name:'CoPlay | Panjim Gymkhana',short:'CoPlay | Panjim Gymkhana',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
+  courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
+  book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
+  insta:'https://www.instagram.com/coplayofficial',
+  url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'}
 ];
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
@@ -616,6 +621,46 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(aerAll),b=pick(aerAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  aerAll.slice(4,12).forEach((p,i)=>reqs.push({id:'da_f'+i,from:aPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...ams);ms.sort(byWhen);all.push(...aerP);
+ /* CoPlay | Panjim Gymkhana: a fifth club built the same way, booked on Hudle. 1 padel court, ranked (no pickleball here yet).
+    Some players from the other clubs play here too. */
+ const cpP=[],mkCp=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
+  const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
+  const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.4?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
+  const p={id:'dk_'+cpP.length,username:un,name,gender,setup:true,demo:true,avatar:null,sports,hand:r()<.85?'right':'left',invites:r()<.7,times,side:pick(['left','right','either']),levels,_skill:skill,_grow:grow,home:'coplay',venues:['coplay'],created:new Date(now-(DAYS+1+Math.floor(r()*200))*864e5).toISOString()};cpP.push(p);return p};
+ const cOwner=mkCp('Rohan Naik','male',['padel'],{padel:4.9}),cAdmin=mkCp('Nisha Dessai','female',['padel'],{padel:4.2}),
+  cCoach=mkCp('Diego Fernandes','male',['padel'],{padel:5.5}),cPlayer=mkCp('Tanvi Shetye','female',['padel'],{padel:3.4});
+ cPlayer.friends='request';
+ while(cpP.length<40){const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;const x=r();mkCp(name,D_FEM.has(fn)?'female':'male',x<.4?['padel','pickleball']:['padel'])}
+ 
+ const both4=[...ps.filter(p=>![caelan.id,surya.id,arjun.id].includes(p.id)).slice(48,58),...floP.slice(24,30),...aerP.slice(28,34),...cpP.slice(20,26)];
+ both4.forEach(p=>{p.venues=[...new Set([...(p.venues||[p.home||'rc']),'coplay'])];p.vstart=Object.assign(p.vstart||{},{coplay:{}});p.sports.filter(sp=>sp==='padel').forEach(sp=>p.vstart.coplay[sp]=Math.round(clampL(sp,sk(p,sp,.6))*100)/100)});
+ const cpAll=[...cpP,...both4],cms=[],cocc={};
+ for(let k=0;k<260;k++){
+  const t=k/260,sp='padel',pool=cpAll.filter(p=>p._skill[sp]!=null),singles=false,n=singles?2:4,anchor=pick(pool);
+  const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t))),cand=r()<.8?near.slice(0,12):near;if(cand.length<n-1)continue;
+  const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
+  const A_=grp.slice(0,n/2),B_=grp.slice(n/2),ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa,slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=1,lane=0;
+  if(date===T&&nowSlot()-len<0)date=addDays(T,-1);const hi=date===T?Math.min(NSLOT-len,nowSlot()-len):NSLOT-len,u=cocc[date+sp+lane]=cocc[date+sp+lane]||[];let st=null;
+  for(let q=0;q<40&&st==null;q++){const c=clamp(r()<.6?20+Math.floor(r()*14):Math.floor(r()*(hi+1)),0,hi);if(!u.some(([a,b])=>c<b&&a<c+len))st=c}if(st==null)continue;u.push([st,st+len]);
+  cms.push({id:'km_'+k,demo:true,venue:'coplay',sport:sp,format:singles?'singles':'doubles',date,time:st,len,court,a:A_.map(slot),b:B_.map(slot),sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+ }
+ cms.sort(byWhen);const cregs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
+ cms.forEach(m=>cregs(m).filter(u=>u!==m.by).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
+ 
+ const ckG=cms.filter(m=>m.date>=addDays(T,-5)&&m.format==='doubles'&&!cregs(m).includes(cPlayer.id)).pop();
+ if(ckG){const i=ckG.b.findIndex(x=>x.uid!==ckG.by);ckG.b[i]={uid:cPlayer.id,level:+fmtL(cPlayer._skill[ckG.sport])};confs.splice(0,confs.length,...confs.filter(c=>!(c.match===ckG.id&&c.user===cPlayer.id)));msgs.push({id:'dk_c',to:cPlayer.id,from:ckG.by,kind:'confirm',data:{match:ckG.id,venue:'coplay'},read:false,at:ago(4)})}
+ const cD=cms.filter(m=>m!==ckG&&m.date>=addDays(T,-4)&&m.format==='doubles').pop();
+ if(cD){const loser=(cD.winner==='a'?cD.b:cD.a).find(s=>s.uid!==cD.by);if(loser){for(let i=confs.length-1;i>=0;i--)if(confs[i].match===cD.id)confs.splice(i,1);
+  const prop=cD.sets.map(s=>s.slice()),j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];if(prop.length===2)prop.push(cD.sport==='padel'?(cD.winner==='a'?[4,6]:[6,4]):(cD.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_cop',match:cD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
+  [cOwner.id,cAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dk_d'+i,to,from:loser.uid,kind:'dispute',data:{match:cD.id,conf:c.id,venue:'coplay'},read:false,at:c.at}))}}
+ const cAsk=cpP[12];if(cAsk){const data={thread:'dth_k1',topic:'court',text:'Could we have a padel ladder night on weekdays?',player:cAsk.id,venue:'coplay'};[cOwner.id,cAdmin.id,you.id,cAsk.id].forEach(t=>msgs.push({id:'dk_am'+t,to:t,from:cAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
+ const cNews=[{text:'Welcome to CoPlay on My Padel! Book your court on Hudle as usual, then log your padel scores here to climb the CoPlay rankings.',link:'',lt:''},{text:'Riverside padel social at Campal this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
+ cNews.forEach((nw,k)=>[...cpP,...both4].forEach(p=>msgs.push({id:'dk_cm'+k+p.id,to:p.id,from:k?cAdmin.id:cOwner.id,kind:'community',data:Object.assign({venue:'coplay'},nw),read:k===0,at:ago(40-k*30)})));
+ for(let k=0;k<160;k++){const a=pick(cpAll),b=pick(cpAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
+ cpAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dk_f'+i,from:cPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
+ ms.push(...cms);ms.sort(byWhen);all.push(...cpP);
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
@@ -635,11 +680,11 @@ function buildDemo(you,rank='dev'){
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
+ Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};coaches[cCoach.id+'@coplay']={sports:['padel'],auto:true};cpP.forEach((p,k)=>{let nn='6';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
  /* Pro is invite only: the strong demo players were invited into Pro by each club's owner when the demo starts */
- const proBy={rc:surya.id,sunday:sOwner.id,floresta:fOwner.id,aer:aOwner.id},proAt=new Date(now-DAYS*864e5).toISOString();
+ const proBy={rc:surya.id,sunday:sOwner.id,floresta:fOwner.id,aer:aOwner.id,coplay:cOwner.id},proAt=new Date(now-DAYS*864e5).toISOString();
  all.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(!L||p.id===you.id)return;const k=Math.max(+L.start||0,(p._skill&&p._skill[sp])||0);if(k<SPORTS[sp].cut[1])return;p.pro=p.pro||{};VENUES.forEach(v=>{p.pro[v.id]=p.pro[v.id]||{};p.pro[v.id][sp]={by:proBy[v.id]||surya.id,at:proAt}})}));
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id}}};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer',cOwner.id+'@coplay',cAdmin.id+'@coplay'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer',cOwner.id+'@coplay'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id},coplay:{player:cPlayer.id,admin:cAdmin.id,owner:cOwner.id,coach:cCoach.id}}};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
@@ -1439,7 +1484,7 @@ function vHome(){
 }
 function seg(key,label,items,cur,act){return `<div class="seg full" data-key="${key}" role="radiogroup" aria-label="${esc(label)}">${items.map(([v,n])=>`<button type="button" role="radio" aria-checked="${v===cur}" data-act="${act}" data-v="${v}">${esc(n)}</button>`).join('')}</div>`}
 function vRank(){
- const ms=mySports();if(!view.rs)view.rs=ms[0];const sp=view.rs;
+ const ms=mySports(),vs=vSports();if(!view.rs||!vs.includes(view.rs)){view.rs=ms.find(k=>vs.includes(k))||vs[0];view.rt=null}const sp=view.rs;
  if(!view.rt){const e=S.R[sp][S.uid];view.rt=e?tierOf(sp,e.r):'intermediate'}
  const g=view.rg||'all',t=view.rt,all=Object.entries(S.R[sp]).filter(([id])=>{const p=prof(id);return p&&p.setup&&(g==='all'||p.gender===g)}).map(([id,e])=>({id,e,p:prof(id)}));
  const inT=all.filter(x=>tierOf(sp,x.e.r)===t),ranked=inT.filter(x=>x.e.n).sort((a,b)=>b.e.r-a.e.r),wait=inT.filter(x=>!x.e.n).sort((a,b)=>b.e.r-a.e.r);
@@ -1451,7 +1496,7 @@ function vRank(){
  const goal=myPos<0?'':myPos<3?`<p class="goal">You're on the ${['gold','silver','bronze'][myPos]} step. Hold on to it.</p>`:`<p class="goal">You're #${myPos+1}. <b>${fmtL(Math.max(.01,pod[2].e.r-ranked[myPos].e.r))}</b> more to reach the podium.</p>`;
  const podium=pod.length>=3?`<div class="podium">${order.map(i=>{const x=pod[i];return`<button class="pod p${i+1} ${MET[i]} rv${x.id===S.uid?' mine':''}"${x.id===S.uid?' id="rkMe"':''} data-act="player" data-v="${x.id}"><span class="shine" aria-hidden="true"></span>${i===0?'<span class="crown" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 8.5l4.6 3.8L12 5l4.4 7.3L21 8.5 19.2 19H4.8z"/><circle cx="3" cy="8" r="1.6"/><circle cx="12" cy="4.4" r="1.6"/><circle cx="21" cy="8" r="1.6"/></svg></span>':''}<span class="medal">${i+1}</span><span class="ring">${avHTML(x.p)}</span><span class="pn">${esc(first(x.p))}</span>${tag(x.id)?`<span class="ptags">${tag(x.id)}</span>`:''}<span class="pl num">${fmtL(x.e.r)}</span><span class="ptag">${['Gold','Silver','Bronze'][i]}</span></button>`}).join('')}</div>${goal}`:'';
  return `<div class="hd"><div><p class="eyebrow">${esc(VEN().name)}</p><h1>Rankings</h1></div>${S.R[sp][S.uid]&&S.R[sp][S.uid].n?`<button class="btn ball sm findme" data-act="rankMe">${ICON.search}<span>Find me</span></button>`:''}<button class="refresh" data-act="rankRefresh" aria-label="Refresh rankings" title="Refresh">${ICON.refresh}</button></div>
-  <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
+  <div class="ctrls">${seg('rs','Sport',vSports().map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}
   ${seg('rg','Players',[['all','All'],['male','Men'],['female','Women']],g,'rankGender')}</div>
   <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. ${t==='pro'?'Pro is invite only: the club owner picks players and invites them in.':'Players move up a ranking as their level rises.'} Scores under review are left out until an admin checks them.</p>
@@ -1696,8 +1741,10 @@ async function savePrices(c,msg){
 }
 /* ---------- Add a score ---------- */
 let A=null;
-const addSports=()=>SP_KEYS.filter(k=>S.R[k][S.uid]);
-function newA(){const sp=addSports()[0]||mySports()[0];return{sport:sp,format:'doubles',date:today(),time:null,len:0,courtNo:1,a:[{uid:S.uid},null],b:[null,null],sets:[['',''],['',''],['','']],err:''}}
+/* the ranked sports at this club: the ones it has courts for */
+const vSports=()=>{const s=SP_KEYS.filter(k=>VEN().courtNos[k]);return s.length?s:SP_KEYS};
+const addSports=()=>vSports().filter(k=>S.R[k][S.uid]);
+function newA(){const sp=addSports()[0]||mySports().find(k=>vSports().includes(k))||vSports()[0];return{sport:sp,format:'doubles',date:today(),time:null,len:0,courtNo:1,a:[{uid:S.uid},null],b:[null,null],sets:[['',''],['',''],['','']],err:''}}
 function fitFormat(){const n=A.format==='singles'?1:2;['a','b'].forEach(t=>{A[t]=A[t].slice(0,n);while(A[t].length<n)A[t].push(null)});if(!A.a[0])A.a[0]={uid:S.uid}}
 function slotLevel(s){if(!s)return null;if(s.uid){const r=lvlOf(A.sport,s.uid);return r!=null?r:(s.level!=null?+s.level:null)}return s.level!=null?+s.level:null}
 function slotHTML(t,i){
@@ -1716,7 +1763,7 @@ function vAdd(){
  return `<div class="hd"><div><p class="eyebrow">After the game</p><h1>Add score</h1></div></div>
  <div class="card rv">
   ${addSports().length>1?seg('as','Sport',addSports().map(k=>[k,SPORTS[k].name]),A.sport,'aSport'):`<p class="eyebrow">${S_.name}</p>`}
-  ${SP_KEYS.filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To add ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
+  ${vSports().filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To add ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
   ${A.sport==='pickleball'?`<div style="margin-top:10px">${seg('af','Format',[['doubles','Doubles'],['singles','Singles']],A.format,'aFormat')}</div>`:''}
   <label>Date played</label>
   <div class="dstrip" role="group" aria-label="Date played">${days.map(d=>{const dt=new Date(d+'T12:00:00'),k=d===today()?'Today':d===addDays(today(),-1)?'Yesterday':dt.toLocaleDateString('en-IN',{weekday:'short'});return`<button type="button" class="dchip" aria-pressed="${d===A.date}" data-act="aDate" data-v="${d}"><span>${k}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
