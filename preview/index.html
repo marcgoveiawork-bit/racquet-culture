@@ -962,8 +962,8 @@ a.btn{text-decoration:none}
 .vmark.sm.v-cocoanjuna{padding:1px 8px;box-shadow:inset 0 0 0 1.5px #b7d968}.vmark.sm.v-cocoanjuna img{height:19px}.clubchip .vmark.sm.v-cocoanjuna img{height:19px}
 .wmark.w-coco{padding:0 14px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18),inset 0 0 0 2px #b7d968}.wmark.w-coco img{height:40px}
 .wmark.w-cocoanjuna{padding:0 14px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18),inset 0 0 0 2px #b7d968}.wmark.w-cocoanjuna img{height:40px}
-.splash .v-coco img{--cw:min(200px,52vw);aspect-ratio:auto;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 0 0 3px #b7d968,inset 0 0 0 6px #fff,inset 0 0 0 7px #c8a27a;padding:calc(var(--cw)*.04) calc(var(--cw)*.12)}
-.splash .v-cocoanjuna img{--cw:min(200px,52vw);aspect-ratio:auto;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 0 0 3px #b7d968,inset 0 0 0 6px #fff,inset 0 0 0 7px #c8a27a;padding:calc(var(--cw)*.04) calc(var(--cw)*.12)}
+.splash .v-coco img{background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 0 0 3px #b7d968,inset 0 0 0 6px #fff,inset 0 0 0 7px #c8a27a;padding:calc(var(--cw)*.035) calc(var(--cw)*.1)}
+.splash .v-cocoanjuna img{background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 0 0 3px #b7d968,inset 0 0 0 6px #fff,inset 0 0 0 7px #c8a27a;padding:calc(var(--cw)*.035) calc(var(--cw)*.1)}
 :root:not([data-theme="light"]) .vsrow[data-v="coco"]{--vc:#b7d968}
 :root:not([data-theme="light"]) .vsrow[data-v="cocoanjuna"]{--vc:#b7d968}
 /* every club's logo card is the same size wherever it shows; the logo sits centred inside it */
@@ -975,9 +975,9 @@ a.btn{text-decoration:none}
 .vmark.v-floresta,.wmark.w-floresta{padding:2px!important}.vmark.v-sunday,.wmark.w-sunday{padding-top:4px!important;padding-bottom:4px!important}
 .vmark img,.wmark img{width:100%!important;height:100%!important;min-width:0;min-height:0;object-fit:contain}
 /* Coco Padel: keep the whole racquet inside its card at every size */
-.vmark.v-coco,.wmark.w-coco,.vmark.v-cocoanjuna,.wmark.w-cocoanjuna{padding:6px 10px!important}
-.vmark.big.v-coco,.vmark.big.v-cocoanjuna{padding:10px 18px!important}
-.vmark.sm.v-coco,.vmark.sm.v-cocoanjuna{padding:3px 6px!important}
+.vmark.v-coco,.wmark.w-coco,.vmark.v-cocoanjuna,.wmark.w-cocoanjuna{padding:3px 8px!important}
+.vmark.big.v-coco,.vmark.big.v-cocoanjuna{padding:6px 14px!important}
+.vmark.sm.v-coco,.vmark.sm.v-cocoanjuna{padding:2px 4px!important}
 /* ============ My Padel's own pages (sign-in, first-time questions): the My Padel blue ============ */
 :root[data-venue="mp"]{--brand:#1d589a;--brand-hi:#3d8be0;--br-rgb:29,88,154;--hi-rgb:61,139,224;--brand-pale:#bcd8f7;--brand-hi2:#2f74c4;--g1:#2265ae;--g2:#1d589a;--g3:#123c6c;--sh1:#14243d;--sh2:#0c1729;--splash-d:#10335c;--splash-l:#dce9f8;--pop-rgb:16,28,48;--bg-rgb:11,18,32;--dock-rgb:16,26,44;--bgl-rgb:243,247,252;--ln-rgb:20,60,110}
 :root[data-venue="mp"]:not([data-theme="light"]){--bg:#0b1220;--bg2:#0f1829;--card:#131e33;--card2:#19263f;--ink:#f1f5fb;--muted:#9fb0c9;--faint:#64748f;--brand-soft:rgba(61,139,224,.16)}
@@ -1066,7 +1066,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=87"></script>
+<script src="app.js?v=88"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
