@@ -132,7 +132,9 @@ const QS={
    ['Against 4.0+ players you usually…',[['Hold your own',.2],['Win more than you lose',.6],['Dominate',1]]]]
  }
 };
-const levelFrom=(sp,band,ans)=>{const [lo,hi]=SPORTS[sp].bands[band];return Math.round((lo+(hi-lo)*avg(ans.map(x=>+x||0)))*10)/10};
+/* Everyone new in a level starts at the same spot: the bottom of the level they pick (no level questions any more) */
+const S_BANDS=['beginner','intermediate'];
+const levelFrom=(sp,band)=>SPORTS[sp].bands[band][0];
 
 /* ---------- Avatars: purple initials, or a photo the player uploads ---------- */
 function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -1338,8 +1340,7 @@ function wSteps(){
  if(W.mode==='gender')return['gender','save'];
  if(W.mode!=='level')st.push('avatar','gender','sports','hand','invites','times','side');
  const lv=W.mode==='level'?W.only:W.mode==='setup'?(d.sports.length?d.sports:SP_KEYS):d.sports.filter(sp=>!(d.levels[sp]&&isFinite(+d.levels[sp].start)));
- lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};const b=d.q[sp].band;st.push('band:'+sp);
-  const n=b?QS[sp][b].length:5;for(let i=0;i<n;i++)st.push('q:'+sp+':'+i);st.push('result:'+sp)});
+ lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};st.push('band:'+sp,'result:'+sp)});
  st.push(W.mode==='setup'?'done':'save');return st;
 }
 const ANIM_OF=new Map([[ICON.padel,'swing'],[ICON.pickleball,'roll'],[ICON.mail,'ring'],[ICON.nomail,'shake'],[ICON.sunrise,'rise'],[ICON.sun,'spin'],[ICON.noon,'pulse'],[ICON.sunset,'sink'],[ICON.moon,'rock'],[ICON.any,'spin']]);
@@ -1375,18 +1376,18 @@ function wStep(key){
  if(kind==='side')return{eyebrow:'On court',title:'Which side of the court do you prefer?',sub:'In doubles, each player covers one side. Facing the net, which is yours?',valid:!!d.side,single:1,
   body:`<div class="courtpick">${courtSVG(d.side)}<div class="opts" role="radiogroup">${SIDES.map(s=>opt({act:'wSide',v:s[0],on:d.side===s[0],title:s[1],sub:s[2]})).join('')}</div></div>`};
  if(kind==='band'){const q=d.q[sp],B=S_.bands;
-  return{eyebrow:S_.name+' level',title:`What's your ${S_.name.toLowerCase()} level?`,sub:'Start with a rough idea. A few quick questions will pin down your number.',valid:!!q.band,single:1,
-   body:`<div class="opts" role="radiogroup">${[['beginner','Beginner','Learning the shots and the rules'],['intermediate','Intermediate','Regular rallies, starting to play tactically'],['pro','Pro','Invite only · start at Intermediate and work your way up']].map((b,i)=>opt({act:'wBand',v:sp+'|'+b[0],on:q.band===b[0],title:b[1],locked:b[0]==='pro',sub:b[0]==='pro'?b[2]:`${b[2]} · ${fmtL(B[b[0]][0],1)} to ${fmtL(B[b[0]][1],1)}`,icon:b[0]==='pro'?ICON.lock:ICON.bars(i+1)})).join('')}</div>`}}
+  return{eyebrow:S_.name+' level',title:`What's your ${S_.name.toLowerCase()} level?`,sub:'Pick the level that fits you best. Everyone new in a level starts at the same spot, at the bottom of it, and your results move you from there.',valid:!!q.band,single:1,
+   body:`<div class="opts" role="radiogroup">${[['beginner','Beginner','Learning the shots and the rules'],['intermediate','Intermediate','Regular rallies, starting to play tactically'],['pro','Pro','Invite only · start at Intermediate and work your way up']].map((b,i)=>opt({act:'wBand',v:sp+'|'+b[0],on:q.band===b[0],title:b[1],locked:b[0]==='pro',sub:b[0]==='pro'?b[2]:`${b[2]} · starts at ${fmtL(B[b[0]][0],1)}`,icon:b[0]==='pro'?ICON.lock:ICON.bars(i+1)})).join('')}</div>`}}
  if(kind==='q'){const q=d.q[sp],list=QS[sp][q.band],it=list[+qi],cur=q.ans[+qi];
   return{eyebrow:`${S_.name} level · Question ${+qi+1} of ${list.length}`,title:it[0],sub:'',valid:cur!==undefined,single:1,
    body:`<div class="opts" role="radiogroup">${it[1].map((a,j)=>opt({act:'wAns',v:sp+'|'+qi+'|'+j,on:cur!==undefined&&q.pick&&q.pick[+qi]===j,title:a[0]})).join('')}</div><p class="qhint">Answer for how you play most of the time.</p>`}}
  if(kind==='result'){const q=d.q[sp],v=levelFrom(sp,q.band,q.ans),t=tierOf(sp,v),had=S.R[sp][S.uid]&&S.R[sp][S.uid].n;
   const segs=TIERS.map(([k,n])=>{const lo=k==='beginner'?S_.min:S_.cut[k==='intermediate'?0:1],hi=k==='pro'?S_.max:S_.cut[k==='beginner'?0:1];return`<span class="${k===t?'on':''}" style="flex:${hi-lo}"><em>${n}</em></span>`}).join('');
-  return{eyebrow:`${S_.name} level`,title:'Your starting level',sub:'',valid:true,result:{sp,v},next:'Confirm this level',alt:`<button class="btn ghost" data-act="wRetake" data-v="${sp}">Retake</button>`,
+  return{eyebrow:`${S_.name} level`,title:'Your starting level',sub:'',valid:true,result:{sp,v},next:'Confirm this level',alt:`<button class="btn ghost" data-act="wRetake" data-v="${sp}">Change</button>`,
    body:`<div class="lvl"><div class="big num" id="lvlNum">0.0</div><div class="tierchip"><span class="chip t-${t}">${TIER_NAME[t]} rankings</span></div>
    <div class="gauge">${segs}<i class="mark" id="lvlMark"></i></div>
    <p class="muted small" style="margin-top:34px">${S_.name} is rated from ${fmtL(S_.min,1)} to ${fmtL(S_.max,1)}. Your level now moves with every result you log: beat stronger players to climb faster.</p>
-   <p class="small lockn">Not quite right? Tap <b>Retake</b> to answer again. Once you confirm, your starting level is locked and only your results move it. You can still drop to a lower tier later from your level card.</p>
+   <p class="small lockn">Everyone new in ${TIER_NAME[t]} starts here. Picked the wrong level? Tap <b>Change</b>. Once you confirm, your starting level is locked and only your results move it. You can still drop to a lower tier later from your level card.</p>
 </div>`}}
  if(kind==='done'){const p=me();
   return{eyebrow:'All set',title:`You're all set, ${first(p)}.`,sub:'Your profile is ready and it works at every club. Next, pick a court to begin.',valid:true,next:'Pick a court',
@@ -1419,7 +1420,7 @@ function wGo(delta){W.dir=delta;W.i+=delta;window.scrollTo({top:0,behavior:calm(
 function wPickThenNext(){if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock=false;const s=wStep(wSteps()[W.i]);if(s.valid)wGo(1)},380)}
 async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
- Object.entries(d.q).forEach(([sp,q])=>{if(q.band==='pro'){q.band='';q.ans=[]}if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]=Object.assign({start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
+ Object.entries(d.q).forEach(([sp,q])=>{if(q.band==='pro'){q.band='';q.ans=[]}if(q.band&&S_BANDS.includes(q.band))levels[sp]=Object.assign({start:levelFrom(sp,q.band),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
  const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true,gender:d.gender||p.gender||''});
  if(W.mode==='setup'&&!p.setup&&!np.home&&!(np.venues||[]).length)np.nohome=true;
  if(np.vstart)Object.keys(d.q).forEach(sp=>{Object.values(np.vstart).forEach(o=>{if(o)delete o[sp]})});
