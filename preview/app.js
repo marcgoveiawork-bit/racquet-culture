@@ -2612,7 +2612,7 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  $('wPick').textContent=pick?'Pick a court to begin':'';$('wPick').hidden=!pick;
  $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
  $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
-  :pick?VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
+  :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
    +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
   :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
  $('wFoot').textContent='My Padel · V'+APP_VER;
@@ -2620,6 +2620,10 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  if($('wIn'))$('wIn').onclick=()=>{tick();showAuth('in')};
  if($('wUp'))$('wUp').onclick=()=>{tick();showAuth('up')};
  if($('wDemoNew'))$('wDemoNew').onclick=demoNewPlayer;
+ if($('wFind')){const f=$('wFind');f.oninput=()=>{const q=f.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let n=0;
+  qsa('#wCourts [data-find]').forEach(b=>{const ok=q.every(w=>b.dataset.find.includes(w));b.hidden=!ok;if(ok)n++});
+  let no=$('wNone');if(!n&&!no){no=document.createElement('p');no.id='wNone';no.className='wnone';f.closest('.wfind').after(no)}
+  if(no){no.hidden=!!n;no.textContent=n?'':'No venues match “'+f.value.trim()+'” yet.'}}}
  $('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=true;closeSheet(true);el.hidden=false;el.scrollTop=0;
 }
 function showPicker(){showWelcome('pick')}

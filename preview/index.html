@@ -202,6 +202,12 @@ input:focus-visible{outline:none}
 .opt.big{flex-direction:column;align-items:flex-start;padding:20px}
 .opt.big .ock{position:absolute;top:16px;right:16px}
 .opt.big .oi{width:54px;height:54px;border-radius:16px}.opt.big .oi svg{width:30px;height:30px}
+.wfind{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);transition:border-color .25s,background .25s}
+.wfind:focus-within{border-color:rgba(220,245,90,.6);background:rgba(255,255,255,.1)}
+.wfind svg{width:19px;height:19px;flex:none}
+.wfind input{flex:1;min-width:0;width:auto;height:100%;margin:0;padding:0;border:0!important;border-radius:0;background:none!important;box-shadow:none!important;outline:0;color:#fff;font:500 16px var(--body)}
+.wfind input::placeholder{color:rgba(255,255,255,.5)}
+.wcourt[hidden]{display:none}.wnone{margin:6px 0;color:rgba(255,255,255,.6);font-size:14px}
 .wfoot{display:flex;gap:10px;align-items:center;padding-top:10px}
 .wfoot .btn{flex:1}
 .avbig{width:132px;height:132px;margin:22px auto 6px;position:relative}
@@ -958,7 +964,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=76"></script>
+<script src="app.js?v=77"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
