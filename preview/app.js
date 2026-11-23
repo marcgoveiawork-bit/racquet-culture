@@ -181,7 +181,12 @@ const VENUES=[
   courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
   insta:'https://www.instagram.com/coplayofficial',
-  url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'}
+  url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'},
+ {id:'assagao',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',area:'Assagao House, Bardez, Assagao, Goa, India',map:'CoPlay @ Assagao House, Assagao, Goa',courts:'1 padel court · 2 pickleball courts',
+  courtNos:{padel:[1],pickleball:[1,2]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
+  book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-at-assagao-house/268830'},
+  insta:'https://www.instagram.com/coplayofficial',
+  url:'https://maps.app.goo.gl/53dKkFMViwWTXHrY9'}
 ];
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
@@ -661,6 +666,46 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(cpAll),b=pick(cpAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  cpAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dk_f'+i,from:cPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...cms);ms.sort(byWhen);all.push(...cpP);
+ /* CoPlay @ Assagao House: CoPlay's second club, booked on Hudle. 1 padel and 2 pickleball courts, both sports ranked.
+    Some players from the other clubs (CoPlay Panjim most of all) play here too. */
+ const asP=[],mkAs=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
+  const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
+  const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.4?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
+  const p={id:'dh_'+asP.length,username:un,name,gender,setup:true,demo:true,avatar:null,sports,hand:r()<.85?'right':'left',invites:r()<.7,times,side:pick(['left','right','either']),levels,_skill:skill,_grow:grow,home:'assagao',venues:['assagao'],created:new Date(now-(DAYS+1+Math.floor(r()*200))*864e5).toISOString()};asP.push(p);return p};
+ const hOwner=mkAs('Vikram Sawant','male',['padel','pickleball'],{padel:4.6,pickleball:5.0}),hAdmin=mkAs('Leah DSouza','female',['padel','pickleball'],{padel:3.9,pickleball:4.6}),
+  hCoach=mkAs('Aditya Gaonkar','male',['pickleball','padel'],{pickleball:5.2,padel:4.4}),hPlayer=mkAs('Meghna Parab','female',['padel','pickleball'],{padel:3.1,pickleball:3.7});
+ hPlayer.friends='request';
+ while(asP.length<40){const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;const x=r();mkAs(name,D_FEM.has(fn)?'female':'male',x<.55?['padel','pickleball']:x<.75?['padel']:['pickleball'])}
+ 
+ const both5=[...ps.filter(p=>![caelan.id,surya.id,arjun.id].includes(p.id)).slice(58,66),...sunP.slice(36,42),...cpP.slice(26,36),...asP.slice(20,26)];
+ both5.forEach(p=>{p.venues=[...new Set([...(p.venues||[p.home||'rc']),'assagao'])];p.vstart=Object.assign(p.vstart||{},{assagao:{}});p.sports.forEach(sp=>p.vstart.assagao[sp]=Math.round(clampL(sp,sk(p,sp,.6))*100)/100)});
+ const asAll=[...asP,...both5],hms=[],hocc={};
+ for(let k=0;k<260;k++){
+  const t=k/260,sp=r()<.45?'padel':'pickleball',pool=asAll.filter(p=>p._skill[sp]!=null),singles=sp==='pickleball'&&r()<.15,n=singles?2:4,anchor=pick(pool);
+  const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t))),cand=r()<.8?near.slice(0,12):near;if(cand.length<n-1)continue;
+  const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
+  const A_=grp.slice(0,n/2),B_=grp.slice(n/2),ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa,slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=sp==='pickleball'?1+Math.floor(r()*2):1,lane=court;
+  if(date===T&&nowSlot()-len<0)date=addDays(T,-1);const hi=date===T?Math.min(NSLOT-len,nowSlot()-len):NSLOT-len,u=hocc[date+sp+lane]=hocc[date+sp+lane]||[];let st=null;
+  for(let q=0;q<40&&st==null;q++){const c=clamp(r()<.6?20+Math.floor(r()*14):Math.floor(r()*(hi+1)),0,hi);if(!u.some(([a,b])=>c<b&&a<c+len))st=c}if(st==null)continue;u.push([st,st+len]);
+  hms.push({id:'hm_'+k,demo:true,venue:'assagao',sport:sp,format:singles?'singles':'doubles',date,time:st,len,court,a:A_.map(slot),b:B_.map(slot),sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+ }
+ hms.sort(byWhen);const hregs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
+ hms.forEach(m=>hregs(m).filter(u=>u!==m.by).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
+ 
+ const hkG=hms.filter(m=>m.date>=addDays(T,-5)&&m.format==='doubles'&&!hregs(m).includes(hPlayer.id)).pop();
+ if(hkG){const i=hkG.b.findIndex(x=>x.uid!==hkG.by);hkG.b[i]={uid:hPlayer.id,level:+fmtL(hPlayer._skill[hkG.sport])};confs.splice(0,confs.length,...confs.filter(c=>!(c.match===hkG.id&&c.user===hPlayer.id)));msgs.push({id:'dh_c',to:hPlayer.id,from:hkG.by,kind:'confirm',data:{match:hkG.id,venue:'assagao'},read:false,at:ago(4)})}
+ const hD=hms.filter(m=>m!==hkG&&m.date>=addDays(T,-4)&&m.format==='doubles').pop();
+ if(hD){const loser=(hD.winner==='a'?hD.b:hD.a).find(s=>s.uid!==hD.by);if(loser){for(let i=confs.length-1;i>=0;i--)if(confs[i].match===hD.id)confs.splice(i,1);
+  const prop=hD.sets.map(s=>s.slice()),j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];if(prop.length===2)prop.push(hD.sport==='padel'?(hD.winner==='a'?[4,6]:[6,4]):(hD.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_ass',match:hD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
+  [hOwner.id,hAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dh_d'+i,to,from:loser.uid,kind:'dispute',data:{match:hD.id,conf:c.id,venue:'assagao'},read:false,at:c.at}))}}
+ const hAsk=asP[12];if(hAsk){const data={thread:'dth_h1',topic:'court',text:'Could one of the pickleball courts be kept for open play on Sunday mornings?',player:hAsk.id,venue:'assagao'};[hOwner.id,hAdmin.id,you.id,hAsk.id].forEach(t=>msgs.push({id:'dh_am'+t,to:t,from:hAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
+ const hNews=[{text:'Welcome to CoPlay @ Assagao House on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Assagao rankings.',link:'',lt:''},{text:'Pickleball round robin on both courts this Sunday from 8 am, with padel open play after. All levels welcome.',link:'',lt:''}];
+ hNews.forEach((nw,k)=>[...asP,...both5].forEach(p=>msgs.push({id:'dh_cm'+k+p.id,to:p.id,from:k?hAdmin.id:hOwner.id,kind:'community',data:Object.assign({venue:'assagao'},nw),read:k===0,at:ago(40-k*30)})));
+ for(let k=0;k<160;k++){const a=pick(asAll),b=pick(asAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
+ asAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dh_f'+i,from:hPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
+ ms.push(...hms);ms.sort(byWhen);all.push(...asP);
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
@@ -680,11 +725,11 @@ function buildDemo(you,rank='dev'){
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};coaches[cCoach.id+'@coplay']={sports:['padel'],auto:true};cpP.forEach((p,k)=>{let nn='6';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
+ Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};coaches[cCoach.id+'@coplay']={sports:['padel'],auto:true};coaches[hCoach.id+'@assagao']={sports:['pickleball','padel'],auto:true};asP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});cpP.forEach((p,k)=>{let nn='6';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
  /* Pro is invite only: the strong demo players were invited into Pro by each club's owner when the demo starts */
- const proBy={rc:surya.id,sunday:sOwner.id,floresta:fOwner.id,aer:aOwner.id,coplay:cOwner.id},proAt=new Date(now-DAYS*864e5).toISOString();
+ const proBy={rc:surya.id,sunday:sOwner.id,floresta:fOwner.id,aer:aOwner.id,coplay:cOwner.id,assagao:hOwner.id},proAt=new Date(now-DAYS*864e5).toISOString();
  all.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(!L||p.id===you.id)return;const k=Math.max(+L.start||0,(p._skill&&p._skill[sp])||0);if(k<SPORTS[sp].cut[1])return;p.pro=p.pro||{};VENUES.forEach(v=>{p.pro[v.id]=p.pro[v.id]||{};p.pro[v.id][sp]={by:proBy[v.id]||surya.id,at:proAt}})}));
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer',cOwner.id+'@coplay',cAdmin.id+'@coplay'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer',cOwner.id+'@coplay'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id},coplay:{player:cPlayer.id,admin:cAdmin.id,owner:cOwner.id,coach:cCoach.id}}};
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer',cOwner.id+'@coplay',cAdmin.id+'@coplay',hOwner.id+'@assagao',hAdmin.id+'@assagao'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer',cOwner.id+'@coplay',hOwner.id+'@assagao'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id},coplay:{player:cPlayer.id,admin:cAdmin.id,owner:cOwner.id,coach:cCoach.id},assagao:{player:hPlayer.id,admin:hAdmin.id,owner:hOwner.id,coach:hCoach.id}}};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
