@@ -1669,8 +1669,8 @@ const ST_LABEL={pending:'Awaiting confirmation',disputed:'Under review',reviewed
 function matchRow(m,opts={}){
  const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',bw=m.winner==='b',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
  const team=(t,w)=>`<div class="tm${w?' win':''}"><span class="avs">${m[t].map(slotAv).join('')}</span><span>${m[t].map(s=>esc(slotName(s))).join(' & ')}</span></div>`;
- const acts=[];if(opts.hist)acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:'',`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`,`<button class="btn link small dangerl" data-act="gameCancel" data-v="${esc(m.id)}">Cancel game</button>`);
- else if(isAdmin()&&!lockedGame(m))acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`);
+ const acts=[];if(opts.hist)acts.push(st==='disputed'?`<button class="btn revbtn" data-act="review" data-v="${esc(m.id)}">${ICON.search}<span>Review score</span></button>`:'',`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`,`<button class="btn link small dangerl" data-act="gameCancel" data-v="${esc(m.id)}">Cancel game</button>`);
+ else if(isAdmin()&&!lockedGame(m))acts.push(st==='disputed'?`<button class="btn revbtn" data-act="review" data-v="${esc(m.id)}">${ICON.search}<span>Review score</span></button>`:`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`);
  if(!opts.hist&&regsOf(m).includes(S.uid)&&regsOf(m).length>1)acts.unshift(`<button class="btn link small" data-act="kudos" data-v="${esc(m.id)}">Send kudos 👍</button>`);
  if(opts.del&&!lockedGame(m)&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
  return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',bw)}
@@ -2870,8 +2870,12 @@ const ACT={
  egPick(v){egPicker(v)},
  egBack(){if(G)gameSheet(G.mid)},
  histMore(){view.histAll=true;render()},
- gameCancel(v){G=null;confirmSheet('Cancel this game?','It’s removed from the club’s games and everyone’s levels are worked out again without it. The players get a message saying you cancelled it.','Cancel game','gameCancelYes',v)},
- async gameCancelYes(v){const m=S.matches.find(x=>x.id===v);if(!m)return closeSheet();
+ gameCancel(v){G=null;
+  openSheet(`<h2>Cancel this game?</h2><p class="muted" style="margin:6px 0 14px">It’s removed from the club’s games and everyone’s levels are worked out again without it. The players get a message saying you cancelled it.</p>
+   <label for="gcType">Type <b>CANCEL GAME</b> to confirm</label><input id="gcType" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CANCEL GAME">
+   <div class="cta" style="margin-top:16px"><button class="btn ghost" data-act="closeSheet" style="flex:1">Go back</button><button class="btn danger" id="gcYes" data-act="gameCancelYes" data-v="${esc(v)}" style="flex:1" disabled>Cancel game</button></div>`,bg=>{
+   const inp=bg.querySelector('#gcType'),btn=bg.querySelector('#gcYes');inp.oninput=()=>{btn.disabled=inp.value.trim().replace(/\s+/g,' ').toUpperCase()!=='CANCEL GAME'}})},
+ async gameCancelYes(v){const t=$('gcType');if(!t||t.value.trim().replace(/\s+/g,' ').toUpperCase()!=='CANCEL GAME')return;const m=S.matches.find(x=>x.id===v);if(!m)return closeSheet();
   try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only admins at this club can cancel games.':'Could not cancel. Check your connection.')}
   S.matches=S.matches.filter(x=>x.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();doneTick('Game cancelled');
   notify(regsOf(m).map(to=>({to,kind:'game_cancel',data:{snap:gameSnap(m)}})))},
