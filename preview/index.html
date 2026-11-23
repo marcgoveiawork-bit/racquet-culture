@@ -157,7 +157,7 @@ input:focus-visible{outline:none}
 .splash{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;text-align:center;padding:24px;background:radial-gradient(70% 60% at 50% 40%,var(--splash-d),var(--bg));animation:sOut 2s ease forwards}
 .splash img{width:min(300px,70vw);height:auto;animation:sLogo 2s var(--ease) forwards}
 /* every club opens on its logo inside a rounded card in the club's colours (Sunday and Floresta have the card drawn into their logo files) */
-.splash .v-rc img,.splash .v-aer img,.splash .v-coplay img,.splash .v-assagao img{--cw:min(260px,64vw);box-sizing:border-box;width:var(--cw);height:auto;aspect-ratio:600/330;object-fit:contain;padding:calc(var(--cw)*.1) calc(var(--cw)*.13);border-radius:calc(var(--cw)*.08)}
+.splash .v-rc img,.splash .v-aer img,.splash .v-coplay img,.splash .v-assagao img,.splash .v-roundtwo img{--cw:min(260px,64vw);box-sizing:border-box;width:var(--cw);height:auto;aspect-ratio:600/330;object-fit:contain;padding:calc(var(--cw)*.1) calc(var(--cw)*.13);border-radius:calc(var(--cw)*.08)}
 .splash .v-rc img{background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289);padding:calc(var(--cw)*.07) calc(var(--cw)*.12)}
 .splash .s1{margin-top:26px;color:var(--muted);font-size:15px;animation:rise .8s var(--ease) .2s both}
 .splash .s2{margin-top:6px;font:500 30px/1.2 var(--display);animation:rise .8s var(--ease) .32s both}
@@ -934,6 +934,17 @@ a.btn{text-decoration:none}
 .sheetbg.kb{bottom:auto;top:var(--vvt,0px);height:var(--vvh,100%);align-items:flex-start}
 .sheetbg.kb .sheet{height:calc(var(--vvh,100%) - 10px);max-height:none;animation:none;padding-bottom:12px}
 :root:not([data-theme="light"]) .vsrow[data-v="aer"]{--vc:#9a9a9a}
+:root[data-venue="roundtwo"]{--brand:#2b2b2b;--brand-hi:#c9c9c9;--br-rgb:43,43,43;--hi-rgb:201,201,201;--brand-pale:#f2f2f2;--brand-hi2:#d9d9d9;--g1:#4a4a4a;--g2:#2b2b2b;--g3:#0d0d0d;--sh1:#000;--sh2:#000;--splash-d:#000000;--splash-l:#ffffff;--pop-rgb:0,0,0;--bg-rgb:0,0,0;--dock-rgb:10,10,10;--bgl-rgb:255,255,255;--ln-rgb:80,80,80}
+:root[data-venue="roundtwo"]:not([data-theme="light"]){--bg:#000000;--bg2:#0a0a0a;--card:#111111;--card2:#1a1a1a;--ink:#ffffff;--muted:#b3b3b3;--faint:#707070;--brand-soft:rgba(255,255,255,.12)}
+:root[data-venue="roundtwo"][data-theme="light"]{--brand:#000000;--br-rgb:0,0,0;--g1:#1f1f1f;--g2:#000000;--g3:#000000;--brand-hi:#000000;--hi-rgb:0,0,0;--bg:#ffffff;--bg2:#f2f2f2;--card2:#f5f5f5;--wr:0,0,0;--ink:#000000;--muted:#555555;--faint:#8a8a8a;--brand-soft:rgba(0,0,0,.07)}
+.vjoin[data-venue="roundtwo"]{--brand:#2b2b2b;--brand-hi:#c9c9c9;--br-rgb:43,43,43;--hi-rgb:201,201,201;--g1:#4a4a4a;--g2:#2b2b2b;--g3:#0d0d0d}
+/* Round Two: flat black with a white inner outline, so it reads apart from AER's soft black gradient */
+.vmark.v-roundtwo{padding:3px 14px;background:#000;box-shadow:0 6px 18px rgba(0,0,0,.25),inset 0 0 0 3px #000,inset 0 0 0 4.5px #fff}.vmark.v-roundtwo img{height:34px}
+.vmark.big.v-roundtwo img{height:56px}
+.vmark.sm.v-roundtwo{padding:2px 9px;box-shadow:inset 0 0 0 2px #000,inset 0 0 0 3px #fff}.vmark.sm.v-roundtwo img{height:20px}.clubchip .vmark.sm.v-roundtwo img{height:20px}
+.wmark.w-roundtwo{padding:0 14px;background:#000;box-shadow:inset 0 0 0 3px #000,inset 0 0 0 4.5px #fff}.wmark.w-roundtwo img{height:34px}
+.splash .v-roundtwo img{background:#000;box-shadow:inset 0 0 0 5px #000,inset 0 0 0 7px #fff;padding:calc(var(--cw)*.06) calc(var(--cw)*.12)}
+:root:not([data-theme="light"]) .vsrow[data-v="roundtwo"]{--vc:#e6e6e6}
 /* every club's logo card is the same size wherever it shows; the logo sits centred inside it */
 .vmark,.wmark{box-sizing:border-box;grid-template:minmax(0,1fr)/minmax(0,1fr);width:76px!important;min-width:0!important;height:46px!important;padding:5px 10px!important}
 .wmark{width:92px!important;height:56px!important;padding:7px 12px!important}
@@ -1030,7 +1041,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=83"></script>
+<script src="app.js?v=84"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
