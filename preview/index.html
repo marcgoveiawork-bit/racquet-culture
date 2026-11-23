@@ -518,6 +518,11 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 .chip.st-pending{background:rgba(255,199,107,.14);color:#ffc76b}.chip.st-disputed{background:var(--bad-bg);color:var(--bad)}.chip.st-reviewed{background:rgba(var(--hi-rgb),.2);color:var(--brand-pale)}.chip.st-confirmed{background:var(--good-bg);color:var(--good)}
 .mrow.disp{border-color:rgba(255,138,155,.35)}
 .macts{display:flex;gap:14px;margin-top:4px}
+.macts{flex-wrap:wrap;row-gap:4px}
+.btn.link.dangerl{color:var(--bad)}
+.hby{margin-top:4px}
+.histnote{margin:-6px 0 12px}
+.eteams .slot{width:100%}
 /* Score entry: a labelled column for each team */
 .timerow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a69fc0' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:18px;padding-right:38px;color-scheme:dark}
@@ -1064,9 +1069,9 @@ a.btn{text-decoration:none}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--brand-hi)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--brand-hi)" stop-opacity="0"/></linearGradient></defs></svg>
 
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
-<script src="config.js?v=67"></script>
+<script src="config.js?v=68"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=90"></script>
+<script src="app.js?v=92"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
