@@ -795,6 +795,16 @@ a.btn{text-decoration:none}
 .vmark.sm.v-aer{padding:2px 10px}.vmark.sm.v-aer img{height:16px}.clubchip .vmark.sm.v-aer img{height:16px}
 .wmark.w-aer{padding:0 16px;background:linear-gradient(135deg,#2a2a2a,#111 60%,#000);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}.wmark.w-aer img{height:22px}
 .splash .v-aer img{width:min(220px,56vw)}
+[data-theme="light"] .splash .v-aer img{filter:invert(1)}
+:root[data-venue="coplay"]{--brand:#0b46c9;--brand-hi:#b5d334;--br-rgb:11,70,201;--hi-rgb:181,211,52;--brand-pale:#dce6ff;--brand-hi2:#d4ea6e;--g1:#2a63e0;--g2:#0b46c9;--g3:#022a86;--sh1:#06349a;--sh2:#03226a;--splash-d:#021a52;--splash-l:#eef3ff;--pop-rgb:10,30,80;--bg-rgb:4,14,40;--dock-rgb:8,22,58;--bgl-rgb:244,247,255;--ln-rgb:40,80,170}
+:root[data-venue="coplay"]:not([data-theme="light"]){--bg:#040e28;--bg2:#071637;--card:#0b1d45;--card2:#102654;--ink:#f3f6ff;--muted:#a9b6d6;--faint:#6b7aa0;--brand-soft:rgba(181,211,52,.14)}
+:root[data-venue="coplay"][data-theme="light"]{--brand-hi:#0237a7;--hi-rgb:2,55,167;--bg:#f4f7ff;--bg2:#e7edfb;--card2:#eef2fc;--wr:2,40,120;--ink:#0a1633;--muted:#4d5b7c;--faint:#8592b0;--brand-soft:rgba(2,55,167,.08)}
+.vjoin[data-venue="coplay"]{--brand:#0b46c9;--brand-hi:#b5d334;--br-rgb:11,70,201;--hi-rgb:181,211,52;--g1:#2a63e0;--g2:#0b46c9;--g3:#022a86}
+.vmark.v-coplay{padding:3px 16px;background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:0 6px 18px rgba(2,55,167,.3),inset 0 0 0 1px rgba(181,211,52,.5)}.vmark.v-coplay img{height:28px}
+.vmark.big.v-coplay img{height:48px}
+.vmark.sm.v-coplay{padding:2px 10px}.vmark.sm.v-coplay img{height:17px}.clubchip .vmark.sm.v-coplay img{height:17px}
+.wmark.w-coplay{padding:0 14px;background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:inset 0 0 0 1px rgba(181,211,52,.55)}.wmark.w-coplay img{height:24px}
+.splash .v-coplay img{width:min(240px,60vw);box-sizing:content-box;padding:18px 30px;border-radius:999px;background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:0 10px 30px rgba(2,55,167,.35),inset 0 0 0 2px rgba(181,211,52,.6)}
 .lbtxt{font-style:normal;font-weight:800;font-size:13px;letter-spacing:.02em;color:#1b1b1b}
 /* the club switcher in the top bar: swipe left and right, tap a club to go there */
 .vswitch{display:flex;align-items:center;gap:8px;min-width:0;max-width:calc(100vw - 170px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none;padding:4px 6px 4px 2px;margin:-4px 0;-webkit-mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent)}
@@ -938,7 +948,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=75"></script>
+<script src="app.js?v=76"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
