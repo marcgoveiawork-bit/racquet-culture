@@ -156,6 +156,9 @@ input:focus-visible{outline:none}
 /* Welcome splash */
 .splash{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;text-align:center;padding:24px;background:radial-gradient(70% 60% at 50% 40%,var(--splash-d),var(--bg));animation:sOut 2s ease forwards}
 .splash img{width:min(300px,70vw);height:auto;animation:sLogo 2s var(--ease) forwards}
+/* every club opens on its logo inside a rounded card in the club's colours (Sunday and Floresta have the card drawn into their logo files) */
+.splash .v-rc img,.splash .v-aer img,.splash .v-coplay img{--cw:min(260px,64vw);box-sizing:border-box;width:var(--cw);height:auto;aspect-ratio:600/330;object-fit:contain;padding:calc(var(--cw)*.1) calc(var(--cw)*.13);border-radius:calc(var(--cw)*.08)}
+.splash .v-rc img{background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289);padding:calc(var(--cw)*.07) calc(var(--cw)*.12)}
 .splash .s1{margin-top:26px;color:var(--muted);font-size:15px;animation:rise .8s var(--ease) .2s both}
 .splash .s2{margin-top:6px;font:500 30px/1.2 var(--display);animation:rise .8s var(--ease) .32s both}
 @keyframes sOut{0%{opacity:0}10%{opacity:1}78%{opacity:1}100%{opacity:0;visibility:hidden}}
@@ -199,6 +202,12 @@ input:focus-visible{outline:none}
 .opt.big{flex-direction:column;align-items:flex-start;padding:20px}
 .opt.big .ock{position:absolute;top:16px;right:16px}
 .opt.big .oi{width:54px;height:54px;border-radius:16px}.opt.big .oi svg{width:30px;height:30px}
+.wfind{display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:rgba(255,255,255,.6);transition:border-color .25s,background .25s}
+.wfind:focus-within{border-color:rgba(220,245,90,.6);background:rgba(255,255,255,.1)}
+.wfind svg{width:19px;height:19px;flex:none}
+.wfind input{flex:1;min-width:0;width:auto;height:100%;margin:0;padding:0;border:0!important;border-radius:0;background:none!important;box-shadow:none!important;outline:0;color:#fff;font:500 16px var(--body)}
+.wfind input::placeholder{color:rgba(255,255,255,.5)}
+.wcourt[hidden]{display:none}.wnone{margin:6px 0;color:rgba(255,255,255,.6);font-size:14px}
 .wfoot{display:flex;gap:10px;align-items:center;padding-top:10px}
 .wfoot .btn{flex:1}
 .avbig{width:132px;height:132px;margin:22px auto 6px;position:relative}
@@ -794,8 +803,7 @@ a.btn{text-decoration:none}
 .vmark.big.v-aer img{height:46px}
 .vmark.sm.v-aer{padding:2px 10px}.vmark.sm.v-aer img{height:16px}.clubchip .vmark.sm.v-aer img{height:16px}
 .wmark.w-aer{padding:0 16px;background:linear-gradient(135deg,#2a2a2a,#111 60%,#000);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}.wmark.w-aer img{height:22px}
-.splash .v-aer img{width:min(220px,56vw)}
-[data-theme="light"] .splash .v-aer img{filter:invert(1)}
+.splash .v-aer img{background:linear-gradient(135deg,#2a2a2a,#111 60%,#000);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
 :root[data-venue="coplay"]{--brand:#0b46c9;--brand-hi:#b5d334;--br-rgb:11,70,201;--hi-rgb:181,211,52;--brand-pale:#dce6ff;--brand-hi2:#d4ea6e;--g1:#2a63e0;--g2:#0b46c9;--g3:#022a86;--sh1:#06349a;--sh2:#03226a;--splash-d:#021a52;--splash-l:#eef3ff;--pop-rgb:10,30,80;--bg-rgb:4,14,40;--dock-rgb:8,22,58;--bgl-rgb:244,247,255;--ln-rgb:40,80,170}
 :root[data-venue="coplay"]:not([data-theme="light"]){--bg:#040e28;--bg2:#071637;--card:#0b1d45;--card2:#102654;--ink:#f3f6ff;--muted:#a9b6d6;--faint:#6b7aa0;--brand-soft:rgba(181,211,52,.14)}
 :root[data-venue="coplay"][data-theme="light"]{--brand-hi:#0237a7;--hi-rgb:2,55,167;--bg:#f4f7ff;--bg2:#e7edfb;--card2:#eef2fc;--wr:2,40,120;--ink:#0a1633;--muted:#4d5b7c;--faint:#8592b0;--brand-soft:rgba(2,55,167,.08)}
@@ -804,7 +812,7 @@ a.btn{text-decoration:none}
 .vmark.big.v-coplay img{height:48px}
 .vmark.sm.v-coplay{padding:2px 10px}.vmark.sm.v-coplay img{height:17px}.clubchip .vmark.sm.v-coplay img{height:17px}
 .wmark.w-coplay{padding:0 14px;background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:inset 0 0 0 1px rgba(181,211,52,.55)}.wmark.w-coplay img{height:24px}
-.splash .v-coplay img{width:min(240px,60vw);box-sizing:content-box;padding:18px 30px;border-radius:999px;background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:0 10px 30px rgba(2,55,167,.35),inset 0 0 0 2px rgba(181,211,52,.6)}
+.splash .v-coplay img{background:linear-gradient(135deg,#2a63e0,#0237a7 60%,#022a86);box-shadow:inset 0 0 0 2px rgba(181,211,52,.6)}
 .lbtxt{font-style:normal;font-weight:800;font-size:13px;letter-spacing:.02em;color:#1b1b1b}
 /* the club switcher in the top bar: swipe left and right, tap a club to go there */
 .vswitch{display:flex;align-items:center;gap:8px;min-width:0;max-width:calc(100vw - 170px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none;padding:4px 6px 4px 2px;margin:-4px 0;-webkit-mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent)}
@@ -860,6 +868,49 @@ a.btn{text-decoration:none}
 .rcclub{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .rchead{display:flex;align-items:center;gap:10px}.vmark.sm{height:30px;border-radius:9px}.vmark.sm img{height:22px}.vmark.sm.v-rc{padding:3px 6px}.vmark.sm.v-sunday{padding:3px 8px}.vmark.sm.v-sunday img{height:20px}
 .clubchips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}.clubchip{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:14px;border:1px solid rgba(var(--wr),.1);background:rgba(var(--wr),.05);color:var(--ink);font:inherit;cursor:pointer}.clubchip .vmark.sm{height:28px;box-shadow:none}.clubchip .vmark.sm img{height:20px}.clubchip .vmark.sm.v-sunday img{height:18px}.clubchip b{font-size:15px;font-weight:800}.clubchip i{font-style:normal;font-size:11px;font-weight:700;color:var(--muted)}.clubchip .crole{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-hi)}.clubchip:active{transform:scale(.97)}
+/* club switcher: the club you're in stays put, the others glide past beside it */
+.vswitch{overflow:visible!important;scroll-snap-type:none!important;-webkit-mask:none!important;mask:none!important;gap:10px!important;padding:4px 0!important}
+.vcur{position:relative;flex:none;z-index:1}
+.vcur .vmark{transition:transform .45s var(--spring),box-shadow .35s ease}
+.vcaret{position:absolute;right:-5px;bottom:-5px;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;background:var(--ball);color:#1b1b1b;box-shadow:0 0 0 2px var(--bg);transition:transform .45s var(--spring)}
+.vcaret svg{width:12px;height:12px}
+@media (hover:hover){.vcur:hover .vmark{transform:translateY(-2px) scale(1.04)}.vcur:hover .vcaret{transform:rotate(180deg)}}
+.vcur:active .vmark{transform:scale(.95)}
+.vrun{position:relative;flex:1;min-width:0;overflow:hidden;padding:4px 0;margin:-4px 0;-webkit-mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent);mask:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 22px),transparent)}
+.vtrack{display:flex;width:max-content;animation:vglide calc(var(--n)*4.5s) linear infinite}
+.vset{display:flex;gap:8px;padding:0 8px 0 6px}
+.vrun:hover .vtrack,.vrun.hold .vtrack{animation-play-state:paused}
+.vrun .vbtn{opacity:.6;transform:scale(.84)}
+@media (hover:hover){.vrun .vbtn:hover{opacity:1;transform:scale(.94);filter:none}}
+@keyframes vglide{to{transform:translateX(-50%)}}
+.calm .vtrack{animation:none}.calm .vrun{overflow-x:auto;scrollbar-width:none}.calm .vrun::-webkit-scrollbar{display:none}.calm .vset[aria-hidden]{display:none}
+@media (prefers-reduced-motion:reduce){.vtrack{animation:none}.vrun{overflow-x:auto;scrollbar-width:none}.vset[aria-hidden]{display:none}}
+/* Switch club pop-up: every club in full colour */
+.vslist{display:grid;gap:10px;margin-top:14px}
+.vsrow{position:relative;display:flex;align-items:center;gap:14px;width:100%;padding:12px 14px;border-radius:18px;border:1px solid var(--line);background:rgba(var(--wr),.04);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:opacity .6s var(--ease),transform .45s var(--spring),border-color .3s ease,box-shadow .4s ease,background .3s ease}
+.vsrow[hidden]{display:none}
+.vsrow .vmark{flex:none;transition:transform .45s var(--spring)}
+.vsrow .grow{flex:1;min-width:0}.vsrow b{display:block;font-size:15.5px}.vsrow small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.vsrow .go{font-size:22px;color:var(--muted);transition:transform .35s var(--spring),color .3s}
+.vstag{display:inline-block;margin-top:6px;padding:3px 9px;border-radius:999px;font-style:normal;font-size:11.5px;font-weight:700;background:rgba(220,245,90,.16);color:var(--ball)}
+[data-theme="light"] .vstag{background:rgba(120,140,0,.12);color:#5d6b00}
+.vstag.here{background:color-mix(in srgb,var(--vc) 22%,transparent);color:var(--ink)}
+.vsrow.on{border-color:color-mix(in srgb,var(--vc) 70%,var(--line));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--vc) 45%,transparent)}
+.vsrow .vdot{position:static;flex:none;width:10px;height:10px;border-radius:50%;background:var(--ball);box-shadow:0 0 8px var(--ball)}
+.vsrow.near,.vsrow:focus-visible{outline:none;border-color:color-mix(in srgb,var(--vc) 75%,var(--line));background:color-mix(in srgb,var(--vc) 14%,transparent);box-shadow:0 10px 28px color-mix(in srgb,var(--vc) 35%,transparent);transform:translateY(-2px)}
+.vsrow.near .vmark{transform:scale(1.05)}.vsrow.near .go{transform:translateX(3px);color:var(--ink)}
+@media (hover:hover){.vsrow:hover{border-color:color-mix(in srgb,var(--vc) 75%,var(--line));background:color-mix(in srgb,var(--vc) 14%,transparent);box-shadow:0 10px 28px color-mix(in srgb,var(--vc) 35%,transparent);transform:translateY(-2px)}.vsrow:hover .vmark{transform:scale(1.06) rotate(-2deg)}.vsrow:hover .go{transform:translateX(4px);color:var(--ink)}}
+.vsrow:active{transform:scale(.98)}
+.vsnone{margin:4px 2px}
+:root:not([data-theme="light"]) .vsrow[data-v="aer"]{--vc:#9a9a9a}
+/* every club's logo card is the same size wherever it shows; the logo sits centred inside it */
+.vmark,.wmark{box-sizing:border-box;grid-template:minmax(0,1fr)/minmax(0,1fr);width:76px!important;min-width:0!important;height:46px!important;padding:5px 10px!important}
+.wmark{width:92px!important;height:56px!important;padding:7px 12px!important}
+.vmark.big{width:140px!important;height:84px!important;padding:10px 18px!important}
+.vmark.sm{width:50px!important;height:30px!important;padding:3px 6px!important}
+.clubchip .vmark.sm{width:46px!important;height:28px!important}
+.vmark.v-floresta,.wmark.w-floresta{padding:2px!important}.vmark.v-sunday,.wmark.w-sunday{padding-top:4px!important;padding-bottom:4px!important}
+.vmark img,.wmark img{width:100%!important;height:100%!important;min-width:0;min-height:0;object-fit:contain}
 /* ============ My Padel's own pages (sign-in, first-time questions): the My Padel blue ============ */
 :root[data-venue="mp"]{--brand:#1d589a;--brand-hi:#3d8be0;--br-rgb:29,88,154;--hi-rgb:61,139,224;--brand-pale:#bcd8f7;--brand-hi2:#2f74c4;--g1:#2265ae;--g2:#1d589a;--g3:#123c6c;--sh1:#14243d;--sh2:#0c1729;--splash-d:#10335c;--splash-l:#dce9f8;--pop-rgb:16,28,48;--bg-rgb:11,18,32;--dock-rgb:16,26,44;--bgl-rgb:243,247,252;--ln-rgb:20,60,110}
 :root[data-venue="mp"]:not([data-theme="light"]){--bg:#0b1220;--bg2:#0f1829;--card:#131e33;--card2:#19263f;--ink:#f1f5fb;--muted:#9fb0c9;--faint:#64748f;--brand-soft:rgba(61,139,224,.16)}
@@ -948,7 +999,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=76"></script>
+<script src="app.js?v=78"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

@@ -1389,8 +1389,32 @@ async function wFinish(){
 /* ================= App views ================= */
 const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
 function paintVenues(){const el=$('vswitch');if(!el)return;
- el.innerHTML=VENUES.map(v=>{const on=v.id===VID,n=on?0:unreadAt(v.id);return`<button type="button" class="vbtn${on?' on':''}" data-act="venue" data-v="${v.id}" aria-label="${esc(v.name)}${on?', you are here':n?', new messages':''}"${on?' aria-current="true"':''} title="${esc(v.name)}">${vMark(v)}${n?'<span class="vdot" aria-hidden="true"></span>':''}</button>`}).join('');
- const cur=el.querySelector('.vbtn.on');if(cur&&el.scrollWidth>el.clientWidth)el.scrollLeft=Math.max(0,cur.offsetLeft-8)}
+ /* the club you're in stays put on the left (tap it for every club); the other clubs glide past beside it */
+ const cur=VEN(),rest=VENUES.filter(v=>v.id!==VID);
+ const one=(v,dup)=>{const n=unreadAt(v.id);return`<button type="button" class="vbtn" data-act="venue" data-v="${v.id}"${dup?' aria-hidden="true" tabindex="-1"':` aria-label="${esc(v.name)}${n?', new messages':''}"`} title="${esc(v.name)}">${vMark(v)}${n?'<span class="vdot" aria-hidden="true"></span>':''}</button>`};
+ el.innerHTML=`<button type="button" class="vbtn on vcur" data-act="venueAll" aria-label="${esc(cur.name)}, you are here. Switch club" aria-haspopup="dialog" title="Switch club">${vMark(cur)}<span class="vcaret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>`
+  +(rest.length?`<div class="vrun"><div class="vtrack" style="--n:${rest.length}"><div class="vset">${rest.map(v=>one(v)).join('')}</div><div class="vset" aria-hidden="true">${rest.map(v=>one(v,1)).join('')}</div></div></div>`:'');
+ const run=el.querySelector('.vrun');if(run){let t=0;const hold=()=>{run.classList.add('hold');clearTimeout(t);t=setTimeout(()=>run.classList.remove('hold'),2600)};run.addEventListener('touchstart',hold,{passive:true});run.addEventListener('focusin',hold)}
+}
+/* Every club in one pop-up: search, then tap to switch */
+function openVenues(){tick();
+ openSheet(`<h2>Switch club</h2><p class="muted small">Every court. One app.</p>
+  <div class="search" style="margin-top:14px">${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
+  <div class="vslist" id="vsL">${VENUES.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
+   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
+  <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
+  requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
+  const q=bg.querySelector('#vsQ');q.oninput=()=>{const w=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let k=0;
+   qsa('.vsrow',bg).forEach(r=>{const ok=w.every(x=>r.dataset.find.includes(x));r.hidden=!ok;if(ok)k++});
+   const no=bg.querySelector('#vsNone');no.hidden=!!k;no.textContent=k?'':'No venues match “'+q.value.trim()+'” yet.';vsNear()};
+  /* phones: the club nearest the middle of the list glows as you scroll, like the rest of the app */
+  const sh=bg.querySelector('.sheet');let raf=0;const vsNear=()=>{raf=0;if(matchMedia('(hover:hover)').matches||calm())return;
+   const sr=sh.getBoundingClientRect(),max=sh.scrollHeight-sh.clientHeight,pr=max>0?sh.scrollTop/max:.5,mid=sr.top+80+(sr.height-160)*pr;let best=null,bd=1e9;
+   qsa('.vsrow:not([hidden])',bg).forEach(r=>{const b=r.getBoundingClientRect(),d=Math.abs((b.top+b.bottom)/2-mid);if(d<bd){bd=d;best=r}});
+   qsa('.vsrow.near',bg).forEach(r=>{if(r!==best)r.classList.remove('near')});if(best)best.classList.add('near')};
+  sh.addEventListener('scroll',()=>{if(!raf)raf=requestAnimationFrame(vsNear)},{passive:true});setTimeout(vsNear,400);
+ });
+}
 /* "an admin at Racquet Culture", or "an admin at Racquet Culture, a player here" when they are at another club */
 /* "an admin at Sunday", "a player at Racquet Culture": their role at the club they are looking at */
 function roleWords(){const r=roleOf(S.uid),w=k=>k==='dev'?'the developer':k==='owner'?'an owner':k==='admin'?'an admin':'a '+k;
@@ -2406,6 +2430,8 @@ const ACT={
  clubRank(v){closeSheet(true);if(v===VID)return go('rank');if(!isMember(S.uid,v)){view.tab='rank';return venueSignIn(v)}tick();setVenue(v,'rank')},
  /* clubs */
  venue(v){switchVenue(v)},
+ venueAll(){openVenues()},
+ venueGo(v){closeSheet();if(v!==VID)setTimeout(()=>switchVenue(v),calm()?0:220)},
  authVenue(v){if(!VENUES.some(x=>x.id===v)||v===VID)return;VID=v;ls.set('rc_venue',v);applyVenue();tick();paintAuthVenue()},
  /* bookings */
  bkCourt(v){const bk=bkState();bk.court=v;bk.sel=null;render()},
@@ -2612,7 +2638,7 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  $('wPick').textContent=pick?'Pick a court to begin':'';$('wPick').hidden=!pick;
  $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
  $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
-  :pick?VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
+  :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
    +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
   :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
  $('wFoot').textContent='My Padel · V'+APP_VER;
@@ -2620,6 +2646,10 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  if($('wIn'))$('wIn').onclick=()=>{tick();showAuth('in')};
  if($('wUp'))$('wUp').onclick=()=>{tick();showAuth('up')};
  if($('wDemoNew'))$('wDemoNew').onclick=demoNewPlayer;
+ if($('wFind')){const f=$('wFind');f.oninput=()=>{const q=f.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let n=0;
+  qsa('#wCourts [data-find]').forEach(b=>{const ok=q.every(w=>b.dataset.find.includes(w));b.hidden=!ok;if(ok)n++});
+  let no=$('wNone');if(!n&&!no){no=document.createElement('p');no.id='wNone';no.className='wnone';f.closest('.wfind').after(no)}
+  if(no){no.hidden=!!n;no.textContent=n?'':'No venues match “'+f.value.trim()+'” yet.'}}}
  $('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=true;closeSheet(true);el.hidden=false;el.scrollTop=0;
 }
 function showPicker(){showWelcome('pick')}
