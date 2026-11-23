@@ -709,7 +709,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 .demobar .dseg{padding:3px}.demobar .dseg>button{padding:6px 12px;font-size:12.5px}.demobar .dseg>button[aria-checked="true"]{background:var(--brand,#7b5cff);color:#fff}
 .demopick{display:grid;gap:10px;margin-top:14px}.demopick .btn{flex-direction:column;align-items:flex-start;text-align:left;padding:14px 16px;height:auto;gap:2px}.demopick .btn span{font-weight:400;font-size:12.5px;opacity:.8;white-space:normal}
 @media (max-width:560px){.demobar{flex-wrap:wrap}.demobar .dbtns{width:100%}.demobar .dbtns .btn{flex:1}}
-@media (max-width:560px){.demobar .dbtns .dseg{flex:1;display:flex}.demobar .dseg>button{flex:1;padding:6px 4px;font-size:12px}.demobar .dbtns .btn{flex:none}}
+@media (max-width:560px){.demobar .dbtns{flex-wrap:wrap}.demobar .dbtns .dseg{flex:1 1 100%;display:flex}.demobar .dseg>button{flex:1 1 auto;padding:6px 3px;font-size:11.5px;white-space:nowrap}.demobar .dbtns .btn{flex:1 1 100%}}
 .demobar .dreset{background:none;border:0;padding:0;font:inherit;font-weight:700;color:var(--brand-hi,#a78bfa);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .pod .ptags{display:flex;justify-content:center;margin:2px 0 1px}.pod .ptags .chip{font-size:9.5px;padding:2px 7px;margin:0}
 a.btn{text-decoration:none}
@@ -926,7 +926,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=72"></script>
+<script src="app.js?v=73"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
