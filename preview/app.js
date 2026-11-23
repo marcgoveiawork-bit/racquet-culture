@@ -636,6 +636,9 @@ function buildDemo(you,rank='dev'){
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
  Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
+ /* Pro is invite only: the strong demo players were invited into Pro by each club's owner when the demo starts */
+ const proBy={rc:surya.id,sunday:sOwner.id,floresta:fOwner.id,aer:aOwner.id},proAt=new Date(now-DAYS*864e5).toISOString();
+ all.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];if(!L||p.id===you.id)return;const k=Math.max(+L.start||0,(p._skill&&p._skill[sp])||0);if(k<SPORTS[sp].cut[1])return;p.pro=p.pro||{};VENUES.forEach(v=>{p.pro[v.id]=p.pro[v.id]||{};p.pro[v.id][sp]={by:proBy[v.id]||surya.id,at:proAt}})}));
  return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id}}};
 }
 let demoPrev=null;
@@ -804,7 +807,7 @@ function applyMatch(R,m,ensure){
  const [ga,gb]=totals(m.sets),share=ga+gb?ga/(ga+gb):.5,mult=.8+.8*Math.abs(share-.5);
  const out={};
  [[m.a,sa,ea],[m.b,1-sa,1-ea]].forEach(([team,s,e])=>team.forEach(sl=>{if(!sl.uid)return;const E=R[sl.uid],k=sp.K*(E.n<5?2:E.n<15?1.4:1),before=E.r;
-  E.r=clampL(m.sport,E.r+k*mult*(s-e));if(E.cap!=null&&E.r>E.cap)E.r=E.cap;const d=E.r-before;E.n++;if(s===1)E.w++;else if(s===0)E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
+  E.r=clampL(m.sport,E.r+k*mult*(s-e));if(E.cap!=null&&E.r>E.cap)E.r=E.cap;if(E.pcap!=null&&E.r>E.pcap)E.r=E.pcap;const d=E.r-before;E.n++;if(s===1)E.w++;else if(s===0)E.l++;E.last=d;E.hist.push({id:m.id,d,r:E.r,date:m.date});out[sl.uid]=d}));
  return{d:out,ea,ta,tb};
 }
 const okMatch=m=>m&&SPORTS[m.sport]&&Array.isArray(m.a)&&Array.isArray(m.b)&&m.a.length&&m.b.length&&(m.winner==='a'||m.winner==='b'||m.winner==='draw');
@@ -827,22 +830,34 @@ const TIER_KEYS=['beginner','intermediate','pro'],LV_CLOSE=0.1;
 const r2=x=>Math.round(x*100)/100;
 const capFor=(sp,t)=>{const i=TIER_KEYS.indexOf(t);return i<2?r2(SPORTS[sp].cut[i]-.01):null};
 const dropTo=(sp,t)=>r2(SPORTS[sp].bands[t][1]-.2);
-function levelEvents(){const ev=[];S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];((L&&Array.isArray(L.adj))?L.adj:[]).forEach(a=>{if(a&&isFinite(+a.r)&&a.at)ev.push({sp,id:p.id,r:+a.r,cap:a.cap==null?null:+a.cap,at:a.at,kind:a.kind,date:isoIST(Date.parse(a.at))})})}));(S.conduct||[]).forEach(c=>{const pn=penOf(c);if(pn&&c.at)ev.push({sp:c.sport,id:c.user,delta:-pn,at:c.at,kind:c.kind,date:isoIST(Date.parse(c.at))})});return ev.sort((x,y)=>x.at.localeCompare(y.at))}
+/* Pro is invite only. Everyone starts no higher than Intermediate and can climb to the top of it, but no further on their own.
+   Only an owner (at their own club) or the developer can invite a player into the Pro ranking at a club. The invite is saved
+   on the player's profile as pro[club][sport] = {by, at} and replayed with the games: from then on their level is free and starts
+   from at least the bottom of Pro. Removing it replays them capped at the top of Intermediate again. */
+const proOf=(id,sp,v=VID)=>{const p=prof(id);return p&&p.pro&&p.pro[v]&&p.pro[v][sp]||null};
+const canPro=(v=VID)=>isDev()||isOwner(S.uid,v);
+const proCap=sp=>capFor(sp,'intermediate');
+function proLockSheet(sp){const n=sp?SPORTS[sp].name.toLowerCase()+' ':'';
+ openSheet(`<div style="text-align:center"><div class="lockbig" aria-hidden="true">${ICON.lock}</div><h2 style="margin-top:10px">Pro is invite only</h2>
+  <p class="muted" style="margin-top:8px">You need to start at Intermediate and work your way up to Pro.</p>
+  <p class="small muted" style="margin-top:10px">Win games to climb the ${n}Intermediate ranking. The club owner picks players from the top and invites them to join the Pro ranking.</p></div>
+  <button class="btn brand wide" style="margin-top:18px" data-act="closeSheet">Got it</button>`)}
+function levelEvents(){const ev=[];S.profiles.forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp];((L&&Array.isArray(L.adj))?L.adj:[]).forEach(a=>{if(a&&isFinite(+a.r)&&a.at)ev.push({sp,id:p.id,r:+a.r,cap:a.cap==null?null:+a.cap,at:a.at,kind:a.kind,date:isoIST(Date.parse(a.at))})})}));(S.conduct||[]).forEach(c=>{const pn=penOf(c);if(pn&&c.at)ev.push({sp:c.sport,id:c.user,delta:-pn,at:c.at,kind:c.kind,date:isoIST(Date.parse(c.at))})});S.profiles.forEach(p=>{const pv=p.pro&&p.pro[VID];if(pv)SP_KEYS.forEach(sp=>{const x=pv[sp];if(x&&x.at)ev.push({sp,id:p.id,pro:true,at:x.at,kind:'pro',date:isoIST(Date.parse(x.at))})})});return ev.sort((x,y)=>x.at.localeCompare(y.at))}
 /* Admin-confirmed reports knock a little off the player's level in that sport */
 const PEN={noshow:{padel:.15,pickleball:.1},late:{padel:.05,pickleball:.03}};
 const penOf=c=>c&&PEN[c.kind]&&PEN[c.kind][c.sport]||0;
 /* The tier a player was in before their latest drop (they can never be capped below a tier they never left) */
 function dropFrom(sp,id){const p=prof(id),L=p&&p.levels&&p.levels[sp];const d=((L&&L.adj)||[]).filter(a=>a.kind==='drop').pop();return d?d.from:null}
 /* Offer to move up: only for a capped player who is within LV_CLOSE of the next tier and hasn't just said stay */
-function moveUpOffer(sp){const E=S.R[sp]&&S.R[sp][S.uid];if(!E||E.cap==null)return null;const t=tierOf(sp,E.r),i=TIER_KEYS.indexOf(t);if(i>1)return null;
+function moveUpOffer(sp){const E=S.R[sp]&&S.R[sp][S.uid];if(!E||E.cap==null)return null;const t=tierOf(sp,E.r),i=TIER_KEYS.indexOf(t);if(i>1||(i===1&&E.pcap!=null))return null;
  const next=SPORTS[sp].cut[i];if(E.r<next-LV_CLOSE-1e-9)return null;if(ls.get('rc_lvstay_'+S.uid+'_'+sp,-1)===E.n)return null;return{sp,t,nt:TIER_KEYS[i+1],next,r:E.r}}
 function rate(){
  const R={},D={};SP_KEYS.forEach(sp=>R[sp]={});S.ST=statusMap();
- const mk=(sp,id,l)=>R[sp][id]={r:l,start:l,n:0,w:0,l:0,hist:[],last:0};
+ const mk=(sp,id,l)=>{const pc=proCap(sp);l=Math.min(l,pc);return R[sp][id]={r:l,start:l,n:0,w:0,l:0,hist:[],last:0,pcap:pc}};
  S.profiles.filter(p=>inVenue(p)).forEach(p=>SP_KEYS.forEach(sp=>{const L=p.levels&&p.levels[sp],vs=p.vstart&&p.vstart[VID]&&p.vstart[VID][sp];if(L&&isFinite(+L.start))mk(sp,p.id,clampL(sp,vs!=null&&isFinite(+vs)?vs:L.start))}));
  const ev=levelEvents();let ei=0;
  const evFirst=(e,m)=>e.date<(m.date||'')||(e.date===m.date&&e.at<=(m.at||''));
- const applyEv=e=>{const E=R[e.sp]&&R[e.sp][e.id];if(!E)return;const before=E.r;if(e.delta!=null){E.r=clampL(e.sp,E.r+e.delta)}else{E.r=clampL(e.sp,e.r);E.cap=e.cap}E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
+ const applyEv=e=>{const E=R[e.sp]&&R[e.sp][e.id];if(!E)return;const before=E.r;if(e.pro){E.pcap=null;E.cap=null;E.r=Math.max(E.r,SPORTS[e.sp].cut[1])}else if(e.delta!=null){E.r=clampL(e.sp,E.r+e.delta)}else{E.r=clampL(e.sp,e.r);E.cap=e.cap}if(E.pcap!=null&&E.r>E.pcap)E.r=E.pcap;E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
  S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{while(ei<ev.length&&evFirst(ev[ei],m))applyEv(ev[ei++]);D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
  while(ei<ev.length)applyEv(ev[ei++]);
  S.R=R;S.D=D;
@@ -1186,6 +1201,7 @@ function showApp(){$('welcome').hidden=true;$('auth').hidden=true;$('wiz').hidde
 /* ================= Profile set-up ================= */
 let W=null,wLock=false;
 const ICON={
+ lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.7" r="1.1" fill="currentColor" stroke="none"/></svg>',
  padel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="14.5" cy="9.5" rx="6" ry="6.8" transform="rotate(40 14.5 9.5)"/><path d="M10.2 14.2 4 20.4"/><path d="M5.3 17.7l1.2 1.2"/><circle cx="13" cy="8" r=".6" fill="currentColor"/><circle cx="16" cy="9" r=".6" fill="currentColor"/><circle cx="14" cy="11.4" r=".6" fill="currentColor"/></svg>',
  pickleball:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><g fill="currentColor" stroke="none"><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="7" r="1"/><circle cx="12" cy="17" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/><circle cx="8.5" cy="8.5" r=".9"/><circle cx="15.5" cy="8.5" r=".9"/><circle cx="8.5" cy="15.5" r=".9"/><circle cx="15.5" cy="15.5" r=".9"/></g></svg>',
  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
@@ -1238,7 +1254,7 @@ function wSteps(){
 }
 const ANIM_OF=new Map([[ICON.padel,'swing'],[ICON.pickleball,'roll'],[ICON.mail,'ring'],[ICON.nomail,'shake'],[ICON.sunrise,'rise'],[ICON.sun,'spin'],[ICON.noon,'pulse'],[ICON.sunset,'sink'],[ICON.moon,'rock'],[ICON.any,'spin']]);
 function opt(o){const role=o.multi?'aria-pressed':'aria-checked',a=o.icon?ANIM_OF.get(o.icon)||(/M6 19v-3/.test(o.icon)?'bars':'pop'):'';
- return `<button type="button" class="opt${o.big?' big':''}${W&&W.jp===o.act+'|'+o.v?' play':''}" ${o.multi?'':'role="radio"'} ${role}="${!!o.on}" data-act="${o.act}" data-v="${esc(o.v)}">${o.icon?`<span class="oi" data-a="${a}">${o.icon}</span>`:''}<span class="ot"><b>${esc(o.title)}</b>${o.sub?`<span>${esc(o.sub)}</span>`:''}</span><span class="ock">${ICON.check}</span></button>`}
+ return `<button type="button" class="opt${o.big?' big':''}${o.locked?' locked':''}${W&&W.jp===o.act+'|'+o.v?' play':''}" ${o.multi?'':'role="radio"'} ${role}="${!!o.on}" data-act="${o.act}" data-v="${esc(o.v)}">${o.icon?`<span class="oi" data-a="${a}">${o.icon}</span>`:''}<span class="ot"><b>${esc(o.title)}</b>${o.sub?`<span>${esc(o.sub)}</span>`:''}</span><span class="ock">${ICON.check}</span></button>`}
 function courtSVG(side){
  const on=s=>side===s||side==='either'?' on':'';
  return `<svg class="cdiag" viewBox="0 0 220 150" aria-hidden="true">
@@ -1270,7 +1286,7 @@ function wStep(key){
   body:`<div class="courtpick">${courtSVG(d.side)}<div class="opts" role="radiogroup">${SIDES.map(s=>opt({act:'wSide',v:s[0],on:d.side===s[0],title:s[1],sub:s[2]})).join('')}</div></div>`};
  if(kind==='band'){const q=d.q[sp],B=S_.bands;
   return{eyebrow:S_.name+' level',title:`What's your ${S_.name.toLowerCase()} level?`,sub:'Start with a rough idea. A few quick questions will pin down your number.',valid:!!q.band,single:1,
-   body:`<div class="opts" role="radiogroup">${[['beginner','Beginner','Learning the shots and the rules'],['intermediate','Intermediate','Regular rallies, starting to play tactically'],['pro','Expert','Strong, competitive, tournament player']].map((b,i)=>opt({act:'wBand',v:sp+'|'+b[0],on:q.band===b[0],title:b[1],sub:`${b[2]} · ${fmtL(B[b[0]][0],1)} to ${fmtL(B[b[0]][1],1)}`,icon:ICON.bars(i+1)})).join('')}</div>`}}
+   body:`<div class="opts" role="radiogroup">${[['beginner','Beginner','Learning the shots and the rules'],['intermediate','Intermediate','Regular rallies, starting to play tactically'],['pro','Pro','Invite only · start at Intermediate and work your way up']].map((b,i)=>opt({act:'wBand',v:sp+'|'+b[0],on:q.band===b[0],title:b[1],locked:b[0]==='pro',sub:b[0]==='pro'?b[2]:`${b[2]} · ${fmtL(B[b[0]][0],1)} to ${fmtL(B[b[0]][1],1)}`,icon:b[0]==='pro'?ICON.lock:ICON.bars(i+1)})).join('')}</div>`}}
  if(kind==='q'){const q=d.q[sp],list=QS[sp][q.band],it=list[+qi],cur=q.ans[+qi];
   return{eyebrow:`${S_.name} level · Question ${+qi+1} of ${list.length}`,title:it[0],sub:'',valid:cur!==undefined,single:1,
    body:`<div class="opts" role="radiogroup">${it[1].map((a,j)=>opt({act:'wAns',v:sp+'|'+qi+'|'+j,on:cur!==undefined&&q.pick&&q.pick[+qi]===j,title:a[0]})).join('')}</div><p class="qhint">Answer for how you play most of the time.</p>`}}
@@ -1313,7 +1329,7 @@ function wGo(delta){W.dir=delta;W.i+=delta;window.scrollTo({top:0,behavior:calm(
 function wPickThenNext(){if(wLock)return;wLock=true;tick();setTimeout(()=>{wLock=false;const s=wStep(wSteps()[W.i]);if(s.valid)wGo(1)},380)}
 async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
- Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]=Object.assign({start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
+ Object.entries(d.q).forEach(([sp,q])=>{if(q.band==='pro'){q.band='';q.ans=[]}if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]=Object.assign({start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
  const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true,gender:d.gender||p.gender||''});
  if(W.mode==='setup'&&!p.setup&&!np.home&&!(np.venues||[]).length)np.nohome=true;
  if(np.vstart)Object.keys(d.q).forEach(sp=>{Object.values(np.vstart).forEach(o=>{if(o)delete o[sp]})});
@@ -1438,7 +1454,7 @@ function vRank(){
   <div class="ctrls">${seg('rs','Sport',SP_KEYS.map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}
   ${seg('rg','Players',[['all','All'],['male','Men'],['female','Women']],g,'rankGender')}</div>
-  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises. Scores under review are left out until an admin checks them.</p>
+  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. ${t==='pro'?'Pro is invite only: the club owner picks players and invites them in.':'Players move up a ranking as their level rises.'} Scores under review are left out until an admin checks them.</p>
   ${podium}<div class="list">${(pod.length>=3?ranked.slice(3).map((x,i)=>row(x,i+3)):ranked.map(row)).join('')}</div>
   ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Add a score and the ranking fills up.</div>`:''}
   ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b><span class="nmt">${esc(x.p.name)}</span>${tag(x.id)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
@@ -1885,6 +1901,7 @@ function msgView(g){
    return{i:MI.shield,t:toMe?`${esc(fn)} (admin) replied`:`${g.from===S.uid?'You':esc(fn)} replied to ${esc(pl?first(pl):'a player')}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:toMe?`<button class="btn ghost sm" data-act="admReply" data-v="${g.id}">Reply</button>`:isAdmin()&&g.from!==S.uid?`<button class="btn link small" data-act="admReply" data-v="${g.id}">Reply too</button>`:''}}
   case 'demo_access':return{i:MI.shield,t:d.on?'You have demo access':'Demo access removed',p:d.on?'You’ve been given access to demo mode. You can switch to it in Settings to see new updates before they go live.':`${esc(fn)} removed your demo access.`,a:d.on?'<button class="btn ghost sm" data-act="go" data-v="settings">Open Settings</button>':''};
+  case 'pro':{const sn=SPORTS[d.sport]?SPORTS[d.sport].name:'',cl=esc(venueOf(vidOf(g)).short);return d.on?{i:MI.shield,t:`You’re invited into the ${sn} Pro ranking`,p:`${esc(fn)} picked you for the ${sn.toLowerCase()} Pro ranking at ${cl}. Your level there now starts from ${fmtL(SPORTS[d.sport].cut[1],1)} and can keep rising.`,a:'<button class="btn ghost sm" data-act="go" data-v="rank">See the rankings</button>'}:{i:MI.shield,t:`You’re back in ${sn} Intermediate`,p:`${esc(fn)} moved you out of the ${sn.toLowerCase()} Pro ranking at ${cl}. Keep winning and you can be invited back.`}}
   case 'role':return{i:MI.shield,t:(d.role==='coach'?'You’re now a coach':d.role==='owner'?'You’re now an owner':d.role==='admin'?'You’re now an admin':'You’re now a player')+' at '+esc(venueOf(vidOf(g)).short),p:d.role==='coach'?`${esc(fn)} made you a ${esc(d.title||'coach')}. You can now block slots for coaching on the Book page${d.auto?'.':'; an admin confirms each block.'}`:d.role==='owner'?`${esc(fn)} made you an owner. You can do everything an admin does, and give or remove admin access.`:d.role==='admin'?`${esc(fn)} made you an admin. You can confirm bookings, set prices, block slots and review scores.`:`${esc(fn)} changed your account back to a player account.`,a:d.role==='player'?'':'<button class="btn ghost sm" data-act="go" data-v="book">Open the Book page</button>'};
   case 'report':{const tp=prof(d.target),tn=tp?esc(tp.name):'a player',done=S.conduct.find(c=>c.report===d.rep),pn=penOf({kind:d.k,sport:d.sport});
    const what=d.k==='noshow'?'didn’t show up':'showed up late',src=d.match?S.matches.find(x=>x.id===d.match):null,bb=d.booking?S.bookings.find(x=>x.id===d.booking):null;
@@ -2041,7 +2058,8 @@ function lvSettingRow(sp){
  const E=S.R[sp][S.uid],S_=SPORTS[sp];if(!E)return'';const t=tierOf(sp,E.r),i=TIER_KEYS.indexOf(t),off=moveUpOffer(sp);
  const lower=TIER_KEYS.slice(0,i);
  return `<div class="lvset"><div class="lvtop"><b>${S_.name}</b><span class="chip t-${t}">${TIER_NAME[t]} · <span class="num">${fmtL(E.r)}</span></span></div>
-  ${E.cap!=null?`<p class="small muted">You chose a lower level. You won't move up to ${TIER_NAME[TIER_KEYS[i+1]]} on your own: win games to get within ${LV_CLOSE.toFixed(1)} of ${fmtL(S_.cut[i],1)} and you can choose to move up.</p>`:''}
+  ${i===1&&E.pcap!=null?`<p class="small muted">Pro is invite only. Win games to climb Intermediate${E.r>=E.pcap-1e-9?' (you’re at the top)':''}; the club owner invites players into the Pro ranking.</p><div class="cta" style="margin-top:8px"><button class="btn ghost sm" data-act="proLock" data-v="${sp}">${ICON.lock}<span>Move up to Pro</span></button></div>`:''}
+  ${E.cap!=null&&!(i===1&&E.pcap!=null)?`<p class="small muted">You chose a lower level. You won't move up to ${TIER_NAME[TIER_KEYS[i+1]]} on your own: win games to get within ${LV_CLOSE.toFixed(1)} of ${fmtL(S_.cut[i],1)} and you can choose to move up.</p>`:''}
   ${off?`<div class="cta" style="margin-top:8px"><button class="btn brand sm" data-act="lvUp" data-v="${sp}">Move up to ${TIER_NAME[off.nt]}</button></div>`:''}
   ${lower.length?`<div class="cta" style="margin-top:8px">${lower.reverse().map(k=>`<button class="btn ghost sm" data-act="lvDrop" data-v="${sp}|${k}">Drop to ${TIER_NAME[k]}</button>`).join('')}</div>`:(E.cap==null?`<p class="small muted">You're in the first tier, so there's no lower level to drop to.</p>`:'')}</div>`;
 }
@@ -2210,6 +2228,17 @@ function roleCard(id){const p=prof(id),clubs=isDev()?VENUES.map(v=>v.id):[VID];
     ${vn.book.kind==='slots'?`<label>Their coaching blocks</label>${seg('cauto_'+v,'Coaching blocks',[['1|'+v,'Go straight through'],['0|'+v,'Need admin OK']],(c.auto?'1':'0')+'|'+v,'coachAuto')}`:''}`:''}</div>`};
  return `<div class="card rolecard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[roleOf(S.uid)]} · account type</span>
   <p class="small muted" style="margin-top:6px">Everyone starts as a player. A role only counts at the club it's given for.</p>${clubs.map(row).join('')}</div>`}
+/* Owners (at their club) and the developer: invite a player into the Pro ranking here, one switch per sport */
+function proCard(id){const p=prof(id);if(!canPro()||!p||!p.setup||!inVenue(p))return'';const sps=(p.sports||[]).filter(sp=>S.R[sp][id]);if(!sps.length)return'';
+ return `<div class="card rolecard procard" style="margin-top:12px"><span class="eyebrow">${ROLE_NAME[roleOf(S.uid)]} · Pro ranking</span>
+  <p class="small muted" style="margin-top:6px">Pro is invite only. Players climb to the top of Intermediate on their own; you pick who joins Pro at ${esc(VEN().name)}.</p>
+  ${sps.map(sp=>{const on=!!proOf(id,sp),x=proOf(id,sp),by=x&&prof(x.by);return`<div class="setline" style="margin-top:10px"><div><b>${SPORTS[sp].name} Pro</b><p class="small muted">${on?`In the Pro ranking${by?` · invited by ${esc(x.by===S.uid?'you':first(by))}`:''}`:`${esc(first(p))} is at ${fmtL(S.R[sp][id].r)}. Inviting them starts them at ${fmtL(SPORTS[sp].cut[1],1)} or higher.`}</p></div><button class="switch" role="switch" aria-checked="${on}" data-act="proSet" data-v="${id}|${sp}" aria-label="${SPORTS[sp].name} Pro ranking"></button></div>`}).join('')}</div>`}
+async function setPro(v){const [id,sp]=v.split('|'),p=prof(id);if(!p||!SPORTS[sp]||!canPro())return;const on=!proOf(id,sp);
+ const np=JSON.parse(JSON.stringify(p));np.pro=np.pro||{};np.pro[VID]=np.pro[VID]||{};
+ if(on)np.pro[VID][sp]={by:S.uid,at:new Date().toISOString()};else{delete np.pro[VID][sp];if(!Object.keys(np.pro[VID]).length)delete np.pro[VID]}
+ try{await Store.saveProfile(np)}catch(e){return toast('Could not save. Check your connection and try again.')}
+ upsert(S.profiles,np);rate();notify([{to:id,kind:'pro',data:{on,sport:sp,venue:VID}}]);playerSheet(id);
+ toast(on?`${first(p)} is now in the ${SPORTS[sp].name.toLowerCase()} Pro ranking`:`${first(p)} is back in Intermediate ${SPORTS[sp].name.toLowerCase()}`)}
 function demoRow(id){if(!isDev()||isDev(id))return'';const on=canDemo(id);
  return `<div class="card rolecard democard" style="margin-top:12px"><span class="eyebrow">Developer · demo mode</span><div class="setline" style="margin-top:10px"><div><b>Demo access</b><p class="small muted">${on?`${esc(first(prof(id)))} can open demo mode from Settings to try new updates before they go live.`:'Let them try new updates in demo mode before they go live.'}</p></div><button class="switch" role="switch" aria-checked="${on}" data-act="demoAcc" data-v="${id}" aria-label="Demo access"></button></div></div>`}
 async function setDemoAcc(id){const on=!canDemo(id);
@@ -2230,7 +2259,7 @@ function playerSheet(id){
   <div class="grid2" style="margin-top:16px">${(p.sports||[]).map(sp=>{const e=S.R[sp][id];if(!e)return'';const t=tierOf(sp,e.r),rk=rankOf(sp,id);
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd>${id!==S.uid&&canSeePhone(id)?`<dt>Phone</dt><dd>${phoneLink(id)}</dd>`:''}<dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
-  ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}${id!==S.uid?demoRow(id):''}
+  ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}${id!==S.uid?proCard(id):''}${id!==S.uid?demoRow(id):''}
   ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));syncGliders();
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
@@ -2435,7 +2464,7 @@ const ACT={
  wInv(v){W.jp='wInv|'+v;W.d.invites=v==='yes';paintWiz(false);wPickThenNext()},
  wTime(v){W.jp='wTime|'+v;const a=W.d.times;W.d.times=a.includes(v)?a.filter(x=>x!==v):[...a,v];tick();paintWiz(false)},
  wSide(v){W.jp='wSide|'+v;W.d.side=v;paintWiz(false);wPickThenNext()},
- wBand(v){W.jp='wBand|'+v;const [sp,b]=v.split('|'),q=W.d.q[sp];if(q.band!==b){q.band=b;q.ans=[];q.pick=[]}paintWiz(false);wPickThenNext()},
+ wBand(v){const [sp,b]=v.split('|'),q=W.d.q[sp];if(b==='pro'){tick();return proLockSheet(sp)}W.jp='wBand|'+v;if(q.band!==b){q.band=b;q.ans=[];q.pick=[]}paintWiz(false);wPickThenNext()},
  wAns(v){W.jp='wAns|'+v;const [sp,qi,j]=v.split('|'),q=W.d.q[sp];q.pick=q.pick||[];q.pick[+qi]=+j;q.ans[+qi]=QS[sp][q.band][+qi][1][+j][1];paintWiz(false);wPickThenNext()},
  go(v){go(v)},
  rankSport(v){view.rs=v;const e=S.R[v][S.uid];view.rt=e?tierOf(v,e.r):view.rt;render()},
@@ -2493,7 +2522,7 @@ const ACT={
  aTime(){timeSheet()},
  kudos(v){kudosSheet(v)},
  mgTab(v){view.mg=v;render()},lvDrop(v){const [sp,k]=v.split('|');lvDropSheet(sp,k)},lvDropYes(v){const [sp,k]=v.split('|');lvDropYes(sp,k)},
- lvUpAsk(v){lvUpSheet(v)},lvUp(v){lvUpSheet(v)},lvUpYes(v){lvUpYes(v)},lvStay(v){const E=S.R[v][S.uid];ls.set('rc_lvstay_'+S.uid+'_'+v,E?E.n:0);closeSheet();toast('Staying put. We’ll ask again after your next game.');render()},
+ proLock(v){tick();proLockSheet(v)},proSet(v){setPro(v)},lvUpAsk(v){lvUpSheet(v)},lvUp(v){lvUpSheet(v)},lvUpYes(v){lvUpYes(v)},lvStay(v){const E=S.R[v][S.uid];ls.set('rc_lvstay_'+S.uid+'_'+v,E?E.n:0);closeSheet();toast('Staying put. We’ll ask again after your next game.');render()},
  async addFriend(id){const p=prof(id),r=relWith(id);if(r.st==='incoming')return ACT.reqAccept(r.r.id);if(r.st!=='none')return;
   const open=p.friends==='open',now=new Date().toISOString(),q={id:'q_'+rid(),from:S.uid,to:id,status:open?'accepted':'pending',at:now,resp:open?now:null};
   try{await Store.addReq(q)}catch(e){return toast(e.code==='cooldown'?'You can send a new request 5 days after a rejection.':'Could not send the request. Check your connection.')}

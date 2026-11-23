@@ -190,6 +190,9 @@ input:focus-visible{outline:none}
 .opt[aria-checked="true"],.opt[aria-pressed="true"]{border-color:var(--brand-hi);background:linear-gradient(135deg,rgba(var(--hi-rgb),.2),rgba(var(--br-rgb),.08));box-shadow:0 0 0 1px var(--brand-hi) inset,0 12px 30px rgba(var(--br-rgb),.28)}
 .opt[aria-checked="true"] .oi,.opt[aria-pressed="true"] .oi{background:var(--brand-hi);color:#fff;transform:rotate(-6deg) scale(1.06)}
 .opt[aria-checked="true"] .ock,.opt[aria-pressed="true"] .ock{background:var(--ball);border-color:var(--ball);color:var(--on-ball)}
+.opt.locked{border-style:dashed;opacity:.82}.opt.locked .oi{background:rgba(var(--wr),.06);color:var(--muted)}.opt.locked .oi svg{width:22px;height:22px}.opt.locked .ock{visibility:hidden}
+.lockbig{width:64px;height:64px;margin:6px auto 0;border-radius:20px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand-hi)}.lockbig svg{width:32px;height:32px}
+.lvset .btn svg,.procard .btn svg{width:15px;height:15px;vertical-align:-2px;margin-right:4px}
 .opt[aria-checked="true"] .ock svg,.opt[aria-pressed="true"] .ock svg{opacity:1;transform:none}
 .opt:active{transform:scale(.985)}
 @media (hover:hover){.opt:not([aria-checked="true"]):not([aria-pressed="true"]):hover{border-color:color-mix(in srgb,var(--glow) 60%,var(--line2));box-shadow:0 8px 24px rgba(var(--br-rgb),.22);transform:translateY(-2px)}}
@@ -935,7 +938,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=74"></script>
+<script src="app.js?v=75"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
