@@ -103,3 +103,6 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - Switching to a club you haven't played at (top-bar switcher, club chips, other clubs card) joins it on the spot with no sign-in, shows its loading screen, a "Yet to play" card on Home (`yetCard`) and a toast. The old club sign-in page is gone.
 - Signed-in players opening the app see the court picker each time (clubs they haven't joined say "New to you · yet to play"). Sign out goes back to the opening screen.
 - Demo: the court picker has "Demo: try the first-time sign-in as a new player", and the demo bar has a **New player** option (`demoNew` → `demoNewPlayer`), which runs the whole sign-up, questions and court pick as a made-up player (`d_new`); any email and password work.
+
+### Bottom bar centred on phones (V1.5demo, preview only, 23 Nov 2026)
+- On screens 420px wide or less, the five dock buttons share the width equally (`flex:1 1 0`), so Add score sits in the exact middle and the Home pill is the same size as the others. The tennis ball's top margin is -17px there so the "Add score" label lines up with the other labels. Wider screens are unchanged.

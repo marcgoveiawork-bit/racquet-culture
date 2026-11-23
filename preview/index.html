@@ -408,7 +408,7 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 @keyframes tbHit{0%{transform:scale(1)}18%{transform:scale(.8,1.14)}45%{transform:scale(1.14,.88) rotate(160deg)}70%{transform:scale(.97,1.03) rotate(300deg)}100%{transform:scale(1) rotate(360deg)}}
 .dock>.glider{background:rgba(var(--hi-rgb),.28)}
 .dock>.glider{background:rgba(var(--hi-rgb),.28);box-shadow:inset 0 0 0 1px rgba(var(--hi-rgb),.45)}
-@media (max-width:420px){.dock>button{min-width:0;padding:8px 9px}.dock{width:calc(100% - 20px);justify-content:space-between}}
+@media (max-width:420px){.dock{width:calc(100% - 20px)}.dock>button{flex:1 1 0;min-width:0;padding:8px 2px}.dock>button.add{padding-top:2px}.dock>button.add .tball{margin:-17px 0 -1px}}
 /* Sheet (bottom on phones, centred on computers) */
 .sheetbg{position:fixed;inset:0;z-index:80;background:rgba(5,3,12,.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .35s ease both}
 .sheet{width:100%;max-width:560px;max-height:88vh;overflow:auto;background:linear-gradient(180deg,var(--sh1),var(--sh2));border:1px solid var(--line2);border-bottom:0;border-radius:26px 26px 0 0;padding:10px 20px calc(22px + var(--safe-b));box-shadow:0 -20px 60px rgba(0,0,0,.5);animation:sheetUp .55s var(--ease) both}
