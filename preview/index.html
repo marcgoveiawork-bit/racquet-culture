@@ -838,6 +838,23 @@ a.btn{text-decoration:none}
 .rcclub{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .rchead{display:flex;align-items:center;gap:10px}.vmark.sm{height:30px;border-radius:9px}.vmark.sm img{height:22px}.vmark.sm.v-rc{padding:3px 6px}.vmark.sm.v-sunday{padding:3px 8px}.vmark.sm.v-sunday img{height:20px}
 .clubchips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:10px}.clubchip{display:inline-flex;align-items:center;gap:8px;padding:4px 12px 4px 4px;border-radius:14px;border:1px solid rgba(var(--wr),.1);background:rgba(var(--wr),.05);color:var(--ink);font:inherit;cursor:pointer}.clubchip .vmark.sm{height:28px;box-shadow:none}.clubchip .vmark.sm img{height:20px}.clubchip .vmark.sm.v-sunday img{height:18px}.clubchip b{font-size:15px;font-weight:800}.clubchip i{font-style:normal;font-size:11px;font-weight:700;color:var(--muted)}.clubchip .crole{font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--brand-soft);color:var(--brand-hi)}.clubchip:active{transform:scale(.97)}
+/* ============ My Padel's own pages (sign-in, first-time questions): the My Padel blue ============ */
+:root[data-venue="mp"]{--brand:#1d589a;--brand-hi:#3d8be0;--br-rgb:29,88,154;--hi-rgb:61,139,224;--brand-pale:#bcd8f7;--brand-hi2:#2f74c4;--g1:#2265ae;--g2:#1d589a;--g3:#123c6c;--sh1:#14243d;--sh2:#0c1729;--splash-d:#10335c;--splash-l:#dce9f8;--pop-rgb:16,28,48;--bg-rgb:11,18,32;--dock-rgb:16,26,44;--bgl-rgb:243,247,252;--ln-rgb:20,60,110}
+:root[data-venue="mp"]:not([data-theme="light"]){--bg:#0b1220;--bg2:#0f1829;--card:#131e33;--card2:#19263f;--ink:#f1f5fb;--muted:#9fb0c9;--faint:#64748f;--brand-soft:rgba(61,139,224,.16)}
+:root[data-venue="mp"][data-theme="light"]{--bg:#f3f7fc;--bg2:#e7eef8;--card2:#edf2f9;--wr:20,60,110;--ink:#0f1b2d;--muted:#51607a;--faint:#8592a8;--brand-soft:rgba(29,88,154,.1)}
+.alogo.mp{width:min(200px,60%);border-radius:40px;box-shadow:0 22px 50px rgba(0,0,0,.35)}
+@media (max-width:860px){.alogo.mp{width:110px;border-radius:26px}}
+.mpmini{width:42px;height:42px;border-radius:12px;flex:none;box-shadow:0 6px 16px rgba(var(--br-rgb),.35)}
+.whi{margin:34px 0 0;font-size:17px;color:rgba(255,255,255,.86);animation:rise .7s var(--ease) .3s both}.whi b{color:#fff}
+.whi:not([hidden])+.wpick{margin-top:8px}
+.wnote{margin:34px 0 18px;color:rgba(255,255,255,.72);font-size:15px}
+.welcome .wbig{padding:16px;font-size:16px}
+.welcome .wghost{margin-top:12px;padding:15px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;box-shadow:none}
+.wnew{display:inline-block;margin-top:6px;font-style:normal;font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:3px 9px;border-radius:999px;background:rgba(220,245,90,.16);color:#dcf55a}
+.wlink{margin:10px auto 0;border:0;background:none;color:rgba(255,255,255,.66);font:600 13px var(--body);text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:8px}
+.wwait{display:flex;justify-content:center;gap:8px;margin-top:44px}.wwait i{width:10px;height:10px;border-radius:50%;background:#dcf55a;animation:wDot 1s ease-in-out infinite}.wwait i:nth-child(2){animation-delay:.15s}.wwait i:nth-child(3){animation-delay:.3s}
+@keyframes wDot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-6px)}}
+.yetcard .mi{background:rgba(220,245,90,.16);color:var(--ball)}[data-theme="light"] .yetcard .mi{color:#6b7d00}
 </style>
 </head>
 <body>
@@ -851,7 +868,8 @@ a.btn{text-decoration:none}
     <img class="wlogo" src="brand/icon-512.png" alt="My Padel">
     <h1 class="wname">My Padel</h1>
     <p class="wtag">Every court. One app.</p>
-    <p class="eyebrow wpick">Pick a court to start</p>
+    <p class="whi" id="wHi" hidden></p>
+    <p class="eyebrow wpick" id="wPick" hidden></p>
     <div class="wcourts" id="wCourts"></div>
     <p class="wfoot" id="wFoot"></p>
   </div>
@@ -861,12 +879,12 @@ a.btn{text-decoration:none}
 <section class="auth" id="auth" hidden>
   <div class="aside">
     <svg class="court" viewBox="0 0 400 200" aria-hidden="true"><rect class="draw" x="4" y="4" width="392" height="192" rx="6"/><line class="draw" x1="200" y1="0" x2="200" y2="200"/><line class="draw" x1="60" y1="4" x2="60" y2="196"/><line class="draw" x1="340" y1="4" x2="340" y2="196"/><line class="draw" x1="60" y1="100" x2="340" y2="100"/></svg>
-    <img class="alogo" src="logo.png" alt="Racquet Culture. Play, recover, repeat.">
+    <img class="alogo mp" src="brand/icon-512.png" alt="My Padel">
     <div>
       <p class="atag"><b>Goa's padel and pickleball club.</b>One padel court, one pickleball court and a community that keeps growing.</p>
       <ul class="afeat"><li>Find players at your level</li><li>Log scores, climb the rankings</li><li>Fair points, whoever you play with</li></ul>
     </div>
-    <p class="afoot">Racquet Culture · Goa, India</p>
+    <p class="afoot">My Padel</p>
   </div>
   <div class="amain">
     <div class="acard">
@@ -906,9 +924,9 @@ a.btn{text-decoration:none}
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--brand-hi)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--brand-hi)" stop-opacity="0"/></linearGradient></defs></svg>
 
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
-<script src="config.js?v=64"></script>
+<script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=71"></script>
+<script src="app.js?v=72"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

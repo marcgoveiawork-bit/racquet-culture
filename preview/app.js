@@ -180,6 +180,8 @@ let VID=(()=>{const q=new URLSearchParams(location.search).get('venue'),s=ls.get
 const VEN=()=>venueOf(VID);
 const hasSlots=()=>VEN().book.kind==='slots';
 function applyVenue(){const r=document.documentElement;r.dataset.venue=VID;applyPrefs()}
+/* Sign-in, the first-time questions and the court picker are My Padel's own pages, in the My Padel blue */
+function applyMP(){document.documentElement.dataset.venue='mp';applyPrefs()}
 const COURTS={padel:'Padel · Court 1',pickleball:'Pickleball · Court 1'};
 const courtNos=sp=>VEN().courtNos[sp]||[1];
 const rupees=n=>'₹'+Number(n).toLocaleString('en-IN');
@@ -597,7 +599,7 @@ const DEMO_AS=[['dev','Developer'],['owner','Owner'],['admin','Admin'],['coach',
 const DEMO_RANK={player:0,coach:1,admin:2,owner:3,dev:4};
 const demoRank=()=>demoPrev&&demoPrev.rank||'player',demoOk=r=>DEMO_RANK[r]<=DEMO_RANK[demoRank()],demoAs=()=>DEMO_AS.filter(([k])=>demoOk(k));
 const demoId=r=>{const d=Demo.d;return r==='dev'?d.you:(d.staff[VID]||d.staff.rc)[r]||d.staff.rc[r]};
-const demoRole=()=>{const d=Demo.d;if(!d)return'dev';for(const o of Object.values(d.staff))for(const [k,id] of Object.entries(o))if(id===S.uid)return k;return'dev'};
+const demoRole=()=>{const d=Demo.d;if(!d)return'dev';if(S.uid==='d_new')return'new';for(const o of Object.values(d.staff))for(const [k,id] of Object.entries(o))if(id===S.uid)return k;return'dev'};
 async function demoSwitch(to){const d=Demo.d;if(!d||!demoOk(to))return;const next=demoId(to);if(next===S.uid)return;S.uid=next;await reload();const moved=await ensureVenue();closeSheet(true);A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all'});
  window.scrollTo(0,0);render();celebrate('Now viewing as '+(to==='admin'?'an admin':to==='owner'?'an owner':to==='dev'?'the developer':'a '+to));if(moved)toast(`${first(me())} hasn’t joined that club yet, so you’re back at ${VEN().name}.`,3600)}
 /* Pick how to see the demo: as an ordinary player or as an admin */
@@ -611,10 +613,19 @@ async function startDemo(role){
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
  Demo.d=buildDemo(you,rank);Store=Demo;S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
- splash('Demo: '+lbl(DEMO_AS,role).toLowerCase()+' view',Demo.d.profiles.length+' players · '+VENUES.length+' clubs · '+Demo.d.matches.length+' games');window.scrollTo(0,0);showApp();
- /* picked a club on the opening screen that this account hasn't joined: ask them to sign in there */
- const wp=welcomePick;welcomePick=null;if(wp&&wp!==VID&&!isMember(S.uid,wp))setTimeout(()=>venueSignIn(wp),calm()?300:2100);
+ window.scrollTo(0,0);
+ /* signed in once: now pick a court to begin */
+ showPicker();
 }
+/* Demo: walk through the first-time sign-in as a brand-new player (made up, nothing saved) */
+async function demoNewPlayer(){const d=Demo.d;if(!d)return;tick();
+ d.profiles=d.profiles.filter(p=>p.id!=='d_new');S.uid=null;S.email='';
+ $('welcome').hidden=true;showAuth('up')}
+async function demoAuthDone(name,user,email){const d=Demo.d,base=(email||'').split('@')[0].replace(/[^A-Za-z0-9._-]/g,'')||'new.player';
+ let un=user||base,k=2;while(d.profiles.some(p=>p.username.toLowerCase()===un.toLowerCase()))un=(user||base)+(k++);
+ d.profiles=d.profiles.filter(p=>p.id!=='d_new');
+ d.profiles.push({id:'d_new',username:un,name:name||base.replace(/[._-]+/g,' ').replace(/\b\w/g,c=>c.toUpperCase()),setup:false,demo:true,avatar:null,created:new Date().toISOString(),venues:[],nohome:true});
+ S.uid='d_new';S.email=email||'';busy(false);await reload();applyMP();startWiz('setup')}
 function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for every demo account. Your real account is not touched.</p>
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
 async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);S.uid=demoId(role);closeSheet(true);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
@@ -626,8 +637,8 @@ async function exitDemo(){
 }
 
 /* ---------- Switching clubs ----------
-   One account works at every club. The first time someone opens a club they haven't joined, they sign in there
-   with the same email and password; after that they switch freely. */
+   One account works at every club. Players sign in once to My Padel; opening any club after that goes straight
+   to its loading screen and in, with no more sign-ins. At a club they're new to, they're yet to play. */
 async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=firstClub();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
 async function setVenue(vid,tab){
  VID=vid;ls.set('rc_venue',vid);applyVenue();closeSheet(true);A=null;view.bk=null;Object.assign(view,{tab:VIEWS[tab]?tab:'home',rs:null,rt:null,ib:'all',mg:'all'});
@@ -637,42 +648,12 @@ function switchVenue(vid){if(!VENUES.some(v=>v.id===vid))return;if(vid===VID)ret
  if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid,view.tab)}
 /* Join a club: their level there starts from the level they have now, so a strong player doesn't start from scratch */
 async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};(p.sports||[]).forEach(sp=>{const e=S.R[sp]&&S.R[sp][S.uid];if(e)vs[sp]=r2(e.r)});
- const np=Object.assign({},p,{venues:[...new Set([...venuesOf(p),vid])],vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
- try{await Store.saveProfile(np)}catch(e){if(!quiet)toast('Could not join. Check your connection and try again.');return false}
+ const fresh=p.nohome&&!p.home,np=Object.assign({},p,{venues:fresh?[vid]:[...new Set([...venuesOf(p),vid])],home:fresh?vid:p.home,vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
+ if(fresh)delete np.nohome;try{await Store.saveProfile(np)}catch(e){if(!quiet)toast('Could not join. Check your connection and try again.');return false}
  upsert(S.profiles,np);return true}
-/* A full sign-in page for the club, in its own colours, like the main sign-in page */
-function closeVenueSignIn(){const el=$('vjPage');if(el)el.hidden=true;applyVenue();$('app').hidden=false;render()}
-function venueSignIn(vid){const v=venueOf(vid),demo=Store.mode==='demo',from=VEN();closeSheet(true);
- document.documentElement.dataset.venue=vid;applyPrefs();
- let el=$('vjPage');if(!el){el=document.createElement('section');el.id='vjPage';el.className='auth vjpage';document.body.appendChild(el)}
- el.innerHTML=`<div class="aside">
-   <svg class="court" viewBox="0 0 400 200" aria-hidden="true"><rect class="draw" x="4" y="4" width="392" height="192" rx="6"/><line class="draw" x1="200" y1="0" x2="200" y2="200"/><line class="draw" x1="60" y1="4" x2="60" y2="196"/><line class="draw" x1="340" y1="4" x2="340" y2="196"/><line class="draw" x1="60" y1="100" x2="340" y2="100"/></svg>
-   <img class="alogo" src="${esc(v.splash)}" alt="${esc(v.name)}" style="${v.id==='rc'?'':'width:min(300px,72%)'}">
-   <div><p class="atag"><b>${esc(v.name)}</b>${esc(v.area)} · ${esc(v.courts)}.</p><ul class="afeat"><li>Your profile, friends and messages come with you</li><li>Its own rankings, starting from your current level</li><li>Sign in once, then switch clubs any time</li></ul></div>
-   <p class="afoot">My Padel · ${esc(v.name)}</p></div>
-  <div class="amain"><div class="acard">
-   <h1>Sign in to ${esc(v.name)}</h1>
-   <p class="muted">Use the same email and password you always use on My Padel. You only do this once.</p>
-   <form id="vjForm" novalidate>
-    <label for="vjEmail">Email</label><input id="vjEmail" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="${esc(S.email||'')}"${S.email&&!demo?' readonly':''} placeholder="you@example.com">
-    <label for="vjPass">Password</label><div class="pw"><input id="vjPass" type="password" autocomplete="current-password"><button type="button" class="pwtoggle" id="vjT">Show</button></div>
-    <p class="aerr" id="vjErr" role="alert"></p>
-    <button class="btn brand wide" id="vjBtn" type="submit">Sign in</button>
-    ${demo?`<p class="small muted" style="text-align:center;margin-top:12px">Demo mode: any email and password work.</p>`:''}
-    <button type="button" class="btn ghost wide" id="vjBack" style="margin-top:14px">Back to ${esc(from.name)}</button>
-   </form></div></div>`;
- el.hidden=false;$('app').hidden=true;window.scrollTo(0,0);el.scrollTop=0;
- $('vjT').onclick=()=>{const i=$('vjPass'),sh=i.type==='password';i.type=sh?'text':'password';$('vjT').textContent=sh?'Hide':'Show'};
- $('vjBack').onclick=()=>{tick();closeVenueSignIn()};
- $('vjForm').onsubmit=async e=>{e.preventDefault();const em=$('vjEmail').value.trim(),pw=$('vjPass').value,err=t=>{$('vjErr').textContent=t;buzz([30,40,30])};
-  if(!demo&&!EMAIL_RE.test(em))return err('Enter the email you signed up with.');if(!pw)return err('Enter your password.');
-  const b=$('vjBtn');b.disabled=true;b.textContent='Signing in…';
-  try{if(!demo){const id=await Store.signIn(em,pw);if(id&&id!==S.uid)throw errc('other')}}
-  catch(x){b.disabled=false;b.textContent='Sign in';return err(x.code==='other'?'That’s a different account. Use the email and password you’re signed in with.':'That email and password don’t match. Use the same ones you always use on My Padel.')}
-  if(!await joinVenue(vid)){b.disabled=false;b.textContent='Sign in';return}
-  el.hidden=true;$('app').hidden=false;await setVenue(vid,view.tab);doneTick('Welcome to '+v.name)};
- setTimeout(()=>{const f=$(S.email&&!demo?'vjPass':'vjEmail');if(f&&matchMedia('(hover:hover)').matches)f.focus()},80);
-}
+/* Opening a club for the first time: no sign-in. Join it, show its loading screen and go straight in, yet to play there */
+async function venueSignIn(vid){closeSheet(true);if(!await joinVenue(vid))return;await setVenue(vid,view.tab);newHere()}
+function newHere(){toast(`Welcome to ${VEN().name}! You’re yet to play here. Log your first game to get ranked.`,4200)}
 
 /* ---------- App state ---------- */
 const S={uid:null,cfg:{},conduct:[],phones:{},coaches:{},devs:[],owners:[],profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],R:{padel:{},pickleball:{}},D:{},ST:{}};
@@ -683,7 +664,7 @@ const prof=id=>S.profiles.find(p=>p.id===id)||null;
    Someone can be owner, admin or coach at one club and a normal player at another, until someone with power there promotes them.
    Roles are stored as "userId@club" keys. The developer keeps every power at every club. */
 const firstClub=id=>{const p=prof(id||S.uid);return p&&p.home||'rc'};
-const venuesOf=p=>p?[...new Set([p.home||'rc',...(p.venues||[])])].filter(v=>VENUES.some(x=>x.id===v)):[];
+const venuesOf=p=>p?[...new Set([...(p.nohome&&!p.home?[]:[p.home||'rc']),...(p.venues||[])])].filter(v=>VENUES.some(x=>x.id===v)):[];
 const inVenue=(p,vid=VID)=>venuesOf(p).includes(vid);
 const isMember=(id,vid=VID)=>inVenue(prof(id||S.uid),vid);
 const rk=(id,v=VID)=>(id||S.uid)+'@'+v;
@@ -969,32 +950,33 @@ addEventListener('scroll',()=>{if(!scRaf)scRaf=requestAnimationFrame(onScroll)},
 let authMode='in',fails=0,lockUntil=0,tkT=0,tkSeq=0;
 const UN_RE=/^[A-Za-z0-9._-]+$/;
 /* The demo version is only open to the developer and the players they give demo access to */
-function previewLocked(){$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
+function previewLocked(){$('welcome').hidden=true;applyMP();$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
  $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><img class="alogo" src="brand/icon-192.png" alt="My Padel" style="max-width:120px;border-radius:26px"><h1 style="margin-top:18px">Demo mode is invite only</h1><p class="muted" style="margin-top:8px">This is where new updates are tried out before they go live. Your account doesn't have demo access yet.</p><a class="btn brand wide" style="margin-top:18px" href="../">Go to the app</a><button class="btn ghost wide" style="margin-top:10px" data-act="signOut">Sign out</button><p class="small muted vline">V${esc(APP_VER)}</p></div>`}
-function showAuth(){
- $('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);mountBar();
- $('modeNote').textContent=Store.mode==='live'?'':'Preview mode: accounts and scores are saved on this device only.';
+function showAuth(mode){if(mode)authMode=mode;
+ applyMP();$('welcome').hidden=true;$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);mountBar();window.scrollTo(0,0);
+ $('modeNote').textContent=Store.mode==='demo'?'Demo: you’re trying the first-time sign-in as a new player. Any email and password work, and nothing is saved.':Store.mode==='live'?'':'Preview mode: accounts and scores are saved on this device only.';
  paintAuthVenue();paintAuth(0);
 }
-/* Sign-in page: pick the club. New accounts start there; one account works at every club */
-function paintAuthVenue(){const v=VEN(),el=$('aVenue');
- if(el)el.innerHTML=VENUES.map(x=>`<button type="button" class="vbtn${x.id===VID?' on':''}" data-act="authVenue" data-v="${x.id}" aria-label="${esc(x.name)}" aria-pressed="${x.id===VID}" title="${esc(x.name)}">${vMark(x)}</button>`).join('')+`<span class="small"><b>${esc(v.name)}</b><span class="muted" style="display:block">One account for every club</span></span>`;
- const lg=document.querySelector('#auth .alogo');if(lg){lg.src=v.splash;lg.alt=v.name;lg.style.width=v.id==='rc'?'':'min(300px,72%)'}
- const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>${esc(v.name)}</b>${esc(v.area)} · ${esc(v.courts)}. Sign in with your My Padel account, the same one at every club.`;
- const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='My Padel · '+v.short}
+/* Sign-in page: My Padel's own, one account for every club. Sign in once, then jump between clubs */
+function paintAuthVenue(){const el=$('aVenue');
+ if(el)el.innerHTML=`<img class="mpmini" src="brand/icon-192.png" alt=""><span class="small"><b>My Padel</b><span class="muted" style="display:block">One sign-in for every club</span></span>`;
+ const lg=document.querySelector('#auth .alogo');if(lg){lg.src='brand/icon-512.png';lg.alt='My Padel';lg.classList.add('mp')}
+ const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>Every court. One app.</b>Sign in once to My Padel and play at ${VENUES.map(v=>esc(v.name)).join(', ').replace(/, ([^,]*)$/,' and $1')}.`;
+ const fl=document.querySelector('#auth .afeat');if(fl)fl.innerHTML='<li>Sign in once, then switch courts any time</li><li>Your level and play style come with you</li><li>Each club has its own rankings</li>';
+ const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='My Padel · V'+APP_VER}
 function paintAuth(dir){
  qsa('#authSeg>button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===authMode)));
  const up=authMode==='up';
  $('authPane').innerHTML=`<div class="pane" style="--from:${dir*18}px">
-  <h1>${up?'Join the club':'Welcome back'}</h1>
-  <p class="muted">${up?'Create your account, then set up your player profile.':'Sign in to see the rankings and log your scores.'}</p>
+  <h1>${up?'Join My Padel':'Welcome back'}</h1>
+  <p class="muted">${up?'One account for every club. Next, a few quick questions about your game.':'Sign in once and you can jump between clubs without signing in again.'}</p>
   <form id="aForm" novalidate autocomplete="on">
    ${up?`<label for="aName">Your name</label><input id="aName" name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rhea Fernandes">`:''}
    <label for="aEmail">Email</label>
    <input id="aEmail" name="email" type="email" inputmode="email" autocomplete="${up?'email':'username'}" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="you@example.com">
    ${up?`<label for="aPhone">Phone number</label>
    <div class="phrow">${ccSelect('aCC','+91')}<input id="aPhone" name="tel" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="18" placeholder="98765 43210"></div>
-   <div class="fieldnote"><span>🔒 Only Padel court admins can see your phone number. You can change this in Settings.</span></div>
+   <div class="fieldnote"><span>🔒 Only club admins can see your phone number. You can change this in Settings.</span></div>
    <label for="aUser">Username</label>
    <input id="aUser" name="nickname" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="How other players will see you">
    <div class="fieldnote"><span id="uNote"></span><span id="uCount" class="num">0/100</span></div>`:''}
@@ -1037,6 +1019,7 @@ async function doSignIn(){
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Sign in failed. Refresh the page and try again.');
  busy(true,'Signing in…');
+ if(Store.mode==='demo')return demoAuthDone('','',u);
  try{S.uid=await Store.signIn(u,p)}
  catch(e){busy(false);$('aPass').value='';fails++;
   if(e.code==='confirm')return aerr('Confirm your email first: open the link we sent you, then sign in.');
@@ -1055,6 +1038,7 @@ async function doSignUp(){
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Something went wrong. Refresh the page and try again.');
  busy(true,'Creating your account…');
+ if(Store.mode==='demo')return demoAuthDone(n,u,em);
  try{if(await Store.taken(u))throw errc('taken');ls.set('rc_phone_new',{phone:ph,email:em.toLowerCase()});S.uid=await Store.signUp(n,u,em,p,ph)}
  catch(e){busy(false);
   if(e.code==='taken'){const el=$('uNote');if(el){el.className='bad';el.textContent='This username is already taken. Try another one.'}$('aUser').focus();return aerr('This username is already taken. Try another one.')}
@@ -1125,13 +1109,11 @@ async function enter(fresh){
  /* the theme a player last chose follows them to every device; new players start in light */
  if(p.theme&&p.theme!==prefs.theme)setPref('theme',p.theme);else if(!p.theme&&!p.setup&&prefs.theme!=='light')setPref('theme','light');
  try{S.email=await Store.email()}catch(e){}
- if(!p.setup){if(fresh)splash('Let’s build your player profile',`Welcome, ${first(p)}`);return startWiz('setup')}
- /* players who joined before the Men and Women rankings: ask once for gender */
- if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);return startWiz('gender')}
- if(!inVenue(p)){if(fresh&&Store.mode!=='demo')await joinVenue(VID,true);else await ensureVenue()}
  if(PREVIEW&&Store.mode!=='demo'){if(canDemo())return startDemo(topRole(S.uid));return previewLocked()}
- if(fresh)splash(first(p),greet());
- showApp();maybeAskNotif();
+ if(!p.setup){applyMP();return startWiz('setup')}
+ /* players who joined before the Men and Women rankings: ask once for gender */
+ if(!p.gender&&!ls.get('rc_g_skip_'+p.id,0)){ls.set('rc_g_skip_'+p.id,1);startWiz('gender');W.after='pick';return}
+ showPicker();
 }
 /* Someone else took the username between sign-up and the first sign-in: choose another */
 function pickUsername(p){
@@ -1153,7 +1135,7 @@ function showReset(){
    try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
    catch(e){$('rErr').textContent='Could not update the password. Open the reset link again, or try once more.'}}});
 }
-function showApp(){$('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=false;render();}
+function showApp(){$('welcome').hidden=true;$('auth').hidden=true;$('wiz').hidden=true;applyVenue();$('app').hidden=false;render();}
 
 /* ================= Profile set-up ================= */
 let W=null,wLock=false;
@@ -1196,6 +1178,7 @@ function startWiz(mode,only){
  const p=me();
  W={mode,only:only||null,i:0,dir:1,d:{gender:p.gender||'',avatar:p.avatar||null,sports:[...(p.sports||[])],hand:p.hand||'',invites:p.invites===undefined?null:p.invites,times:[...(p.times||[])],side:p.side||'',levels:JSON.parse(JSON.stringify(p.levels||{})),q:{}}};
  if(mode==='level')W.only.forEach(sp=>W.d.q[sp]={band:'',ans:[]});
+ if(mode==='setup'||$('app').hidden){applyMP();$('welcome').hidden=true}
  $('auth').hidden=true;$('app').hidden=true;$('wiz').hidden=false;window.scrollTo(0,0);closeSheet(true);mountBar();paintWiz();
 }
 function wSteps(){
@@ -1223,12 +1206,12 @@ function wStep(key){
  const d=W.d,[kind,sp,qi]=key.split(':'),S_=sp&&SPORTS[sp];
  if(kind==='avatar'){
   const p=me(),pv=Object.assign({},p,{avatar:d.avatar});
-  return{eyebrow:'Your profile',title:'Add a profile picture',sub:'Upload a photo, or keep the club initials badge. You can change it any time.',valid:true,next:'Continue',
+  return{eyebrow:'Your profile',title:'Add a profile picture',sub:'Upload a photo, or keep your initials badge. You can change it any time.',valid:true,next:'Continue',
    body:`<div class="avbig">${avHTML(pv,132)}</div>
    <label class="upload">${ICON.upload}<span>${d.avatar?'Choose a different photo':'Upload a photo'}</span><input type="file" accept="image/*" id="wPhoto"></label>
-   ${d.avatar?`<p style="text-align:center;margin-top:10px"><button type="button" class="btn link small" data-act="wNoPhoto">Remove photo and use my initials</button></p>`:`<p class="small muted" style="text-align:center;margin-top:12px">No photo? Your initials on club purple look great too.</p>`}`}}
+   ${d.avatar?`<p style="text-align:center;margin-top:10px"><button type="button" class="btn link small" data-act="wNoPhoto">Remove photo and use my initials</button></p>`:`<p class="small muted" style="text-align:center;margin-top:12px">No photo? Your initials look great too.</p>`}`}}
  if(kind==='sports')return{eyebrow:'Your game',title:'Which sports do you play?',sub:'Choose one or both. Each sport has its own level and its own rankings.',valid:d.sports.length>0,
-  body:`<div class="opts two">${SP_KEYS.map(k=>opt({multi:1,big:1,act:'wSport',v:k,on:d.sports.includes(k),title:SPORTS[k].name,sub:k==='padel'?'Our purple court':'Our pickleball court',icon:ICON[k]})).join('')}</div>`};
+  body:`<div class="opts two">${SP_KEYS.map(k=>opt({multi:1,big:1,act:'wSport',v:k,on:d.sports.includes(k),title:SPORTS[k].name,sub:`Levels ${fmtL(SPORTS[k].min,1)} to ${fmtL(SPORTS[k].max,1)}`,icon:ICON[k]})).join('')}</div>`};
  if(kind==='gender')return{eyebrow:'About you',title:'Are you male or female?',sub:'This puts you in the Men or Women rankings. Everyone is always in All.',valid:!!d.gender,single:1,
   body:`<div class="opts" role="radiogroup">${GENDERS.map(g=>opt({act:'wGender',v:g[0],on:d.gender===g[0],title:g[1],sub:g[2],icon:g[3]})).join('')}</div>`};
  if(kind==='hand')return{eyebrow:'Your game',title:'Which hand do you play with?',sub:'Helps partners plan who covers the middle.',valid:!!d.hand,single:1,
@@ -1254,7 +1237,7 @@ function wStep(key){
    <p class="small lockn">Not quite right? Tap <b>Retake</b> to answer again. Once you confirm, your starting level is locked and only your results move it. You can still drop to a lower tier later from your level card.</p>
 </div>`}}
  if(kind==='done'){const p=me();
-  return{eyebrow:'All set',title:`You're on court, ${first(p)}.`,sub:'Your profile is ready. Log your first score to enter the rankings.',valid:true,next:'Enter the club',
+  return{eyebrow:'All set',title:`You're all set, ${first(p)}.`,sub:'Your profile is ready and it works at every club. Next, pick a court to begin.',valid:true,next:'Pick a court',
    body:`<div class="avbig">${avHTML(Object.assign({},p,{avatar:d.avatar}),132)}</div>
    <div class="chips" style="justify-content:center;margin-top:16px">${d.sports.map(sp=>{const v=levelFrom(sp,d.q[sp].band,d.q[sp].ans);return`<span class="chip t-${tierOf(sp,v)}">${SPORTS[sp].name} ${fmtL(v,1)}</span>`}).join('')}
    <span class="chip">${esc(lbl(HANDS,d.hand))}</span><span class="chip">${esc(lbl(SIDES,d.side))}</span><span class="chip">${d.invites?'Open to game invites':'Game invites off'}</span></div>`}}
@@ -1286,14 +1269,14 @@ async function wFinish(){
  const d=W.d,p=me(),levels=Object.assign({},d.levels);
  Object.entries(d.q).forEach(([sp,q])=>{if(q.band&&q.ans.length===QS[sp][q.band].length)levels[sp]=Object.assign({start:levelFrom(sp,q.band,q.ans),band:q.band,at:new Date().toISOString()},p.levels&&p.levels[sp]&&p.levels[sp].adj?{adj:p.levels[sp].adj}:{})});
  const np=Object.assign({},p,{avatar:d.avatar,sports:W.mode==='level'?[...new Set([...d.sports,...W.only])]:d.sports,hand:d.hand,invites:!!d.invites,times:d.times,side:d.side,levels,setup:true,gender:d.gender||p.gender||''});
- if(!np.home){np.home=VID;np.venues=[VID]}
+ if(W.mode==='setup'&&!p.setup&&!np.home&&!(np.venues||[]).length)np.nohome=true;
  if(np.vstart)Object.keys(d.q).forEach(sp=>{Object.values(np.vstart).forEach(o=>{if(o)delete o[sp]})});
  const btn=$('wiz').querySelector('[data-act="wNext"]');if(btn){btn.disabled=true;btn.textContent='Saving…'}
  try{await Store.saveProfile(np)}catch(e){if(btn){btn.disabled=false;btn.textContent='Try again'}return toast('Could not save. Check your connection and try again.')}
  const i=S.profiles.findIndex(x=>x.id===np.id);S.profiles[i]=np;rate();
- const wasSetup=W.mode==='setup';W=null;
- if(wasSetup){splash(first(np),'Welcome to '+VEN().name);view.tab='home'}else{doneTick('Profile updated')}
- showApp();
+ const wasSetup=W.mode==='setup',after=W.after;W=null;
+ if(wasSetup||after==='pick')return showPicker();
+ doneTick('Profile updated');showApp();
 }
 
 /* ================= App views ================= */
@@ -1366,6 +1349,9 @@ function matchRow(m,opts={}){
   ${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
   <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}${Array.isArray(m.extra)?`<div class="xset" title="Extra set, played for fun after the match was decided"><span>${+m.extra[0]}</span><span>${+m.extra[1]}</span></div>`:''}</div></div>`;
 }
+/* New at this club: no games here yet, so not ranked here yet */
+function yetCard(){if(S.uid&&mySports().some(sp=>S.R[sp][S.uid]&&S.R[sp][S.uid].n))return'';
+ return`<button class="card todo hov rv yetcard" data-act="go" data-v="add"><span class="mi">${ICON.bars(1)}</span><span><b>Yet to play at ${esc(VEN().name)}</b><span class="small muted">You’re not ranked here yet. Log your first game at this club and you’ll join its rankings.</span></span><span class="go">›</span></button>`}
 function vHome(){
  const p=me(),ms=S.matches.filter(okMatch).sort(byWhen).reverse(),mine=ms.filter(m=>regsOf(m).includes(S.uid));
  const players=S.profiles.filter(x=>x.setup&&inVenue(x)).length,wk=S.matches.filter(okMatch).filter(m=>m.date>=addDays(today(),-6)).length;
@@ -1373,7 +1359,7 @@ function vHome(){
  const up=myBookings(),toConfirm=pendingBookings().length,todayB=S.bookings.filter(b=>b.date===today()&&isGame(b)&&bkStatus(b)==='confirmed').length;
  return `<div class="card hero rv"><p class="eyebrow">${esc(greet())}</p><h1>${esc(first(p))}, ready to play?</h1>
   <p class="muted" style="margin-top:6px">${esc(VEN().name)} · ${players} player${players===1?'':'s'} · ${wk} game${wk===1?'':'s'} played this week.</p>
-  <div class="cta">${hasSlots()?'<button class="btn ball" data-act="go" data-v="book">Book a court</button>':bookLinkBtn(VEN(),'btn ball')}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${moveUpCard()}
+  <div class="cta">${hasSlots()?'<button class="btn ball" data-act="go" data-v="book">Book a court</button>':bookLinkBtn(VEN(),'btn ball')}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${yetCard()}${moveUpCard()}
   ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
    <div class="astats">${hasSlots()?`<button data-act="go" data-v="book"><b class="num">${toConfirm}</b><span>booking${toConfirm===1?'':'s'} to confirm</span></button><button data-act="go" data-v="book"><b class="num">${todayB}</b><span>game${todayB===1?'':'s'} today</span></button>`:''}<button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
   ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm, invites and bookings in your inbox</span></span><span class="go">›</span></button>`:''}
@@ -1409,7 +1395,7 @@ function vRank(){
   <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. Players move up a ranking as their level rises. Scores under review are left out until an admin checks them.</p>
   ${podium}<div class="list">${(pod.length>=3?ranked.slice(3).map((x,i)=>row(x,i+3)):ranked.map(row)).join('')}</div>
   ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Add a score and the ranking fills up.</div>`:''}
-  ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b><span class="nmt">${esc(x.p.name)}</span>${tag(x.id)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
+  ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b><span class="nmt">${esc(x.p.name)}</span>${tag(x.id)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
 }
 
 /* ---------- Book (courts are booked on Hudle) ---------- */
@@ -2437,7 +2423,7 @@ const ACT={
   const r=$('r-'+v);if(r){r.classList.add('play');setTimeout(()=>r.classList.remove('play'),1000)}},
  demo(){demoChooser()},demoGo(v){startDemo(DEMO_AS.some(x=>x[0]===v)?v:'player')},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
- async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showAuth()},
+ async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showWelcome('start')},
  /* inbox */
  ibTab(v){view.ib=v;render()},
  ibTodo(){view.ib='todo';go('inbox')},
@@ -2497,21 +2483,39 @@ function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeo
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
 
 /* ================= Start ================= */
-const WELCOME_COURTS=VENUES.map(v=>({id:v.id,name:v.name,area:v.area.replace(/, India$/,''),logo:v.logo}));
-/* The opening screen: the My Padel logo and tagline, then the player picks a court */
-let go_on=()=>{},welcomePick=null;
-function showWelcome(then){go_on=then;const el=$('welcome');if(!el)return then();
- $('wCourts').innerHTML=WELCOME_COURTS.map(c=>`<button type="button" class="wcourt" data-court="${esc(c.id)}"><span class="wmark w-${esc(c.id)}"><img src="${esc(c.logo)}" alt=""></span><span><b>${esc(c.name)}</b><small>${esc(c.area)}</small></span><span class="go" aria-hidden="true">›</span></button>`).join('');
+/* My Padel's opening screen. Sign in once at the start; after that, pick a court and go straight in.
+   Picking a club you haven't played at joins it on the spot (no second sign-in) and you start there as yet to play. */
+function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
+ const pick=mode==='pick',p=pick&&me();
+ $('wPick').textContent=pick?'Pick a court to begin':'';$('wPick').hidden=!pick;
+ $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
+ $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
+  :pick?VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
+   +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
+  :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
  $('wFoot').textContent='My Padel · V'+APP_VER;
- qsa('#wCourts [data-court]').forEach(b=>b.onclick=()=>pickCourt(b.dataset.court));
- el.hidden=false;
+ qsa('#wCourts [data-court]').forEach(b=>b.onclick=()=>enterCourt(b.dataset.court));
+ if($('wIn'))$('wIn').onclick=()=>{tick();showAuth('in')};
+ if($('wUp'))$('wUp').onclick=()=>{tick();showAuth('up')};
+ if($('wDemoNew'))$('wDemoNew').onclick=demoNewPlayer;
+ $('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=true;closeSheet(true);el.hidden=false;el.scrollTop=0;
 }
-function pickCourt(v){$('welcome').hidden=true;tick();if(VENUES.some(x=>x.id===v)){VID=v;ls.set('rc_venue',v);applyVenue();welcomePick=v}go_on()}
+function showPicker(){showWelcome('pick')}
+/* Into a court: its loading screen, then straight into the club */
+async function enterCourt(vid){if(!VENUES.some(x=>x.id===vid))return;tick();
+ const isNew=!isMember(S.uid,vid);
+ if(isNew&&!await joinVenue(vid))return;
+ VID=vid;ls.set('rc_venue',vid);applyVenue();$('welcome').hidden=true;
+ try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}
+ A=null;view.bk=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);
+ splash(VEN().name,'Welcome to',VEN());showApp();maybeAskNotif();
+ if(isNew)setTimeout(newHere,calm()?700:2000);
+}
 (async function boot(){
- applyVenue();
+ applyMP();
  try{await Store.init()}catch(e){console.warn(e)}
  let id=null;try{id=await Store.session()}catch(e){}
- const start=async()=>{if(id){S.uid=id;await enter(false)}else showAuth();booted=true;if(recovery)setTimeout(showReset,300)};
- if(recovery)return start();
- showWelcome(start);
+ if(recovery){applyVenue();if(id){S.uid=id;await enter(false)}else showAuth();booted=true;return setTimeout(showReset,300)}
+ if(id){showWelcome('wait');S.uid=id;await enter(false)}else showWelcome('start');
+ booted=true;
 })();
