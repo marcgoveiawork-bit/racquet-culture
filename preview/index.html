@@ -783,6 +783,15 @@ a.btn{text-decoration:none}
 .vmark.sm.v-floresta{padding:2px 10px}.vmark.sm.v-floresta img{height:24px}.clubchip .vmark.sm.v-floresta img{height:24px}
 .wmark.w-floresta{padding:0 16px;background:linear-gradient(135deg,#0a7a45,#005e36 60%,#004a2a)}.wmark.w-floresta img{height:40px}
 .splash .v-floresta img{width:min(260px,64vw)}
+:root[data-venue="aer"]{--brand:#262626;--brand-hi:#7d7d7d;--br-rgb:38,38,38;--hi-rgb:150,150,150;--brand-pale:#e6e6e6;--brand-hi2:#bdbdbd;--g1:#3a3a3a;--g2:#1f1f1f;--g3:#000000;--sh1:#1a1a1a;--sh2:#0d0d0d;--splash-d:#0a0a0a;--splash-l:#efefef;--pop-rgb:24,24,24;--bg-rgb:8,8,8;--dock-rgb:20,20,20;--bgl-rgb:246,246,246;--ln-rgb:60,60,60}
+:root[data-venue="aer"]:not([data-theme="light"]){--bg:#080808;--bg2:#101010;--card:#161616;--card2:#1e1e1e;--ink:#f5f5f5;--muted:#a8a8a8;--faint:#6b6b6b;--brand-soft:rgba(200,200,200,.12)}
+:root[data-venue="aer"][data-theme="light"]{--brand-hi:#111111;--hi-rgb:17,17,17;--bg:#f6f6f6;--bg2:#ececec;--card2:#f0f0f0;--wr:20,20,20;--ink:#111111;--muted:#5a5a5a;--faint:#8e8e8e;--brand-soft:rgba(17,17,17,.08)}
+.vjoin[data-venue="aer"]{--brand:#262626;--brand-hi:#7d7d7d;--br-rgb:38,38,38;--hi-rgb:150,150,150;--g1:#3a3a3a;--g2:#1f1f1f;--g3:#000000}
+.vmark.v-aer{padding:3px 18px;background:linear-gradient(135deg,#2a2a2a,#111 60%,#000);box-shadow:0 6px 18px rgba(0,0,0,.25),inset 0 0 0 1px rgba(255,255,255,.14)}.vmark.v-aer img{height:26px}
+.vmark.big.v-aer img{height:46px}
+.vmark.sm.v-aer{padding:2px 10px}.vmark.sm.v-aer img{height:16px}.clubchip .vmark.sm.v-aer img{height:16px}
+.wmark.w-aer{padding:0 16px;background:linear-gradient(135deg,#2a2a2a,#111 60%,#000);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}.wmark.w-aer img{height:22px}
+.splash .v-aer img{width:min(220px,56vw)}
 .lbtxt{font-style:normal;font-weight:800;font-size:13px;letter-spacing:.02em;color:#1b1b1b}
 /* the club switcher in the top bar: swipe left and right, tap a club to go there */
 .vswitch{display:flex;align-items:center;gap:8px;min-width:0;max-width:calc(100vw - 170px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scrollbar-width:none;padding:4px 6px 4px 2px;margin:-4px 0;-webkit-mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent);mask:linear-gradient(90deg,#000 calc(100% - 18px),transparent)}
@@ -926,7 +935,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=73"></script>
+<script src="app.js?v=74"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
