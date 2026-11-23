@@ -405,8 +405,6 @@ function buildDemo(you,rank='dev'){
  if(!you.gender)you.gender='male';
  you.home=you.home||'rc';you.venues=[you.home];delete you.vstart;
  const all=[you,...ps];
- /* recent games privacy: most share with everyone, some only with friends, a few keep them hidden */
- ps.forEach((p,k)=>{if(k%4===1)p.games='friends';else if(k%7===2)p.games='hidden'});arjun.games='friends';
  if(!you._skill){you._skill={};you._grow={};(you.sports||[]).forEach(sp=>{const L=you.levels&&you.levels[sp];if(L){you._skill[sp]=+L.start;you._grow[sp]=.1}})}
  const sk=(p,sp,t)=>p._skill[sp]+p._grow[sp]*t;
  const setsFor=(sp,aw,close)=>{const lg=()=>Math.min(4,Math.floor(r()*(2+close*4)));let sets;
@@ -987,9 +985,6 @@ const PH_VIS=[['admins','Only admins'],['friends','Friends too'],['all','Everyon
 const ccSelect=(id,cur)=>`<select id="${id}" class="ccsel" aria-label="Country code">${CCS.map(([c,n])=>`<option value="${c}"${c===cur?' selected':''}>${c} ${n}</option>`).join('')}</select>`;
 const phoneOf=(cc,raw)=>{const d=String(raw||'').replace(/\D/g,'').replace(/^0+/,'');return d.length>=6&&d.length<=14?cc+' '+d:null};
 const myPhone=()=>S.phones[S.uid]||null;
-/* Recent games on a profile: Everyone (default), Friends only or Hidden. Admins and above at this club still see games played here */
-const GM_VIS=[['hidden','Hidden'],['friends','Friends only'],['all','Everyone']],gamesVis=id=>{const v=(prof(id)||{}).games;return v==='hidden'||v==='friends'?v:'all'};
-const gamesShared=id=>{const v=gamesVis(id);return id===S.uid||v==='all'||(v==='friends'&&isFriend(id))},canSeeGames=id=>gamesShared(id)||isAdmin();
 const canSeePhone=id=>{const r=S.phones[id];if(!r||!r.phone)return false;return id===S.uid||isAdmin()||r.vis==='all'||(r.vis==='friends'&&isFriend(id))};
 const phoneLink=id=>canSeePhone(id)?`<a class="phlink" data-act="tel" href="tel:${esc(S.phones[id].phone.replace(/\s/g,''))}">${esc(S.phones[id].phone)}</a>`:'';
 function relWith(id){
@@ -1432,7 +1427,6 @@ function showApp(){$('welcome').hidden=true;$('auth').hidden=true;$('wiz').hidde
 /* ================= Profile set-up ================= */
 let W=null,wLock=false;
 const ICON={
- eye:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
  lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.7" r="1.1" fill="currentColor" stroke="none"/></svg>',
  padel:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="14.5" cy="9.5" rx="6" ry="6.8" transform="rotate(40 14.5 9.5)"/><path d="M10.2 14.2 4 20.4"/><path d="M5.3 17.7l1.2 1.2"/><circle cx="13" cy="8" r=".6" fill="currentColor"/><circle cx="16" cy="9" r=".6" fill="currentColor"/><circle cx="14" cy="11.4" r=".6" fill="currentColor"/></svg>',
  pickleball:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><g fill="currentColor" stroke="none"><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="7" r="1"/><circle cx="12" cy="17" r="1"/><circle cx="7" cy="12" r="1"/><circle cx="17" cy="12" r="1"/><circle cx="8.5" cy="8.5" r=".9"/><circle cx="15.5" cy="8.5" r=".9"/><circle cx="8.5" cy="15.5" r=".9"/><circle cx="15.5" cy="15.5" r=".9"/></g></svg>',
@@ -2412,9 +2406,6 @@ function vSettings(){
  <div class="card rv">${row(ICON.mail,'pop','Open to game invites',me().invites?'Players booking a court can find you and invite you to their game.':'Off: you won’t show up when players look for someone to invite.',`<button class="switch" role="switch" aria-checked="${!!me().invites}" data-act="invPref" aria-label="Open to game invites"></button>`,'r-inv')}</div>
  <div class="card rv" style="margin-top:12px">${row(MI.user,'pop','Friend requests',me().friends==='open'?'Open account: anyone can add you as a friend straight away.':'Ask me first: you accept or reject each request.')}
   <div style="margin-top:12px">${seg('fr','Friend requests',[['request','Ask me first'],['open','Open account']],me().friends==='open'?'open':'request','frMode')}</div></div>
- <div class="card rv" style="margin-top:12px" id="r-games">${row(ICON.eye,'pop','Recent games',gamesVis(S.uid)==='hidden'?'Hidden: other players can’t see your recent games on your profile.':gamesVis(S.uid)==='friends'?'Friends only: just your friends can see your recent games on your profile.':'Everyone: any player can see your recent games on your profile.')}
-  <div style="margin-top:12px">${seg('gmv','Who can see your recent games',GM_VIS,gamesVis(S.uid),'gmVis')}</div>
-  <p class="small muted" style="margin-top:10px">Admins at a club can still see the games you play there.</p></div>
  <p class="eyebrow period">Account</p>
  <div class="card rv">${row(ICON.phone,'shake','Phone number',myPhone()?esc(myPhone().phone):'Not added yet. Admins use it to reach you about bookings.',`<button class="btn ghost sm" data-act="phEdit">${myPhone()?'Change':'Add'}</button>`,'r-phone')}
   ${myPhone()?`<p class="small muted" style="margin:12px 0 8px">Who can see your number?</p>${seg('phv','Who can see your number',PH_VIS,myPhone().vis||'admins','phVis')}`:''}</div>
@@ -2545,8 +2536,7 @@ function playerSheet(id){
    return`<div class="card"><span class="eyebrow">${SPORTS[sp].name}</span><div style="font:500 30px var(--display);margin:6px 0 2px" class="num">${fmtL(e.r)}</div><span class="chip t-${t}">${TIER_NAME[t]}</span><p class="rkline" data-sp="${sp}">${rankText(sp,id,'all')}</p><p class="tiny muted" style="margin-top:8px">${e.w} won · ${e.l} lost</p>${(levelVotes(sp,id)||{}).html||''}</div>`}).join('')}</div>
   <div class="card" style="margin-top:12px"><dl class="prefs"><dt>Hand</dt><dd>${esc(lbl(HANDS,p.hand))||'–'}</dd><dt>Court side</dt><dd>${esc(lbl(SIDES,p.side))||'–'}</dd><dt>Plays</dt><dd>${(p.times||[]).map(t=>lbl(TIMES,t)).join(', ')||'–'}</dd><dt>Invites</dt><dd>${p.invites?'Open to game invites':'Not right now'}</dd>${id!==S.uid&&canSeePhone(id)?`<dt>Phone</dt><dd>${phoneLink(id)}</dd>`:''}<dt>Friends</dt><dd>${p.friends==='open'?'Open: anyone can add them':'Requests need approval'}</dd></dl></div>
   ${isAdmin()&&id!==S.uid&&p.setup?roleCard(id):''}${id!==S.uid?proCard(id):''}${id!==S.uid?demoRow(id):''}
-  ${!ms.length?'':!canSeeGames(id)?`<div class="sec"><h3>Recent games</h3></div><div class="card empty gmhide"><b>${gamesVis(id)==='friends'?'Shared with friends only':'Hidden'}</b>${esc(first(p))} ${gamesVis(id)==='friends'?'only shows their recent games to friends.':'keeps their recent games private.'}</div>`
-   :`<div class="sec"><h3>Recent games</h3>${gamesShared(id)?'':`<span class="chip">${gamesVis(id)==='friends'?'Friends only':'Hidden'}</span>`}</div>${gamesShared(id)?'':`<p class="small muted gmnote">${esc(first(p))} ${gamesVis(id)==='friends'?'only shares these with friends':'keeps these hidden from other players'}. You can see their games at ${esc(VEN().name)} because you're ${isDev()?'the Developer':'an '+ROLE_NAME[roleOf(S.uid)]+' here'}.</p>`}<div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`}
+  ${ms.length?`<div class="sec"><h3>Recent games</h3></div><div class="list">${ms.map(m=>matchRow(m,{for:id})).join('')}</div>`:''}
   <button class="btn ghost wide" style="margin-top:16px" data-act="closeSheet">Close</button>`,bg=>{qsa('.rv',bg).forEach(e=>e.classList.add('in'));syncGliders();
   qsa('[data-rkg]',bg).forEach(b=>b.onclick=()=>{const g=b.dataset.rkg;qsa('[data-rkg]',bg).forEach(x=>x.setAttribute('aria-checked',x===b));qsa('.rkline',bg).forEach(l=>l.innerHTML=rankText(l.dataset.sp,id,g));tick()})});
  playerSheet.open=id;
@@ -2835,7 +2825,6 @@ const ACT={
   try{for(const r of rs)await Store.delReq(r.id)}catch(e){return toast('Could not update. Check your connection.')}S.reqs=S.reqs.filter(r=>!rs.includes(r));closeSheet(true);toast('Friend removed');refreshSocial(id)},
  async follow(id){if(following(id))return;try{await Store.follow(id)}catch(e){return toast('Could not follow. Check your connection.')}S.follows.push({follower:S.uid,followee:id,at:new Date().toISOString()});notify([{to:id,kind:'follow',data:{}}]);doneTick(`Following ${first(prof(id))}`);refreshSocial(id)},
  async unfollow(id){try{await Store.unfollow(id)}catch(e){return toast('Could not unfollow. Check your connection.')}S.follows=S.follows.filter(f=>!(f.follower===S.uid&&f.followee===id));toast(`Unfollowed ${first(prof(id))}`);refreshSocial(id)},
- async gmVis(v){if(!['hidden','friends','all'].includes(v))return;const p=Object.assign({},me(),{games:v});try{await Store.saveProfile(p)}catch(e){return toast('Could not save. Check your connection.')}upsert(S.profiles,p);tick();toast(v==='hidden'?'Your recent games are hidden from other players':v==='friends'?'Only your friends can see your recent games now':'Everyone can see your recent games now');render()},
  async frMode(v){const p=Object.assign({},me(),{friends:v});try{await Store.saveProfile(p)}catch(e){return toast('Could not save. Check your connection.')}upsert(S.profiles,p);tick();toast(v==='open'?'Open account: anyone can add you as a friend':'Friend requests now need your approval');render()},
 };
 document.addEventListener('click',e=>{
