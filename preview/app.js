@@ -787,8 +787,9 @@ async function setVenue(vid,tab){
 }
 function switchVenue(vid){if(!VENUES.some(v=>v.id===vid))return;if(vid===VID)return go('home');tick();
  if(!isMember(S.uid,vid))return venueSignIn(vid);setVenue(vid,view.tab)}
-/* Join a club: their level there starts from the level they have now, so a strong player doesn't start from scratch */
-async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};(p.sports||[]).forEach(sp=>{const e=S.R[sp]&&S.R[sp][S.uid];if(e)vs[sp]=r2(e.r)});
+/* Join a club: their level there starts at the bottom of the level (band) they're in now, per sport. Pro is invite only per club,
+   so a Pro player without an invite at the new club starts at the bottom of Intermediate there. */
+async function joinVenue(vid,quiet){const p=me();if(!p)return false;const vs={};(p.sports||[]).forEach(sp=>{const e=S.R[sp]&&S.R[sp][S.uid];if(e){const t=tierOf(sp,e.r),b=t==='pro'&&!proOf(S.uid,sp,vid)?'intermediate':t;vs[sp]=SPORTS[sp].bands[b][0]}});
  const fresh=p.nohome&&!p.home,np=Object.assign({},p,{venues:fresh?[vid]:[...new Set([...venuesOf(p),vid])],home:fresh?vid:p.home,vstart:Object.assign({},p.vstart||{},{[vid]:Object.assign(vs,(p.vstart||{})[vid]||{})})});
  if(fresh)delete np.nohome;try{await Store.saveProfile(np)}catch(e){if(!quiet)toast('Could not join. Check your connection and try again.');return false}
  upsert(S.profiles,np);return true}
