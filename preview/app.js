@@ -1399,12 +1399,16 @@ function paintVenues(){const el=$('vswitch');if(!el)return;
 /* Every club in one pop-up: search, then tap to switch */
 function openVenues(){tick();
  openSheet(`<h2>Switch club</h2><p class="muted small">Every court. One app.</p>
-  <div class="search" style="margin-top:14px">${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
+  <div class="search vssearch">${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${VENUES.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
    return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
   <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
   requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
-  const q=bg.querySelector('#vsQ');q.oninput=()=>{const w=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let k=0;
+  const q=bg.querySelector('#vsQ');
+  /* keep the search at the top of the pop-up when the keyboard opens, so results show right under it */
+  const toTop=()=>{const s=bg.querySelector('.sheet'),box=q.closest('.vssearch');if(s&&box)s.scrollTop=Math.max(0,box.offsetTop-50)};
+  q.addEventListener('focus',()=>{const s=bg.querySelector('.sheet');if(s&&!bg.classList.contains('kb'))s.style.minHeight=s.offsetHeight+'px';setTimeout(toTop,60);setTimeout(toTop,350)});
+  q.oninput=()=>{toTop();const w=q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);let k=0;
    qsa('.vsrow',bg).forEach(r=>{const ok=w.every(x=>r.dataset.find.includes(x));r.hidden=!ok;if(ok)k++});
    const no=bg.querySelector('#vsNone');no.hidden=!!k;no.textContent=k?'':'No venues match “'+q.value.trim()+'” yet.';vsNear()};
   /* phones: the club nearest the middle of the list glows as you scroll, like the rest of the app */
@@ -2248,9 +2252,15 @@ const SHEET_BACK=`<div class="sheetback"><button type="button" class="backbtn" d
 function openSheet(html,onReady){
  closeSheet(true);const bg=document.createElement('div');bg.className='sheetbg';bg.id='sheetBg';
  bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html.includes('data-noback')?'':SHEET_BACK}${html}</div>`;
- bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});$('sheetRoot').appendChild(bg);if(onReady)onReady(bg);
+ bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});$('sheetRoot').appendChild(bg);sheetKb(bg);if(onReady)onReady(bg);
  const f=bg.querySelector('input,button:not(.grab):not(.backbtn)');if(f&&matchMedia('(hover:hover)').matches)setTimeout(()=>f.focus(),60);
 }
+/* Phones: when the keyboard opens, pin the pop-up to the visible area above it (iOS otherwise slides it down behind the keyboard) */
+function sheetKb(bg){const vv=window.visualViewport;if(!vv)return;
+ const fit=()=>{if(!bg.isConnected){vv.removeEventListener('resize',fit);vv.removeEventListener('scroll',fit);return}
+  const kb=window.innerHeight-vv.height>120;bg.classList.toggle('kb',kb);
+  if(kb){bg.style.setProperty('--vvh',vv.height+'px');bg.style.setProperty('--vvt',vv.offsetTop+'px')}else{bg.style.removeProperty('--vvh');bg.style.removeProperty('--vvt')}};
+ vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);fit()}
 function closeSheet(now){const bg=$('sheetBg');if(!bg)return;if(now||calm()){bg.remove();return}bg.classList.add('out');setTimeout(()=>bg.remove(),300)}
 function lvlInput(sp,val){const S_=SPORTS[sp];
  return `<div class="lvlin"><button type="button" class="step" data-act="lstep" data-v="-0.1" aria-label="Lower">−</button><input id="gLvl" type="number" inputmode="decimal" step="0.1" min="${S_.min}" max="${S_.max}" value="${val!=null?fmtL(val,1):''}" placeholder="${fmtL(avg(S_.bands.intermediate),1)}" aria-label="Level"><button type="button" class="step" data-act="lstep" data-v="0.1" aria-label="Higher">+</button></div>

@@ -902,6 +902,18 @@ a.btn{text-decoration:none}
 @media (hover:hover){.vsrow:hover{border-color:color-mix(in srgb,var(--vc) 75%,var(--line));background:color-mix(in srgb,var(--vc) 14%,transparent);box-shadow:0 10px 28px color-mix(in srgb,var(--vc) 35%,transparent);transform:translateY(-2px)}.vsrow:hover .vmark{transform:scale(1.06) rotate(-2deg)}.vsrow:hover .go{transform:translateX(4px);color:var(--ink)}}
 .vsrow:active{transform:scale(.98)}
 .vsnone{margin:4px 2px}
+/* every club row is the same height: name up to two lines, area one line, tag space kept */
+.vsrow{box-sizing:border-box;height:108px;min-height:108px}
+.vsrow .grow{display:flex;flex-direction:column;justify-content:center;align-self:stretch}
+.vsrow b{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.25}
+.vsrow small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vsrow .vstag{align-self:flex-start;white-space:nowrap}
+/* the search stays pinned under Back while you scroll or type */
+.vssearch{position:sticky;top:50px;z-index:4;margin-top:14px;padding:6px 0;background:linear-gradient(180deg,var(--sh1) 70%,transparent);border-radius:14px}
+[data-theme="light"] .vssearch{background:linear-gradient(180deg,#fff 70%,transparent)}
+/* keyboard open (phones): the pop-up sits above the keyboard at full height, so it never drops down */
+.sheetbg.kb{bottom:auto;top:var(--vvt,0px);height:var(--vvh,100%)}
+.sheetbg.kb .sheet{height:calc(var(--vvh,100%) - 10px);max-height:none;animation:none;padding-bottom:12px}
 :root:not([data-theme="light"]) .vsrow[data-v="aer"]{--vc:#9a9a9a}
 /* every club's logo card is the same size wherever it shows; the logo sits centred inside it */
 .vmark,.wmark{box-sizing:border-box;grid-template:minmax(0,1fr)/minmax(0,1fr);width:76px!important;min-width:0!important;height:46px!important;padding:5px 10px!important}
@@ -999,7 +1011,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=78"></script>
+<script src="app.js?v=79"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

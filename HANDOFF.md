@@ -106,3 +106,8 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 
 ### Bottom bar centred on phones (V1.5demo, preview only, 23 Nov 2026)
 - On screens 420px wide or less, the five dock buttons share the width equally (`flex:1 1 0`), so Add score sits in the exact middle and the Home pill is the same size as the others. The tennis ball's top margin is -17px there so the "Add score" label lines up with the other labels. Wider screens are unchanged.
+
+### Switch club pop-up: equal cards and keyboard fix (V1.5demo, preview only, 23 Nov 2026)
+- Every club row in Switch club is the same height (108px): name up to two lines, area one line with "…", tag below.
+- The search box sticks under Back. Focusing it locks the pop-up's height and scrolls the search to the top, so results show right under it.
+- `sheetKb()` (called by every `openSheet`) watches `visualViewport`; when a phone keyboard is open it adds `.kb` to the backdrop, pinning the pop-up to the visible area above the keyboard at full height, so it no longer drops down behind it.
