@@ -891,6 +891,9 @@ a.btn{text-decoration:none}
 .vrun:hover .vtrack,.vrun.hold .vtrack{animation-play-state:paused}
 .vrun .vbtn{opacity:.6;transform:scale(.84)}
 @media (hover:hover){.vrun .vbtn:hover{opacity:1;transform:scale(.94);filter:none}}
+.vrun.still{-webkit-mask:none;mask:none}.vrun.still .vtrack{animation:none}.vrun.still .vset[aria-hidden]{display:none}
+.vcount{position:absolute;left:-3px;bottom:-3px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--ball);color:#1b1b1b;font:800 11px/1 var(--body);box-shadow:0 0 0 2px var(--bg)}
+.vssearch[hidden]{display:none}
 @keyframes vglide{to{transform:translateX(-50%)}}
 .calm .vtrack{animation:none}.calm .vrun{overflow-x:auto;scrollbar-width:none}.calm .vrun::-webkit-scrollbar{display:none}.calm .vset[aria-hidden]{display:none}
 @media (prefers-reduced-motion:reduce){.vtrack{animation:none}.vrun{overflow-x:auto;scrollbar-width:none}.vset[aria-hidden]{display:none}}
@@ -1020,7 +1023,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=65"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=80"></script>
+<script src="app.js?v=81"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
