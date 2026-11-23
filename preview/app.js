@@ -171,7 +171,12 @@ const VENUES=[
  {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
   courtNos:{padel:[1],pickleball:[1]},also:'1 badminton court and 1 table tennis table',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
-  url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'}
+  url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'},
+ {id:'aer',name:'AER | Dona Paula',short:'AER | Dona Paula',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
+  courtNos:{padel:[1],pickleball:[1]},logo:'venues/aer.png',splash:'venues/aer-big.png',mark:'wide',color:'#111111',
+  book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
+  insta:'https://www.instagram.com/theaerclub/',
+  url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'}
 ];
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
@@ -192,7 +197,8 @@ function mapCard(v){const q=v.map?encodeURIComponent(v.map):v.lat+','+v.lng;
  return `<div class="card mapcard rv"><div class="maptop"><span class="pinico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg></span><span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span></div>
   <div class="mapbox"><iframe title="Map of ${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${q}&t=k&z=17&output=embed"></iframe>
   <a class="mapopen" href="${esc(v.url)}" target="_blank" rel="noopener" aria-label="Open ${esc(v.name)} in Google Maps"></a></div>
-  <a class="btn brand wide" href="${esc(v.url)}" target="_blank" rel="noopener" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Open in Google Maps</span></a></div>`}
+  <a class="btn brand wide" href="${esc(v.url)}" target="_blank" rel="noopener" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Open in Google Maps</span></a>
+  ${v.insta?`<a class="btn ghost wide instabtn" href="${esc(v.insta)}" target="_blank" rel="noopener" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/></svg><span>${esc(v.short)} on Instagram</span></a>`:''}</div>`}
 const durLabel=n=>{const h=Math.floor(n/2),m=n%2*30;return (h?h+' h':'')+(h&&m?' ':'')+(m?m+' min':'')};
 const slotLabel=i=>{const m=OPEN_H*60+i*30,h=Math.floor(m/60)%24,mm=m%60;return `${h%12||12}:${pad(mm)} ${h<12?'am':'pm'}`};
 const slotRange=(s,len)=>{const a=slotLabel(s),b=slotLabel(s+len),[ta,pa]=a.split(' '),[tb,pb]=b.split(' ');return pa===pb?`${ta}–${tb} ${pb}`:`${a} – ${b}`};
@@ -570,6 +576,46 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(floAll),b=pick(floAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  floAll.slice(4,12).forEach((p,i)=>reqs.push({id:'df_f'+i,from:fPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...fms);ms.sort(byWhen);all.push(...floP);
+ /* AER | Dona Paula: a fourth club built the same way, booked on Hudle. 1 padel and 1 pickleball court, both ranked.
+    Some players from the other clubs play here too. */
+ const aerP=[],mkAer=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
+  const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
+  const nt=1+Math.floor(r()*3),times=[];while(times.length<nt){const t=r()<.4?'evening':pick(TIMES)[0];if(!times.includes(t))times.push(t)}
+  const p={id:'da_'+aerP.length,username:un,name,gender,setup:true,demo:true,avatar:null,sports,hand:r()<.85?'right':'left',invites:r()<.7,times,side:pick(['left','right','either']),levels,_skill:skill,_grow:grow,home:'aer',venues:['aer'],created:new Date(now-(DAYS+1+Math.floor(r()*200))*864e5).toISOString()};aerP.push(p);return p};
+ const aOwner=mkAer('Kunal Sardesai','male',['padel','pickleball'],{padel:5.0,pickleball:4.6}),aAdmin=mkAer('Sara Pinto','female',['padel','pickleball'],{padel:4.2,pickleball:4.3}),
+  aCoach=mkAer('Mateo Alvares','male',['padel'],{padel:5.6}),aPlayer=mkAer('Riya Kamat','female',['padel','pickleball'],{padel:3.3,pickleball:3.6});
+ aPlayer.friends='request';
+ while(aerP.length<40){const fn=pick(D_FN),ln=pick(D_LN),name=fn+' '+ln;if(names.has(name))continue;const x=r();mkAer(name,D_FEM.has(fn)?'female':'male',x<.55?['padel','pickleball']:x<.9?['padel']:['pickleball'])}
+ 
+ const both3=[...ps.filter(p=>![caelan.id,surya.id,arjun.id].includes(p.id)).slice(36,48),...sunP.slice(30,36),...aerP.slice(20,26)];
+ both3.forEach(p=>{p.venues=[...new Set([...(p.venues||[p.home||'rc']),'aer'])];p.vstart=Object.assign(p.vstart||{},{aer:{}});p.sports.forEach(sp=>p.vstart.aer[sp]=Math.round(clampL(sp,sk(p,sp,.6))*100)/100)});
+ const aerAll=[...aerP,...both3],ams=[],aocc={};
+ for(let k=0;k<260;k++){
+  const t=k/260,sp=r()<.65?'padel':'pickleball',pool=aerAll.filter(p=>p._skill[sp]!=null),singles=sp==='pickleball'&&r()<.15,n=singles?2:4,anchor=pick(pool);
+  const near=pool.filter(p=>p!==anchor).sort((a,b)=>Math.abs(sk(a,sp,t)-sk(anchor,sp,t))-Math.abs(sk(b,sp,t)-sk(anchor,sp,t))),cand=r()<.8?near.slice(0,12):near;if(cand.length<n-1)continue;
+  const grp=[anchor];while(grp.length<n){const c=pick(cand);if(!grp.includes(c))grp.push(c)}
+  const A_=grp.slice(0,n/2),B_=grp.slice(n/2),ta=avg(A_.map(p=>sk(p,sp,t))),tb=avg(B_.map(p=>sk(p,sp,t))),pa=1/(1+Math.pow(10,(tb-ta)/SPORTS[sp].scale)),aw=r()<pa,slot=p=>({uid:p.id,level:+fmtL(sk(p,sp,t))});
+  const d=new Date(now-(1-t)*DAYS*864e5-(2+Math.floor(r()*8))*36e5);let date=isoIST(d);const len=sp==='padel'?(r()<.6?3:2):2,court=1,lane=0;
+  if(date===T&&nowSlot()-len<0)date=addDays(T,-1);const hi=date===T?Math.min(NSLOT-len,nowSlot()-len):NSLOT-len,u=aocc[date+sp+lane]=aocc[date+sp+lane]||[];let st=null;
+  for(let q=0;q<40&&st==null;q++){const c=clamp(r()<.6?20+Math.floor(r()*14):Math.floor(r()*(hi+1)),0,hi);if(!u.some(([a,b])=>c<b&&a<c+len))st=c}if(st==null)continue;u.push([st,st+len]);
+  ams.push({id:'am_'+k,demo:true,venue:'aer',sport:sp,format:singles?'singles':'doubles',date,time:st,len,court,a:A_.map(slot),b:B_.map(slot),sets:setsFor(sp,aw,1-Math.abs(pa-.5)*2),winner:aw?'a':'b',by:anchor.id,at:d.toISOString()});
+ }
+ ams.sort(byWhen);const aregs=m=>[...m.a,...m.b].filter(s=>s.uid).map(s=>s.uid);
+ ams.forEach(m=>aregs(m).filter(u=>u!==m.by).forEach(u=>{if(m.date<cut||r()<.5)confs.push({id:'dc_'+m.id+u,match:m.id,user:u,verdict:'ok',at:m.at})}));
+ 
+ const akG=ams.filter(m=>m.date>=addDays(T,-5)&&m.format==='doubles'&&!aregs(m).includes(aPlayer.id)).pop();
+ if(akG){const i=akG.b.findIndex(x=>x.uid!==akG.by);akG.b[i]={uid:aPlayer.id,level:+fmtL(aPlayer._skill[akG.sport])};confs.splice(0,confs.length,...confs.filter(c=>!(c.match===akG.id&&c.user===aPlayer.id)));msgs.push({id:'da_c',to:aPlayer.id,from:akG.by,kind:'confirm',data:{match:akG.id,venue:'aer'},read:false,at:ago(4)})}
+ const aD=ams.filter(m=>m!==akG&&m.date>=addDays(T,-4)&&m.format==='doubles').pop();
+ if(aD){const loser=(aD.winner==='a'?aD.b:aD.a).find(s=>s.uid!==aD.by);if(loser){for(let i=confs.length-1;i>=0;i--)if(confs[i].match===aD.id)confs.splice(i,1);
+  const prop=aD.sets.map(s=>s.slice()),j=prop.length-1;prop[j]=[prop[j][1],prop[j][0]];if(prop.length===2)prop.push(aD.sport==='padel'?(aD.winner==='a'?[4,6]:[6,4]):(aD.winner==='a'?[7,11]:[11,7]));
+  const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_aer',match:aD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
+  [aOwner.id,aAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'da_d'+i,to,from:loser.uid,kind:'dispute',data:{match:aD.id,conf:c.id,venue:'aer'},read:false,at:c.at}))}}
+ const aAsk=aerP[12];if(aAsk){const data={thread:'dth_a1',topic:'court',text:'Could we keep a few evening slots for open play on the padel court?',player:aAsk.id,venue:'aer'};[aOwner.id,aAdmin.id,you.id,aAsk.id].forEach(t=>msgs.push({id:'da_am'+t,to:t,from:aAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
+ const aNews=[{text:'Welcome to AER on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the AER rankings.',link:'',lt:''},{text:'Sunset padel and pickleball mixer this Friday from 6 pm. All levels welcome.',link:'',lt:''}];
+ aNews.forEach((nw,k)=>[...aerP,...both3].forEach(p=>msgs.push({id:'da_cm'+k+p.id,to:p.id,from:k?aAdmin.id:aOwner.id,kind:'community',data:Object.assign({venue:'aer'},nw),read:k===0,at:ago(40-k*30)})));
+ for(let k=0;k<160;k++){const a=pick(aerAll),b=pick(aerAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
+ aerAll.slice(4,12).forEach((p,i)=>reqs.push({id:'da_f'+i,from:aPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
+ ms.push(...ams);ms.sort(byWhen);all.push(...aerP);
  const clean=p=>{const q=Object.assign({},p);delete q._skill;delete q._grow;return q};
  /* level feedback from people who played them: leans the way their real skill differs from their level */
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
@@ -589,8 +635,8 @@ function buildDemo(you,rank='dev'){
  const rg=yourGames.length?yourGames[yourGames.length-1]:null,rt=rg&&regs(rg).find(u=>u!==you.id&&u!==arjun.id&&u!==caelan.id&&u!==surya.id);
  if(rg&&rt){const rp=regs(rg).find(u=>u!==you.id&&u!==rt)||caelan.id;msgs.push({id:'dg_rep',to:you.id,from:rp,kind:'report',data:{rep:'drp_new',target:rt,k:'late',sport:rg.sport,match:rg.id,date:rg.date,note:'Turned up 20 minutes after the start'},read:false,at:ago(5)})}
  sunP.forEach((p,k)=>{let nn='9';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
- return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id}}};
+ Object.keys(coaches).forEach(k=>{if(!k.includes('@')){coaches[k+'@rc']=coaches[k];delete coaches[k]}});coaches[sCoach.id+'@sunday']={sports:['padel'],auto:true};coaches[fCoach.id+'@floresta']={sports:['padel'],auto:true};coaches[aCoach.id+'@aer']={sports:['padel'],auto:true};aerP.forEach((p,k)=>{let nn='7';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});floP.forEach((p,k)=>{let nn='8';for(let i=0;i<9;i++)nn+=Math.floor(r()*10);phones[p.id]={phone:'+91 '+nn,vis:k%4===0?'all':'admins'}});
+ return{profiles:all.map(clean),matches:ms,bookings:bks,cfg,conduct,phones,coaches,confs,admins:[...(['dev','owner','admin'].includes(rank)?[you.id+'@rc']:[]),caelan.id+'@rc',surya.id+'@rc',sOwner.id+'@sunday',sAdmin.id+'@sunday',fOwner.id+'@floresta',fAdmin.id+'@floresta',aOwner.id+'@aer',aAdmin.id+'@aer'],devs:rank==='dev'?[you.id]:[],owners:[...(rank==='owner'?[you.id+'@rc']:[]),surya.id+'@rc',sOwner.id+'@sunday',fOwner.id+'@floresta',aOwner.id+'@aer'],demoAcc:[caelan.id],msgs,follows,reqs,votes,you:you.id,staff:{rc:{player:arjun.id,admin:caelan.id,owner:surya.id,coach:coach1.id},sunday:{player:sPlayer.id,admin:sAdmin.id,owner:sOwner.id,coach:sCoach.id},floresta:{player:fPlayer.id,admin:fAdmin.id,owner:fOwner.id,coach:fCoach.id},aer:{player:aPlayer.id,admin:aAdmin.id,owner:aOwner.id,coach:aCoach.id}}};
 }
 let demoPrev=null;
 /* Demo: switch between you (admin) and Arjun (an ordinary player) to see both sides */
