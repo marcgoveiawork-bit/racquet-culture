@@ -102,4 +102,4 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - New players have `nohome:true` until they pick their first court; `joinVenue` then sets `home` and `venues`. Older profiles without `home` still count as Racquet Culture members.
 - Switching to a club you haven't played at (top-bar switcher, club chips, other clubs card) joins it on the spot with no sign-in, shows its loading screen, a "Yet to play" card on Home (`yetCard`) and a toast. The old club sign-in page is gone.
 - Signed-in players opening the app see the court picker each time (clubs they haven't joined say "New to you · yet to play"). Sign out goes back to the opening screen.
-- Demo: the court picker has "Demo: try the first-time sign-in as a new player" (`demoNewPlayer`), which runs the whole sign-up, questions and court pick as a made-up player (`d_new`); any email and password work.
+- Demo: the court picker has "Demo: try the first-time sign-in as a new player", and the demo bar has a **New player** option (`demoNew` → `demoNewPlayer`), which runs the whole sign-up, questions and court pick as a made-up player (`d_new`); any email and password work.

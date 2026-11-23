@@ -1294,7 +1294,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();paintVenues();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${esc(roleWords())}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns">${demoAs().length>1?`<span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}</span>`:''}<button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${esc(roleWords())}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}<button type="button" role="radio" aria-checked="${r==='new'}" data-act="demoNew" title="Start again as a brand-new player: sign-up, questions, then pick a court">New player</button></span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -2421,7 +2421,7 @@ const ACT={
  wRetake(sp){const d=W.d;d.q[sp]={band:'',ans:[]};W.i=wSteps().indexOf('band:'+sp);W.dir=-1;window.scrollTo(0,0);paintWiz()},
  pref(v){setPref(v,!prefs[v]);render();if(v==='haptics'&&prefs.haptics)buzz([12,40,12]);if(v==='sound'&&prefs.sound)sfx('pop');if(v==='popups'&&prefs.popups)celebrate('Pop-ups on');
   const r=$('r-'+v);if(r){r.classList.add('play');setTimeout(()=>r.classList.remove('play'),1000)}},
- demo(){demoChooser()},demoGo(v){startDemo(DEMO_AS.some(x=>x[0]===v)?v:'player')},exitDemo(){exitDemo()},
+ demo(){demoChooser()},demoNew(){closeSheet(true);demoNewPlayer()},demoGo(v){startDemo(DEMO_AS.some(x=>x[0]===v)?v:'player')},exitDemo(){exitDemo()},
  signOut(){confirmSheet('Sign out?','You can sign back in with your email and password.','Sign out','signOutYes')},
  async signOutYes(){if(Store.mode==='demo')return exitDemo();closeSheet(true);await Store.signOut();S.uid=null;A=null;view.tab='home';authMode='in';showWelcome('start')},
  /* inbox */
