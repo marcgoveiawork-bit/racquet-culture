@@ -836,7 +836,7 @@ function rankAt(id,v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduc
 function clubLines(id){if(isDev(id))return'';const cs=clubsOf(id);if(!cs.length)return'';
  return`<div class="clubchips">${cs.map(v=>{const r=roleAt(id,v),V=venueOf(v),k=rankAt(id,v),sp=k&&SPORTS[k.sp];
   const tip=V.name+(k?` · #${k.pos} in ${lbl(TIERS,k.tier)} ${sp?sp.name:''}`:' · not ranked yet')+(r!=='player'?' · '+(r==='coach'?coachTitle(id,v):ROLE_NAME[r]):'');
-  return`<button class="clubchip" data-act="clubRank" data-v="${v}" title="${esc(tip)}" aria-label="${esc(tip)}"><span class="vmark sm v-${v}"><img src="${esc(V.logo)}" alt=""></span><b>${k?'#'+k.pos:'–'}</b>${k&&k.sp==='pickleball'?'<i>PB</i>':''}${r!=='player'?`<span class="crole">${ROLE_ICON[r]} ${r==='coach'?'Coach':ROLE_NAME[r]}</span>`:''}</button>`}).join('')}</div>`}
+  return`<button class="clubchip" data-act="clubRank" data-v="${v}" data-p="${esc(id)}" title="${esc(tip)}" aria-label="${esc(tip)}"><span class="vmark sm v-${v}"><img src="${esc(V.logo)}" alt=""></span><b>${k?'#'+k.pos:'–'}</b>${k?`<span class="ctier t-${k.tier}">${esc(lbl(TIERS,k.tier))}</span>`:''}${k&&k.sp==='pickleball'?'<i>PB</i>':''}${r!=='player'?`<span class="crole">${ROLE_ICON[r]} ${r==='coach'?'Coach':ROLE_NAME[r]}</span>`:''}</button>`}).join('')}</div>`}
 /* Friends and following. Friends are two-way (a request the other player accepts, or instant for open accounts).
    Following is one-way and needs no approval. After a rejection, a new request can only be sent 5 days later. */
 const COOLDOWN=5*864e5;
@@ -2305,16 +2305,24 @@ const SHEET_BACK=`<div class="sheetback"><button type="button" class="backbtn" d
 function openSheet(html,onReady){
  closeSheet(true);const bg=document.createElement('div');bg.className='sheetbg';bg.id='sheetBg';
  bg.innerHTML=`<div class="sheet" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html.includes('data-noback')?'':SHEET_BACK}${html}</div>`;
- bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});$('sheetRoot').appendChild(bg);sheetKb(bg);if(onReady)onReady(bg);
+ bg.addEventListener('click',e=>{if(e.target===bg)closeSheet()});$('sheetRoot').appendChild(bg);pageLock(true);sheetKb(bg);if(onReady)onReady(bg);
  const f=bg.querySelector('input,button:not(.grab):not(.backbtn)');if(f&&matchMedia('(hover:hover)').matches)setTimeout(()=>f.focus(),60);
 }
 /* Phones: when the keyboard opens, pin the pop-up to the visible area above it (iOS otherwise slides it down behind the keyboard) */
-function sheetKb(bg){const vv=window.visualViewport;if(!vv)return;
- const fit=()=>{if(!bg.isConnected){vv.removeEventListener('resize',fit);vv.removeEventListener('scroll',fit);return}
-  const kb=window.innerHeight-vv.height>120;bg.classList.toggle('kb',kb);
+/* While a pop-up is open the page behind it is frozen, so on phones it can't scroll underneath or get pushed around by the keyboard */
+let lockY=null;
+function pageLock(on){const b=document.body;
+ if(on&&lockY===null){lockY=window.scrollY;Object.assign(b.style,{position:'fixed',top:-lockY+'px',left:'0',right:'0',width:'100%'})}
+ else if(!on&&lockY!==null){const y=lockY;lockY=null;Object.assign(b.style,{position:'',top:'',left:'',right:'',width:''});window.scrollTo(0,y)}}
+function sheetKb(bg){const vv=window.visualViewport;if(!vv)return;let base=Math.max(window.innerHeight,vv.height),raf=0;
+ const run=()=>{raf=0;if(!bg.isConnected){vv.removeEventListener('resize',fit);vv.removeEventListener('scroll',fit);return}
+  base=Math.max(base,vv.height);const kb=base-vv.height>120;bg.classList.toggle('kb',kb);
   if(kb){bg.style.setProperty('--vvh',vv.height+'px');bg.style.setProperty('--vvt',vv.offsetTop+'px')}else{bg.style.removeProperty('--vvh');bg.style.removeProperty('--vvt')}};
- vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);fit()}
-function closeSheet(now){const bg=$('sheetBg');if(!bg)return;if(now||calm()){bg.remove();return}bg.classList.add('out');setTimeout(()=>bg.remove(),300)}
+ const fit=()=>{if(!raf)raf=requestAnimationFrame(run)};
+ vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit);run()}
+function closeSheet(now){const bg=$('sheetBg');if(!bg)return;const gone=()=>{bg.remove();if(!$('sheetBg'))pageLock(false)};
+ if(document.activeElement&&bg.contains(document.activeElement))document.activeElement.blur();
+ if(now||calm()){gone();return}bg.classList.add('out');setTimeout(gone,300)}
 function lvlInput(sp,val){const S_=SPORTS[sp];
  return `<div class="lvlin"><button type="button" class="step" data-act="lstep" data-v="-0.1" aria-label="Lower">−</button><input id="gLvl" type="number" inputmode="decimal" step="0.1" min="${S_.min}" max="${S_.max}" value="${val!=null?fmtL(val,1):''}" placeholder="${fmtL(avg(S_.bands.intermediate),1)}" aria-label="Level"><button type="button" class="step" data-act="lstep" data-v="0.1" aria-label="Higher">+</button></div>
   <div class="bandq">${TIERS.map(([k,n])=>`<button type="button" class="fchip" data-act="lband" data-v="${k}">${n} · ${fmtL(S_.bands[k][0],1)}–${fmtL(S_.bands[k][1],1)}</button>`).join('')}</div>
@@ -2489,8 +2497,17 @@ async function hsInstall(){
  try{await e.prompt();const r=await e.userChoice;if(r&&r.outcome==='accepted'){installEvt=null;ls.set('rc_installed',1)}}catch(err){homeSheet()}
  render();
 }
+/* Jump to a player's row in the rankings and keep it lit until the screen is touched */
+function spotRow(id){setTimeout(()=>{const el=document.querySelector(`#main [data-act="player"][data-v="${CSS.escape(id)}"]`);if(!el)return;
+ qsa('.spot').forEach(e=>e.classList.remove('spot'));el.scrollIntoView({block:'center',behavior:calm()?'auto':'smooth'});el.classList.add('spot');
+ setTimeout(()=>{const off=()=>{el.classList.remove('spot');['pointerdown','touchstart','wheel','keydown'].forEach(t=>window.removeEventListener(t,off,true))};
+  ['pointerdown','touchstart','wheel','keydown'].forEach(t=>window.addEventListener(t,off,{capture:true,passive:true}))},400)},120)}
 const ACT={
- clubRank(v){closeSheet(true);if(v===VID)return go('rank');if(!isMember(S.uid,v)){view.tab='rank';return venueSignIn(v)}tick();setVenue(v,'rank')},
+ async clubRank(v,el){const id=el&&el.dataset.p,k=id?rankAt(id,v):null;closeSheet(true);tick();
+  const show=()=>{if(k){view.rs=k.sp;view.rt=k.tier;view.rg='all'}view.tab='rank';render();if(k)spotRow(id)};
+  if(v===VID)return show();
+  if(!isMember(S.uid,v)){view.tab='rank';await venueSignIn(v)}else await setVenue(v,'rank');
+  if(VID===v)setTimeout(show,calm()?0:500)},
  /* clubs */
  venue(v){switchVenue(v)},
  venueAll(){openVenues()},

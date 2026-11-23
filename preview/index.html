@@ -914,6 +914,13 @@ a.btn{text-decoration:none}
 @media (hover:hover){.vsrow:hover{border-color:color-mix(in srgb,var(--vc) 75%,var(--line));background:color-mix(in srgb,var(--vc) 14%,transparent);box-shadow:0 10px 28px color-mix(in srgb,var(--vc) 35%,transparent);transform:translateY(-2px)}.vsrow:hover .vmark{transform:scale(1.06) rotate(-2deg)}.vsrow:hover .go{transform:translateX(4px);color:var(--ink)}}
 .vsrow:active{transform:scale(.98)}
 .vsnone{margin:4px 2px}
+.sheet{overscroll-behavior:contain}
+/* profile club chips: their ranking band next to their place */
+.clubchip .ctier{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:999px;white-space:nowrap}
+.ctier.t-beginner{background:rgba(34,160,90,.14);color:#1f9a57}.ctier.t-intermediate{background:rgba(60,120,230,.14);color:#3d7fe0}.ctier.t-pro{background:rgba(230,170,30,.18);color:#c98a00}
+/* the player you jumped to from a profile stays lit until you touch the screen */
+.rrow.spot,.pod.spot{position:relative;z-index:1;border-color:var(--ball)!important;box-shadow:0 0 0 2px var(--ball),0 10px 30px rgba(220,245,90,.35)!important;background:linear-gradient(90deg,rgba(220,245,90,.2),rgba(220,245,90,.06))!important;animation:spotPulse 1.6s ease-in-out infinite}
+@keyframes spotPulse{50%{box-shadow:0 0 0 2px var(--ball),0 10px 36px rgba(220,245,90,.6)}}
 /* every club row is the same height: name up to two lines, area one line, tag space kept */
 .vsrow{box-sizing:border-box;height:118px;min-height:118px}
 .vsrow .grow{display:flex;flex-direction:column;justify-content:center;align-self:stretch}
@@ -924,7 +931,7 @@ a.btn{text-decoration:none}
 .vssearch{position:sticky;top:50px;z-index:4;margin-top:14px;padding:6px 0;background:linear-gradient(180deg,var(--sh1) 70%,transparent);border-radius:14px}
 [data-theme="light"] .vssearch{background:linear-gradient(180deg,#fff 70%,transparent)}
 /* keyboard open (phones): the pop-up sits above the keyboard at full height, so it never drops down */
-.sheetbg.kb{bottom:auto;top:var(--vvt,0px);height:var(--vvh,100%)}
+.sheetbg.kb{bottom:auto;top:var(--vvt,0px);height:var(--vvh,100%);align-items:flex-start}
 .sheetbg.kb .sheet{height:calc(var(--vvh,100%) - 10px);max-height:none;animation:none;padding-bottom:12px}
 :root:not([data-theme="light"]) .vsrow[data-v="aer"]{--vc:#9a9a9a}
 /* every club's logo card is the same size wherever it shows; the logo sits centred inside it */

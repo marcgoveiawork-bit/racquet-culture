@@ -111,3 +111,7 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - Every club row in Switch club is the same height (108px): name up to two lines, area one line with "…", tag below.
 - The search box sticks under Back. Focusing it locks the pop-up's height and scrolls the search to the top, so results show right under it.
 - `sheetKb()` (called by every `openSheet`) watches `visualViewport`; when a phone keyboard is open it adds `.kb` to the backdrop, pinning the pop-up to the visible area above the keyboard at full height, so it no longer drops down behind it.
+
+### Phone pop-up fixes and profile rank chips (V1.5demo, preview only, 23 Nov 2026)
+- `pageLock()` freezes the page (body `position:fixed`, scroll restored on close) while any pop-up is open, so on phones the page behind can't scroll and the keyboard can't push things around. `closeSheet` blurs any focused field first. `sheetKb` now measures the keyboard against the tallest height seen (not `innerHeight`) and pins the pop-up to the top of the visible area.
+- Profile club chips show the ranking band (Beginner / Intermediate / Pro) beside the place. Tapping one (`clubRank`, chip has `data-p`) opens that club's rankings on the player's sport and band, scrolls to their row and keeps it lit (`spotRow`, `.spot`) until the screen is touched.
