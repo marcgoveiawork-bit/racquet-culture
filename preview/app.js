@@ -177,12 +177,12 @@ const VENUES=[
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
   insta:'https://www.instagram.com/theaerclub/',
   url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'},
- {id:'coplay',name:'CoPlay | Panjim Gymkhana',short:'CoPlay | Panjim Gymkhana',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
+ {id:'coplay',brand:'CoPlay',name:'CoPlay | Panjim Gymkhana',short:'CoPlay | Panjim Gymkhana',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'},
- {id:'assagao',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',area:'Assagao House, Bardez, Assagao, Goa, India',map:'CoPlay @ Assagao House, Assagao, Goa',courts:'1 padel court · 2 pickleball courts',
+ {id:'assagao',brand:'CoPlay',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',area:'Assagao House, Bardez, Assagao, Goa, India',map:'CoPlay @ Assagao House, Assagao, Goa',courts:'1 padel court · 2 pickleball courts',
   courtNos:{padel:[1],pickleball:[1,2]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-at-assagao-house/268830'},
   insta:'https://www.instagram.com/coplayofficial',
@@ -1433,19 +1433,26 @@ async function wFinish(){
 
 /* ================= App views ================= */
 const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
+/* Clubs that run more than one venue show once in the strip; tapping them asks which venue */
+const groupOf=v=>v.brand||v.id;
 function paintVenues(){const el=$('vswitch');if(!el)return;
  /* the club you're in stays put on the left (tap it for every club); the other clubs glide past beside it */
- const cur=VEN(),rest=VENUES.filter(v=>v.id!==VID);
- const one=(v,dup)=>{const n=unreadAt(v.id);return`<button type="button" class="vbtn" data-act="venue" data-v="${v.id}"${dup?' aria-hidden="true" tabindex="-1"':` aria-label="${esc(v.name)}${n?', new messages':''}"`} title="${esc(v.name)}">${vMark(v)}${n?'<span class="vdot" aria-hidden="true"></span>':''}</button>`};
+ const cur=VEN(),rest=VENUES.filter(v=>v.id!==VID),groups=[];
+ rest.forEach(v=>{const g=groups.find(x=>x.k===groupOf(v));g?g.vs.push(v):groups.push({k:groupOf(v),vs:[v]})});
+ const one=(g,dup)=>{const v=g.vs[0],many=g.vs.length>1,n=g.vs.some(x=>unreadAt(x.id)),nm=many?`${g.k} (${g.vs.length} venues)`:v.name;
+  return`<button type="button" class="vbtn${many?' vmany':''}" data-act="${many?'venueGroup':'venue'}" data-v="${esc(many?g.k:v.id)}"${dup?' aria-hidden="true" tabindex="-1"':` aria-label="${esc(nm)}${n?', new messages':''}"`} title="${esc(nm)}">${vMark(v)}${many?`<span class="vcount" aria-hidden="true">${g.vs.length}</span>`:''}${n?'<span class="vdot" aria-hidden="true"></span>':''}</button>`};
  el.innerHTML=`<button type="button" class="vbtn on vcur" data-act="venueAll" aria-label="${esc(cur.name)}, you are here. Switch club" aria-haspopup="dialog" title="Switch club">${vMark(cur)}<span class="vcaret" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span></button>`
-  +(rest.length?`<div class="vrun"><div class="vtrack" style="--n:${rest.length}"><div class="vset">${rest.map(v=>one(v)).join('')}</div><div class="vset" aria-hidden="true">${rest.map(v=>one(v,1)).join('')}</div></div></div>`:'');
- const run=el.querySelector('.vrun');if(run){let t=0;const hold=()=>{run.classList.add('hold');clearTimeout(t);t=setTimeout(()=>run.classList.remove('hold'),2600)};run.addEventListener('touchstart',hold,{passive:true});run.addEventListener('focusin',hold)}
+  +(groups.length?`<div class="vrun"><div class="vtrack" style="--n:${groups.length}"><div class="vset">${groups.map(g=>one(g)).join('')}</div><div class="vset" aria-hidden="true">${groups.map(g=>one(g,1)).join('')}</div></div></div>`:'');
+ const run=el.querySelector('.vrun');if(run){let t=0;const hold=()=>{run.classList.add('hold');clearTimeout(t);t=setTimeout(()=>run.classList.remove('hold'),2600)};run.addEventListener('touchstart',hold,{passive:true});run.addEventListener('focusin',hold);fitRun()}
 }
+/* When every club already fits beside yours, they sit still (no loop, no repeats); otherwise they glide */
+function fitRun(){const run=document.querySelector('#vswitch .vrun');if(!run)return;const set=run.querySelector('.vset');run.classList.remove('still');run.classList.toggle('still',set.scrollWidth<=run.clientWidth+1)}
+addEventListener('resize',()=>{clearTimeout(fitRun.t);fitRun.t=setTimeout(fitRun,120)});
 /* Every club in one pop-up: search, then tap to switch */
-function openVenues(){tick();
- openSheet(`<h2>Switch club</h2><p class="muted small">Every court. One app.</p>
-  <div class="search vssearch">${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
-  <div class="vslist" id="vsL">${VENUES.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
+function openVenues(grp){tick();const list=grp?VENUES.filter(v=>groupOf(v)===grp):VENUES;
+ openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
+  <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
+  <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
    return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
   <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
   requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
@@ -2486,6 +2493,7 @@ const ACT={
  /* clubs */
  venue(v){switchVenue(v)},
  venueAll(){openVenues()},
+ venueGroup(v){openVenues(v)},
  venueGo(v){closeSheet();if(v!==VID)setTimeout(()=>switchVenue(v),calm()?0:220)},
  authVenue(v){if(!VENUES.some(x=>x.id===v)||v===VID)return;VID=v;ls.set('rc_venue',v);applyVenue();tick();paintAuthVenue()},
  /* bookings */
