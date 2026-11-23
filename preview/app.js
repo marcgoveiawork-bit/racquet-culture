@@ -1663,14 +1663,78 @@ const ST_LABEL={pending:'Awaiting confirmation',disputed:'Under review',reviewed
 function matchRow(m,opts={}){
  const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',bw=m.winner==='b',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
  const team=(t,w)=>`<div class="tm${w?' win':''}"><span class="avs">${m[t].map(slotAv).join('')}</span><span>${m[t].map(s=>esc(slotName(s))).join(' & ')}</span></div>`;
- const acts=[];if(isAdmin())acts.push(`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">${st==='disputed'?'Review score':'Edit score'}</button>`);
- if(regsOf(m).includes(S.uid)&&regsOf(m).length>1)acts.unshift(`<button class="btn link small" data-act="kudos" data-v="${esc(m.id)}">Send kudos 👍</button>`);
+ const acts=[];if(opts.hist)acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:'',`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`,`<button class="btn link small dangerl" data-act="gameCancel" data-v="${esc(m.id)}">Cancel game</button>`);
+ else if(isAdmin())acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`);
+ if(!opts.hist&&regsOf(m).includes(S.uid)&&regsOf(m).length>1)acts.unshift(`<button class="btn link small" data-act="kudos" data-v="${esc(m.id)}">Send kudos 👍</button>`);
  if(opts.del&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
  return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',bw)}
   <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(whenOf(m))}${st&&st!=='confirmed'?` · <span class="stx st-${st}">${ST_LABEL[st]}</span>`:''}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
-  ${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
+  ${opts.hist?histBy(m):''}${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
   <div class="sets num">${sets.map(s=>`<div><span class="${+s[0]>+s[1]?'w':'l'}">${+s[0]}</span><span class="${+s[1]>+s[0]?'w':'l'}">${+s[1]}</span></div>`).join('')}${Array.isArray(m.extra)?`<div class="xset" title="Extra set, played for fun after the match was decided"><span>${+m.extra[0]}</span><span>${+m.extra[1]}</span></div>`:''}</div></div>`;
 }
+/* ---------- Game history (admins and above) ----------
+   Every game logged at the club in the last 7 days, newest first. Older games drop off this list on their own,
+   but they stay in everyone's level and the rankings. Admins can edit a game's score or players, or cancel it. */
+const HIST_DAYS=7;
+const histGames=()=>S.matches.filter(okMatch).filter(m=>m.date>=addDays(today(),-(HIST_DAYS-1))).sort(byWhen).reverse();
+/* "Caelan DaCosta (Owner)": the staff member's full name and role at the club, for notices */
+const staffName=(id,v=VID)=>{const p=prof(id);return (p?p.name:'An admin')+' ('+ROLE_NAME[roleAt(id,v)]+')'};
+function histBy(m){const by=prof(m.by),ed=(m.edits||[]).slice(-1)[0],ep=ed&&prof(ed.by);
+ return `<p class="tiny muted hby">Logged by ${esc(by?by.name:'a member')}${m.logged?' for the players':''}${ed?` · edited by ${esc(ep?ep.name:'an admin')}`:''}</p>`}
+function histSection(){
+ const gs=histGames(),n=view.histAll?gs.length:5;
+ return `<div class="sec"><h2>Game history</h2><span class="small muted">Last ${HIST_DAYS} days · ${gs.length}</span></div>
+  <p class="small muted histnote">Every score logged at ${esc(VEN().name)} this week. Edit the score or players, or cancel a game, and the players are told. Games leave this list after ${HIST_DAYS} days; their points stay in the rankings.</p>
+  <div class="list">${gs.slice(0,n).map(m=>matchRow(m,{for:'-',hist:1})).join('')||`<div class="card empty rv"><b>No games this week</b>Scores logged at this club in the last ${HIST_DAYS} days appear here.</div>`}</div>
+  ${gs.length>n?`<button class="btn ghost wide" style="margin-top:10px" data-act="histMore">Show all ${gs.length} games</button>`:''}`}
+/* The edit pop-up keeps its changes in G while a player is being picked */
+let G=null;
+function gameSheet(mid){
+ const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;
+ if(!G||G.mid!==mid)G={mid,a:m.a.map(x=>Object.assign({},x)),b:m.b.map(x=>Object.assign({},x)),rows:[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):i===2&&Array.isArray(m.extra)?m.extra.map(String):['',''])};
+ const sl=(t,i)=>{const x=G[t][i],lv=x&&x.uid?lvlOf(m.sport,x.uid):x&&x.level;return`<button type="button" class="slot filled" data-act="egPick" data-v="${t}${i}">${slotAv(x)}<span class="sn"><b>${esc(slotName(x))}</b><span>${lv!=null?'Level '+fmtL(lv,x.uid?2:1):''} · Change</span></span></button>`};
+ openSheet(`<h2>Edit game</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))} · logged by ${esc(prof(m.by)?prof(m.by).name:'a member')}</p>
+  <div class="teams eteams" style="margin-top:12px"><div class="team"><p class="eyebrow">Team 1</p>${G.a.map((_,i)=>sl('a',i)).join('')}</div><span class="vs">VS</span><div class="team"><p class="eyebrow">Team 2</p>${G.b.map((_,i)=>sl('b',i)).join('')}</div></div>
+  <h3 style="margin-top:16px">Score</h3>
+  <div>${scoreGrid(m.sport,G.rows,'eg',[teamHead('Team 1',G.a,false),teamHead('Team 2',G.b,false)],-1)}</div>
+  <p class="ferr" id="egErr"></p>
+  <p class="small muted">Levels and rankings are worked out again with the new result. Everyone in the game, and anyone you take out of it, gets a message saying you made the change.</p>
+  <button class="btn brand wide" id="egSave" style="margin-top:12px">Save changes</button>
+  <button class="btn danger wide" style="margin-top:10px" data-act="gameCancel" data-v="${esc(m.id)}">Cancel this game</button>`,bg=>{
+  bindGrid('eg',G.rows,null,m.sport);
+  bg.querySelector('#egSave').onclick=()=>saveGameEdit(m.id)});
+}
+function egPicker(key){
+ const m=S.matches.find(x=>x.id===G.mid);if(!m)return;const t=key[0],i=+key[1],cur=G[t][i];
+ openSheet(`<h2>Change player</h2><p class="muted small">${SPORTS[m.sport].name} · Team ${t==='a'?1:2} · replacing ${esc(slotName(cur))}</p>
+  <div class="search" style="margin-top:14px">${ICON.search}<input id="egQ" type="search" placeholder="Search members" aria-label="Search members"></div>
+  <div class="pickl" id="egL"></div><p class="tiny muted" style="margin-top:8px">Members of this club with a ${SPORTS[m.sport].name.toLowerCase()} level.</p>
+  <button class="btn ghost wide" style="margin-top:12px" data-act="egBack">Back to the game</button>`,bg=>{
+  const paint=()=>{const q=(bg.querySelector('#egQ').value||'').trim().toLowerCase(),used=[...G.a,...G.b].filter(Boolean).map(x=>x.uid);
+   const list=S.profiles.filter(p=>p.setup&&inVenue(p)&&lvlOf(m.sport,p.id)!=null&&!used.includes(p.id)&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,40);
+   bg.querySelector('#egL').innerHTML=list.map(p=>{const r=lvlOf(m.sport,p.id);return`<button type="button" data-eg="${p.id}">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span>@${esc(p.username)}</span></span><span class="chip t-${tierOf(m.sport,r)} num">${fmtL(r)}</span></button>`}).join('')||'<p class="small muted" style="padding:8px 4px">No members found.</p>';
+   qsa('[data-eg]',bg).forEach(el=>el.onclick=()=>{const id=el.dataset.eg;G[t][i]={uid:id,level:+fmtL(lvlOf(m.sport,id))};tick();gameSheet(G.mid)})};
+  bg.querySelector('#egQ').oninput=paint;paint()});
+}
+const slotKey=x=>x?(x.uid||'g:'+x.name):'';
+const teamsKey=m=>[m.a,m.b].map(t=>t.map(slotKey).sort().join('+')).join('|');
+async function saveGameEdit(mid){
+ const m=S.matches.find(x=>x.id===mid),err=t=>{const e=$('egErr');if(e)e.textContent=t;toast(t)};if(!m||!G)return;
+ const rs=readSetsOf(m.sport,G.rows);if(rs.err)return err(rs.err);
+ const nm0={a:G.a,b:G.b},ids=regsOf(nm0);if(new Set(ids).size!==ids.length)return err('The same player is in the game twice.');
+ const what=[];if(setsStr(rs.sets)!==setsStr(m.sets)||setsStr(rs.extra?[rs.extra]:[])!==setsStr(Array.isArray(m.extra)?[m.extra]:[]))what.push('score');if(teamsKey(nm0)!==teamsKey(m))what.push('players');
+ if(!what.length)return err('Nothing has changed yet.');
+ const at=new Date().toISOString(),nm=Object.assign({},m,{a:G.a,b:G.b,sets:rs.sets,winner:rs.winner,review:{by:S.uid,at,prev:m.sets,kept:false},edits:[...(m.edits||[]),{by:S.uid,at,what,prevSets:m.sets,prevA:m.a,prevB:m.b}]});
+ if(rs.extra)nm.extra=rs.extra;else delete nm.extra;
+ const btn=$('egSave');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+ try{await Store.updateMatch(nm)}catch(e){if(btn){btn.disabled=false;btn.textContent='Save changes'}return err(e.code==='denied'?'Only admins at this club can change games.':'Could not save. Check your connection.')}
+ upsert(S.matches,nm);rate();G=null;closeSheet();doneTick('Game updated');
+ const before=regsOf(m),after=regsOf(nm);
+ notify([...new Set([...before,...after])].map(to=>({to,kind:'game_edit',data:{match:nm.id,what,prev:setsStr(m.sets),removed:!after.includes(to),added:!before.includes(to),snap:gameSnap(m)}})));
+ toast('Game saved. Rankings updated and the players have been told.',3600);render();
+}
+const gameSnap=m=>({sport:m.sport,date:m.date,time:m.time,len:m.len,sets:m.sets,a:m.a.map(slotName),b:m.b.map(slotName)});
+const snapLine=s=>`<span class="scoreline">${esc((s.a||[]).join(' & '))} <span class="muted">vs</span> ${esc((s.b||[]).join(' & '))} · ${setsStr(s.sets)}</span>`;
 /* New at this club: no games here yet, so not ranked here yet */
 function yetCard(){if(S.uid&&mySports().some(sp=>S.R[sp][S.uid]&&S.R[sp][S.uid].n))return'';
  return`<button class="card todo hov rv yetcard" data-act="go" data-v="add"><span class="mi">${ICON.bars(1)}</span><span><b>Yet to play at ${esc(VEN().name)}</b><span class="small muted">You’re not ranked here yet. Log your first game at this club and you’ll join its rankings.</span></span><span class="go">›</span></button>`}
@@ -1684,6 +1748,7 @@ function vHome(){
   <div class="cta">${hasSlots()?'<button class="btn ball" data-act="go" data-v="book">Book a court</button>':bookLinkBtn(VEN(),'btn ball')}<button class="btn ghost" data-act="go" data-v="add">Add score</button></div></div>${yetCard()}${moveUpCard()}
   ${isAdmin()?`<div class="card admincard rv"><div class="lhead"><span class="eyebrow">Admin</span><span class="chip admin">Admin</span></div>
    <div class="astats">${hasSlots()?`<button data-act="go" data-v="book"><b class="num">${toConfirm}</b><span>booking${toConfirm===1?'':'s'} to confirm</span></button><button data-act="go" data-v="book"><b class="num">${todayB}</b><span>game${todayB===1?'':'s'} today</span></button>`:''}<button data-act="ibTodo"><b class="num">${disputes}</b><span>score${disputes===1?'':'s'} to review</span></button></div></div>`:''}
+  ${isAdmin()?histSection():''}
   ${todo.length?`<button class="card todo hov rv" data-act="ibTodo"><span class="mi">${ICON.mail}</span><span><b>${todo.length} thing${todo.length===1?'':'s'} need${todo.length===1?'s':''} you</b><span class="small muted">Scores to confirm, invites and bookings in your inbox</span></span><span class="go">›</span></button>`:''}
   ${hasSlots()?`<div class="sec"><h2>Your next games</h2><button class="btn link small" data-act="go" data-v="book">Book</button></div>
   <div class="list">${up.slice(0,3).map(bookingRow).join('')||`<div class="card empty rv"><b>Nothing booked</b>Find a free slot, invite players and pay at the court when you arrive.</div>`}</div>`:`<div class="sec"><h2>Play next</h2><button class="btn link small" data-act="go" data-v="book">Courts</button></div>${bookCard(true)}`}
@@ -1959,12 +2024,14 @@ let A=null;
 /* the ranked sports at this club: the ones it has courts for */
 const vSports=()=>{const s=SP_KEYS.filter(k=>VEN().courtNos[k]);return s.length?s:SP_KEYS};
 const addSports=()=>vSports().filter(k=>S.R[k][S.uid]);
+/* Admins logging a game for others can pick any sport the club has */
+const aSports=()=>A&&A.others?vSports():addSports();
 function newA(){const sp=addSports()[0]||mySports().find(k=>vSports().includes(k))||vSports()[0];return{sport:sp,format:'doubles',date:today(),time:null,len:0,courtNo:1,a:[{uid:S.uid},null],b:[null,null],sets:[['',''],['',''],['','']],err:''}}
-function fitFormat(){const n=A.format==='singles'?1:2;['a','b'].forEach(t=>{A[t]=A[t].slice(0,n);while(A[t].length<n)A[t].push(null)});if(!A.a[0])A.a[0]={uid:S.uid}}
+function fitFormat(){const n=A.format==='singles'?1:2;['a','b'].forEach(t=>{A[t]=A[t].slice(0,n);while(A[t].length<n)A[t].push(null)});if(!A.a[0]&&!A.others)A.a[0]={uid:S.uid}}
 function slotLevel(s){if(!s)return null;if(s.uid){const r=lvlOf(A.sport,s.uid);return r!=null?r:(s.level!=null?+s.level:null)}return s.level!=null?+s.level:null}
 function slotHTML(t,i){
- const s=A[t][i],fixed=t==='a'&&i===0,lv=slotLevel(s);
- if(!s)return `<button type="button" class="slot" data-act="pick" data-v="${t}${i}"><span class="plus">+</span><span class="sn"><b>${t==='a'?'Add your partner':'Add opponent'}</b><span>Member or guest</span></span></button>`;
+ const s=A[t][i],fixed=t==='a'&&i===0&&!A.others,lv=slotLevel(s);
+ if(!s)return `<button type="button" class="slot" data-act="pick" data-v="${t}${i}"><span class="plus">+</span><span class="sn"><b>${A.others?'Add player':t==='a'?'Add your partner':'Add opponent'}</b><span>Member or guest</span></span></button>`;
  return `<${fixed?'div':'button type="button"'} class="slot filled${fixed?' fixed':''}" ${fixed?'':`data-act="pick" data-v="${t}${i}"`}>${slotAv(s)}<span class="sn"><b>${esc(fixed?'You':slotName(s))}</b><span>${lv!=null?'Level '+fmtL(lv,s.uid?2:1):'Level needed'}${s.uid?'':' · entered'}</span></span></${fixed?'div':'button'}>`;
 }
 /* The score grid: a clear column for each team, with who is in it, so no one types a score on the wrong side */
@@ -1973,12 +2040,14 @@ function scoreGrid(sport,rows,key,heads,mineCol){const S_=SPORTS[sport];
  return `<div class="scorehead"><span></span>${heads[0]}<i></i>${heads[1]}</div><div class="sets">${rows.map((s,r)=>`<div class="setrow"><span class="eyebrow">${S_.setName} ${r+1}</span>${[0,1].map(c=>`<input class="${c===mineCol?'mine':''}" inputmode="numeric" pattern="[0-9]*" maxlength="2" aria-label="${S_.setName} ${r+1}, ${c?'right':'left'} team" data-${key}="${r},${c}" value="${esc(s[c])}" placeholder="–">`).join('<i>–</i>')}</div>`).join('')}</div>`}
 function bindGrid(key,rows,onChange,sport){const mx=MAX_GAMES[sport]||99;qsa(`[data-${key}]`).forEach(el=>el.oninput=()=>{const [r,c]=el.dataset[key].split(',');let v=el.value.replace(/\D/g,'').slice(0,2);if(v!==''&&+v>mx){v=rows[+r][+c]||'';toast(sport==='padel'?'A padel set has at most 7 games.':`A pickleball game goes to 11. Scores above ${mx} aren't allowed.`)}rows[+r][+c]=v;if(el.value!==rows[+r][+c])el.value=rows[+r][+c];onChange&&onChange()})}
 function vAdd(){
- if(!A)A=newA();fitFormat();const S_=SPORTS[A.sport],days=Array.from({length:30},(_,k)=>addDays(today(),-k));
+ if(A&&A.others&&!isAdmin())A=null;
+ if(!A)A=newA();fitFormat();const O=!!A.others;const S_=SPORTS[A.sport],days=Array.from({length:30},(_,k)=>addDays(today(),-k));
  after=()=>{bindGrid('set',A.sets,paintFair,A.sport);paintFair();const d=document.querySelector('.dstrip .dchip[aria-pressed="true"]');if(d&&d.scrollIntoView)d.parentElement.scrollLeft=d.offsetLeft-d.parentElement.clientWidth/2+d.offsetWidth/2};
  return `<div class="hd"><div><p class="eyebrow">After the game</p><h1>Add score</h1></div></div>
  <div class="card rv">
-  ${addSports().length>1?seg('as','Sport',addSports().map(k=>[k,SPORTS[k].name]),A.sport,'aSport'):`<p class="eyebrow">${S_.name}</p>`}
-  ${vSports().filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To add ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
+  ${isAdmin()?`<div class="awho">${seg('aw','Who played',[['me','I played'],['others','Log for others']],O?'others':'me','aWho')}<p class="small muted" style="margin:8px 0 12px">${O?`As ${esc(ROLE_NAME[roleOf(S.uid)].toLowerCase())}, you can log any game at ${esc(VEN().name)}. Pick all the players. The score is final and they’re told you logged it.`:'Playing in this game? Log it as normal. To log a game you weren’t in, tap Log for others.'}</p></div>`:''}
+  ${aSports().length>1?seg('as','Sport',aSports().map(k=>[k,SPORTS[k].name]),A.sport,'aSport'):`<p class="eyebrow">${S_.name}</p>`}
+  ${O?'':vSports().filter(k=>!S.R[k][S.uid]).map(k=>`<p class="small muted" style="margin-top:10px">To add ${SPORTS[k].name.toLowerCase()} games, <button class="btn link small" data-act="retake" data-v="${k}">set your ${SPORTS[k].name.toLowerCase()} level</button> first.</p>`).join('')}
   ${A.sport==='pickleball'?`<div style="margin-top:10px">${seg('af','Format',[['doubles','Doubles'],['singles','Singles']],A.format,'aFormat')}</div>`:''}
   <label>Date played</label>
   <div class="dstrip" role="group" aria-label="Date played">${days.map(d=>{const dt=new Date(d+'T12:00:00'),k=d===today()?'Today':d===addDays(today(),-1)?'Yesterday':dt.toLocaleDateString('en-IN',{weekday:'short'});return`<button type="button" class="dchip" aria-pressed="${d===A.date}" data-act="aDate" data-v="${d}"><span>${k}</span><b>${dt.getDate()}</b><span>${dt.toLocaleDateString('en-IN',{month:'short'})}</span></button>`}).join('')}</div>
@@ -1988,18 +2057,18 @@ function vAdd(){
   <button type="button" class="timepick${A.time==null?' empty':''}" data-act="aTime"><span class="tp-i">${MI.clock}</span><span class="tp-t">${A.time==null?'<b>Choose start and end time</b><span>Tap the slots you were on court</span>':`<b>${slotRange(A.time,A.len)}</b><span>${durLabel(A.len)} · ${esc(dateLabel(A.date))}</span>`}</span><span class="tp-c">›</span></button>
  </div>
  <div class="card rv"><div class="teams">
-  <div class="team"><p class="eyebrow">${A.format==='singles'?'You':'Your team'}</p>${A.a.map((_,i)=>slotHTML('a',i)).join('')}</div>
+  <div class="team"><p class="eyebrow">${O?(A.format==='singles'?'Player 1':'Team 1'):A.format==='singles'?'You':'Your team'}</p>${A.a.map((_,i)=>slotHTML('a',i)).join('')}</div>
   <span class="vs">VS</span>
-  <div class="team"><p class="eyebrow">${A.format==='singles'?'Opponent':'Opponents'}</p>${A.b.map((_,i)=>slotHTML('b',i)).join('')}</div>
+  <div class="team"><p class="eyebrow">${O?(A.format==='singles'?'Player 2':'Team 2'):A.format==='singles'?'Opponent':'Opponents'}</p>${A.b.map((_,i)=>slotHTML('b',i)).join('')}</div>
  </div><p class="small muted" style="margin-top:12px">Members' levels fill in on their own. For anyone without an account, you enter their level so the points stay fair.</p></div>
  <div class="card rv"><h3>Score</h3><p class="small muted" style="margin:-4px 0 14px">Games won by each team. ${A.sport==='padel'?'Best of 3 sets. Leave the third set empty if you played two.':'Games to 11, win by 2. Best of 3 games.'}</p>
-  ${scoreGrid(A.sport,A.sets,'set',[teamHead(A.format==='singles'?'You':'Your team',A.a,1),teamHead(A.format==='singles'?'Opponent':'Opponents',A.b,0)],0)}
+  ${scoreGrid(A.sport,A.sets,'set',O?[teamHead('Team 1',A.a,0),teamHead('Team 2',A.b,0)]:[teamHead(A.format==='singles'?'You':'Your team',A.a,1),teamHead(A.format==='singles'?'Opponent':'Opponents',A.b,0)],O?-1:0)}
   <div id="s3note"></div>
   <p class="ssum" id="ssum"></p></div>
  <div class="card fair rv" id="fair"></div>
  <p class="ferr" id="aErr2" role="alert"></p>
  <button class="btn brand wide" data-act="submitMatch" style="margin-top:6px">Save score</button>
- <p class="tiny muted" style="text-align:center;margin-top:10px">The other players are asked to confirm it. If someone disagrees, an admin checks it.</p>`;
+ <p class="tiny muted" style="text-align:center;margin-top:10px">${O?'Every player gets a message that you logged it. Rankings update straight away.':'The other players are asked to confirm it. If someone disagrees, an admin checks it.'}</p>`;
 }
 /* Which court slots are already used on this day by another logged game */
 function usedSlot(i){
@@ -2076,17 +2145,19 @@ function paintFair(){
  paintSet3();
  const rs=readSets(),sum=$('ssum');
  if(sum){const filled=A.sets.some(s=>s[0]!==''||s[1]!=='');sum.className='ssum'+(rs.sets?rs.winner==='a'?' win':rs.winner==='draw'?'':' lose':'');
-  sum.textContent=rs.sets?(rs.winner==='draw'?`It's a draw, ${rs.wa}–${rs.wb} in games won (${rs.dr} drawn at the ${PB_CAP}-point cap)`:(rs.winner==='a'?`Your team wins ${rs.wa}–${rs.wb}`:`Your opponents win ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games')):filled?rs.err:''}
+  sum.textContent=rs.sets?(rs.winner==='draw'?`It's a draw, ${rs.wa}–${rs.wb} in games won (${rs.dr} drawn at the ${PB_CAP}-point cap)`:(rs.winner==='a'?`${A.others?'Team 1':'Your team'} wins ${rs.wa}–${rs.wb}`:`${A.others?'Team 2':'Your opponents'} win${A.others?'s':''} ${rs.wb}–${rs.wa}`)+(SPORTS[A.sport].setName==='Set'?' in sets':' in games')):filled?rs.err:''}
  const el=$('fair');if(!el)return;const m=draft();
  if(!m){el.innerHTML=`<h3>Fair points</h3><p class="small muted">Add all the players to see how many points this game is worth for each of you.</p>`;return}
  const ta=avg(m.a.map(s=>s.level)),tb=avg(m.b.map(s=>s.level)),ea=1/(1+Math.pow(10,(tb-ta)/SPORTS[m.sport].scale));
  let rows;
  if(rs.sets){const pv=preview(Object.assign({},m,{sets:rs.sets,winner:rs.winner}));
   rows=[...m.a,...m.b].filter(s=>s.uid).map(s=>`<div class="prow"><span>${s.uid===S.uid?'You':esc(slotName(s))}</span><span class="delta ${dcls(pv.d[s.uid])}">${fmtD(pv.d[s.uid])}</span></div>`).join('');
-  rows=`<p class="small" style="margin:10px 0 4px"><b>${rs.winner==='a'?'Your team wins.':rs.winner==='draw'?'A draw.':'Your opponents win.'}</b> Points from this result:</p>${rows}`}
+  rows=`<p class="small" style="margin:10px 0 4px"><b>${rs.winner==='a'?(A.others?'Team 1 wins.':'Your team wins.'):rs.winner==='draw'?'A draw.':(A.others?'Team 2 wins.':'Your opponents win.')}</b> Points from this result:</p>${rows}`}
+ else if(A.others)rows=`<p class="tiny muted" style="margin-top:6px">Enter the score to see each player’s points.</p>`;
  else{const w=preview(Object.assign({},m,{sets:[[1,0]],winner:'a'})),l=preview(Object.assign({},m,{sets:[[0,1]],winner:'b'}));
   rows=`<div class="prow"><span>If you win</span><span class="delta up">${fmtD(w.d[S.uid])}</span></div><div class="prow"><span>If you lose</span><span class="delta down">${fmtD(l.d[S.uid])}</span></div><p class="tiny muted" style="margin-top:6px">Bigger wins move the number a little more.</p>`}
- el.innerHTML=`<h3>Fair points</h3><p class="small muted">Your team averages <b class="num">${fmtL(ta)}</b>, your opponents <b class="num">${fmtL(tb)}</b>. ${Math.abs(ta-tb)<.15?'An even match.':ta>tb?'You are the favourites, so a win earns less and a loss costs more.':'You are the underdogs, so a win earns more and a loss costs less.'}</p>
+ el.innerHTML=A.others?`<h3>Fair points</h3><p class="small muted">Team 1 averages <b class="num">${fmtL(ta)}</b>, Team 2 <b class="num">${fmtL(tb)}</b>. ${Math.abs(ta-tb)<.15?'An even match.':ta>tb?'Team 1 are the favourites.':'Team 2 are the favourites.'}</p>
+  <div class="bar" aria-hidden="true"><i style="width:${(ea*100).toFixed(0)}%"></i><b></b></div><p class="tiny muted">Expected chance Team 1 wins: <b class="num">${Math.round(ea*100)}%</b></p>${rows}`:`<h3>Fair points</h3><p class="small muted">Your team averages <b class="num">${fmtL(ta)}</b>, your opponents <b class="num">${fmtL(tb)}</b>. ${Math.abs(ta-tb)<.15?'An even match.':ta>tb?'You are the favourites, so a win earns less and a loss costs more.':'You are the underdogs, so a win earns more and a loss costs less.'}</p>
   <div class="bar" aria-hidden="true"><i style="width:${(ea*100).toFixed(0)}%"></i><b></b></div><p class="tiny muted">Expected chance your team wins: <b class="num">${Math.round(ea*100)}%</b></p>${rows}`;
 }
 async function submitMatch(){
@@ -2098,10 +2169,15 @@ async function submitMatch(){
  const m=draft();if(!m)return err('Add every player, with a level for anyone who does not have one yet.');
  const ids=regsOf(m);if(new Set(ids).size!==ids.length)return err('The same player is in the game twice.');
  const rs=readSets();if(rs.err)return err(rs.err);
+ const O=!!A.others;if(O&&!isAdmin())return err('Only admins can log a game for other players.');if(O&&ids.includes(S.uid))return err('You’re in this game, so tap I played and log it as normal.');
  const rec=Object.assign(m,{id:'m_'+rid(),sets:rs.sets,winner:rs.winner,by:S.uid,at:new Date().toISOString()});if(rs.extra)rec.extra=rs.extra;if(A.booking)rec.booking=A.booking;
+ if(O){rec.logged=true;rec.review={by:S.uid,at:rec.at,prev:null,kept:true}}
  const btn=document.querySelector('[data-act="submitMatch"]');btn.disabled=true;btn.textContent='Saving…';
  try{await Store.addMatch(rec)}catch(e){btn.disabled=false;btn.textContent='Save score';return err('Could not save the score. Check your connection and try again.')}
- S.matches.push(rec);rate();const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
+ S.matches.push(rec);rate();
+ if(O){doneTick('Game logged');notify(ids.map(to=>({to,kind:'game_logged',data:{match:rec.id}})));toast(`Game logged. Rankings are updated and the ${ids.length} players have been told.`,4200);
+  A=null;view.tab='home';setTimeout(()=>{window.scrollTo(0,0);render()},500);return}
+ const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
  notify(ids.filter(u=>u!==S.uid).map(to=>({to,kind:'confirm',data:{match:rec.id}})));
  toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}. The other players are asked to confirm.`,4200);
  view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>levelAsk(rec.id,()=>kudosSheet(rec.id,true)),900)},500);
@@ -2140,7 +2216,15 @@ function msgView(g){
    return{i:MI.flag,warn:1,t:'Score disputed',p:`${esc(fn)} says ${esc(prof(m.by)?first(prof(m.by))+'\u2019s':'the')} score for this ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}, is wrong.${score}${c?`<span class="scoreline prop">Their score: ${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}`:''}`,
     a:st==='disputed'?(isAdmin()?`<button class="btn brand sm" data-act="review" data-v="${esc(m.id)}">Review score</button>`:''):'<span class="chip st-reviewed">Reviewed</span>'}}
   case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game played ${esc(playedWhen(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
-  case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(fn)} (admin) ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
+  case 'game_edit':{const sn=esc(staffName(g.from,vidOf(g))),s=d.snap||{},spn=SPORTS[s.sport]?SPORTS[s.sport].name.toLowerCase():'';
+   if(d.removed)return{i:MI.shield,warn:1,t:`${sn} took you out of a game`,p:`You’re no longer in this ${spn} game, played ${esc(playedWhen(s))}, so it doesn’t count for your level any more. Rankings are updated.${snapLine(s)}`};
+   if(!m)return gone;const w=(d.what||[]);
+   return{i:MI.shield,t:d.added?`${sn} added you to a game`:`${sn} changed ${w.includes('score')&&w.includes('players')?'the score and players of':w.includes('players')?'the players in':'the score of'} your game`,
+    p:`Your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))}${d.added?' now includes you':' was edited'}. Rankings are updated.${score}${w.includes('score')&&d.prev&&!d.added?`<span class="tiny muted">Was ${esc(d.prev)}</span>`:''}`}}
+  case 'game_cancel':{const sn=esc(staffName(g.from,vidOf(g))),s=d.snap||{},spn=SPORTS[s.sport]?SPORTS[s.sport].name.toLowerCase():'';
+   return{i:MI.flag,warn:1,t:`${sn} cancelled a game`,p:`Your ${spn} game played ${esc(playedWhen(s))} has been removed. Levels and rankings are worked out again without it.${snapLine(s)}`}}
+  case 'game_logged':{if(!m)return gone;return{i:MI.shield,t:`${esc(staffName(g.from,vidOf(g)))} logged your game`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))} was added by the club. Rankings are updated.${score}`}}
+  case 'resolved':{if(!m)return gone;return{i:MI.shield,t:`${esc(staffName(g.from,vidOf(g)))} ${d.kept?'confirmed':'set'} a score`,p:`The score of your ${SPORTS[m.sport].name.toLowerCase()} game played ${esc(playedWhen(m))} is now final${d.kept?' as it was added':''}. Rankings are updated.${score}`}}
   case 'invite':{if(!b)return gone;const st=(b.going||[]).includes(S.uid)?'in':(b.declined||[]).includes(S.uid)?'out':'',past=slotDate(b.date,b.start)<=new Date();
    return{i:MI.cal,t:`${esc(fn)} invited you to play`,p:`${bkLine(b)}${bkStatus(b)==='pending'?' · waiting for the club to confirm':''}${b.note?`<span class="quote">“${esc(b.note)}”</span>`:''}`,
     a:st==='in'?'<span class="chip st-confirmed">You’re in</span>':st==='out'?'<span class="chip st-disputed">You said no</span>':past?'<span class="chip">This game has passed</span>'
@@ -2186,7 +2270,7 @@ function msgView(g){
  }
  return{i:MI.check,t:'Message',p:''};
 }
-const ADMIN_KINDS=['admin_msg','admin_reply','dispute','disputed','resolved','report','report_done','conduct'];
+const ADMIN_KINDS=['admin_msg','admin_reply','dispute','disputed','resolved','report','report_done','conduct','game_edit','game_cancel','game_logged'];
 const ibCat=g=>g.kind==='community'?'community':ADMIN_KINDS.includes(g.kind)?'admin':'other';
 const ADM_TOPICS=[['court','Court or facilities problem'],['player','Report a player'],['booking','Booking or payment'],['other','Something else']];
 const P_MAX=160,A_MAX=600,C_MAX=500;
@@ -2271,7 +2355,7 @@ function reviewSheet(mid){
    const nm=Object.assign({},m,{sets:rs.sets,winner:rs.winner,review:{by:S.uid,at:new Date().toISOString(),prev:m.sets,kept:!!keep||setsStr(rs.sets)===setsStr(m.sets)}});
    try{await Store.updateMatch(nm)}catch(e){$('rvErr').textContent=e.code==='denied'?'Only admins can change scores. Check that your account is an admin in Supabase.':'Could not save. Check your connection.';return}
    upsert(S.matches,nm);rate();closeSheet();doneTick('Score updated');
-   notify([...regsOf(nm),...S.admins].filter((x,i,a)=>a.indexOf(x)===i).map(to=>({to,kind:'resolved',data:{match:nm.id,sets:nm.sets,kept:nm.review.kept}})));
+   notify([...regsOf(nm),...vAdmins()].filter((x,i,a)=>a.indexOf(x)===i).map(to=>({to,kind:'resolved',data:{match:nm.id,sets:nm.sets,kept:nm.review.kept}})));
    toast('Score saved. Rankings updated and everyone in the game has been told.',3600);render()};
   bg.querySelector('#rvSave').onclick=()=>done(false);const k=bg.querySelector('#rvKeep');if(k)k.onclick=()=>done(true)});
 }
@@ -2464,18 +2548,18 @@ function lvlInput(sp,val){const S_=SPORTS[sp];
 let pickT=null;
 function openPicker(key){
  pickT={t:key[0],i:+key[1]};const sp=SPORTS[A.sport];
- openSheet(`<h2>Choose a player</h2><p class="muted small">${sp.name} · ${pickT.t==='a'?'Your team':'Opponents'}</p>
+ openSheet(`<h2>Choose a player</h2><p class="muted small">${sp.name} · ${A.others?'Team '+(pickT.t==='a'?1:2):pickT.t==='a'?'Your team':'Opponents'}</p>
   <div class="search" style="margin-top:14px">${ICON.search}<input id="pkQ" type="search" placeholder="Search members" aria-label="Search members"></div>
   <div class="pickl" id="pkL"></div>
   <div class="divider">Playing with someone without an account?</div>
   <label for="gName">Their name</label><input id="gName" maxlength="40" placeholder="e.g. Sam" autocomplete="off">
   <label for="gLvl">Their ${sp.name.toLowerCase()} level</label>${lvlInput(A.sport,null)}
   <p class="ferr" id="gErr"></p><button class="btn brand wide" data-act="addGuest">Add guest</button>
-  ${A[pickT.t][pickT.i]&&!(pickT.t==='a'&&pickT.i===0)?`<button class="btn link small" style="display:block;margin:12px auto 0" data-act="clearSlot">Remove this player</button>`:''}`,
+  ${A[pickT.t][pickT.i]&&!(pickT.t==='a'&&pickT.i===0&&!A.others)?`<button class="btn link small" style="display:block;margin:12px auto 0" data-act="clearSlot">Remove this player</button>`:''}`,
  bg=>{const q=bg.querySelector('#pkQ');q.oninput=paintPick;paintPick()});
 }
 function paintPick(){
- const q=($('pkQ').value||'').trim().toLowerCase(),used=[...A.a,...A.b].filter(Boolean).map(s=>s.uid);
+ const q=($('pkQ').value||'').trim().toLowerCase(),used=[...A.a,...A.b].filter(Boolean).map(s=>s.uid);if(A.others)used.push(S.uid);
  const list=S.profiles.filter(p=>p.setup&&inVenue(p)&&!used.includes(p.id)&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,40);
  $('pkL').innerHTML=list.map(p=>{const r=lvlOf(A.sport,p.id);return`<button type="button" data-act="pickMember" data-v="${p.id}">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span>@${esc(p.username)}</span></span>${r!=null?`<span class="chip t-${tierOf(A.sport,r)} num">${fmtL(r)}</span>`:'<span class="chip">No level</span>'}</button>`}).join('')||`<p class="small muted" style="padding:8px 4px">No members found. Add them as a guest below.</p>`;
 }
@@ -2777,8 +2861,20 @@ const ACT={
  lstep(v){const i=$('gLvl'),S_=SPORTS[A.sport],cur=parseFloat(i.value);i.value=fmtL(clamp((isFinite(cur)?cur:avg(S_.bands.intermediate))+ +v,S_.min,S_.max),1);tick()},
  lband(v){const b=SPORTS[A.sport].bands[v];$('gLvl').value=fmtL((b[0]+b[1])/2,1);tick()},
  submitMatch(){submitMatch()},
+ gameEdit(v){G=null;gameSheet(v)},
+ egPick(v){egPicker(v)},
+ egBack(){if(G)gameSheet(G.mid)},
+ histMore(){view.histAll=true;render()},
+ gameCancel(v){G=null;confirmSheet('Cancel this game?','It’s removed from the club’s games and everyone’s levels are worked out again without it. The players get a message saying you cancelled it.','Cancel game','gameCancelYes',v)},
+ async gameCancelYes(v){const m=S.matches.find(x=>x.id===v);if(!m)return closeSheet();
+  try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only admins at this club can cancel games.':'Could not cancel. Check your connection.')}
+  S.matches=S.matches.filter(x=>x.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();doneTick('Game cancelled');
+  notify(regsOf(m).map(to=>({to,kind:'game_cancel',data:{snap:gameSnap(m)}})))},
+ aWho(v){const o=v==='others';if(!!A.others===o)return;A.others=o;A.extra3=false;const n=A.format==='singles'?1:2;A.a=Array(n).fill(null);A.b=Array(n).fill(null);
+  if(!o){A.a[0]={uid:S.uid};if(!addSports().includes(A.sport)&&addSports().length)A.sport=addSports()[0]}render()},
  delMatch(v){confirmSheet('Delete this score?','Everyone’s levels from this game are recalculated without it.','Delete','delMatchYes',v)},
- async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only the player who added it, or an admin, can delete this score.':'Could not delete. Check your connection.')}S.matches=S.matches.filter(m=>m.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();toast('Score deleted')},
+ async delMatchYes(v){try{await Store.delMatch(v)}catch(e){return toast(e.code==='denied'?'Only the player who added it, or an admin, can delete this score.':'Could not delete. Check your connection.')}const gm=S.matches.find(m=>m.id===v);S.matches=S.matches.filter(m=>m.id!==v);S.confs=S.confs.filter(c=>c.match!==v);rate();closeSheet();render();toast('Score deleted');
+  if(gm&&isAdmin()&&gm.by!==S.uid)notify(regsOf(gm).map(to=>({to,kind:'game_cancel',data:{snap:gameSnap(gm)}})))},
  editProfile(){startWiz('edit')},
  retake(v){const L=me().levels||{};if(L[v]&&isFinite(+L[v].start))return toast('Your starting level is set. Play games to move it.');startWiz('level',[v])},
  wRetake(sp){const d=W.d;d.q[sp]={band:'',ans:[]};W.i=wSteps().indexOf('band:'+sp);W.dir=-1;window.scrollTo(0,0);paintWiz()},
