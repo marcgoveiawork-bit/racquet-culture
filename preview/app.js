@@ -1024,7 +1024,12 @@ const unreadAt=vid=>(S.allMsgs||[]).filter(g=>!g.read&&msgVenue(g)===vid).length
    Each team's strength is the average of its players' levels. Beating a stronger team earns more,
    losing to a weaker one costs more, so a strong player with a newer partner is not punished for it.
    New players move faster for their first matches so their level settles quickly.
-   A disputed score is left out until an admin has reviewed it. */
+   Every score counts in the rankings as soon as it is logged, without waiting for the other players to confirm.
+   A disputed score keeps counting as it was added; only an admin's change moves the rankings. After a week
+   (HIST_DAYS) a game is final: it can no longer be disputed or edited, and the score stands for good. */
+const HIST_DAYS=7;
+/* A game older than a week is final */
+const lockedGame=m=>!!m&&(m.date||'')<addDays(today(),-(HIST_DAYS-1));
 function totals(sets){let a=0,b=0;(sets||[]).forEach(s=>{a+=+s[0]||0;b+=+s[1]||0});return[a,b]}
 function applyMatch(R,m,ensure){
  const sp=SPORTS[m.sport];if(!sp)return null;
@@ -1043,6 +1048,7 @@ const regsOf=m=>[...m.a,...m.b].filter(s=>s&&s.uid).map(s=>s.uid);
 function statusMap(){
  const by={},st={};S.confs.forEach(c=>(by[c.match]=by[c.match]||[]).push(c));
  S.matches.forEach(m=>{const rv=m.review&&m.review.at||'',cs=(by[m.id]||[]).filter(c=>!rv||c.at>rv),disp=cs.filter(c=>c.verdict==='dispute');
+  if(lockedGame(m)){st[m.id]={st:m.review?'reviewed':'confirmed',locked:true};return}
   if(disp.length){st[m.id]={st:'disputed',disp};return}
   if(m.review){st[m.id]={st:'reviewed'};return}
   const need=regsOf(m).filter(u=>u!==m.by),ok=need.filter(u=>cs.some(c=>c.user===u&&c.verdict==='ok'));
@@ -1084,7 +1090,7 @@ function rate(){
  const ev=levelEvents();let ei=0;
  const evFirst=(e,m)=>e.date<(m.date||'')||(e.date===m.date&&e.at<=(m.at||''));
  const applyEv=e=>{const E=R[e.sp]&&R[e.sp][e.id];if(!E)return;const before=E.r;if(e.pro){E.pcap=null;E.cap=null;E.r=Math.max(E.r,SPORTS[e.sp].cut[1])}else if(e.delta!=null){E.r=clampL(e.sp,E.r+e.delta)}else{E.r=clampL(e.sp,e.r);E.cap=e.cap}if(E.pcap!=null&&E.r>E.pcap)E.r=E.pcap;E.last=E.r-before;E.hist.push({id:'adj',d:E.r-before,r:E.r,date:e.date,adj:e.kind})};
- S.matches.filter(m=>okMatch(m)&&(!S.ST[m.id]||S.ST[m.id].st!=='disputed')).sort(byWhen).forEach(m=>{while(ei<ev.length&&evFirst(ev[ei],m))applyEv(ev[ei++]);D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
+ S.matches.filter(okMatch).sort(byWhen).forEach(m=>{while(ei<ev.length&&evFirst(ev[ei],m))applyEv(ev[ei++]);D[m.id]=applyMatch(R[m.sport],m,(id,l)=>mk(m.sport,id,l))});
  while(ei<ev.length)applyEv(ev[ei++]);
  S.R=R;S.D=D;
 }
@@ -1664,9 +1670,9 @@ function matchRow(m,opts={}){
  const D=S.D[m.id],sets=m.sets||[],aw=m.winner==='a',bw=m.winner==='b',mineD=D&&D.d&&D.d[opts.for||S.uid],st=(S.ST[m.id]||{}).st;
  const team=(t,w)=>`<div class="tm${w?' win':''}"><span class="avs">${m[t].map(slotAv).join('')}</span><span>${m[t].map(s=>esc(slotName(s))).join(' & ')}</span></div>`;
  const acts=[];if(opts.hist)acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:'',`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`,`<button class="btn link small dangerl" data-act="gameCancel" data-v="${esc(m.id)}">Cancel game</button>`);
- else if(isAdmin())acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`);
+ else if(isAdmin()&&!lockedGame(m))acts.push(st==='disputed'?`<button class="btn link small" data-act="review" data-v="${esc(m.id)}">Review score</button>`:`<button class="btn link small" data-act="gameEdit" data-v="${esc(m.id)}">Edit game</button>`);
  if(!opts.hist&&regsOf(m).includes(S.uid)&&regsOf(m).length>1)acts.unshift(`<button class="btn link small" data-act="kudos" data-v="${esc(m.id)}">Send kudos 👍</button>`);
- if(opts.del&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
+ if(opts.del&&!lockedGame(m)&&(m.by===S.uid||isAdmin()))acts.push(`<button class="btn link small" data-act="delMatch" data-v="${esc(m.id)}">Delete</button>`);
  return `<div class="mrow rv${st==='disputed'?' disp':''}"><div class="side">${team('a',aw)}${team('b',bw)}
   <div class="mmeta"><span>${SPORTS[m.sport].name} · ${esc(whenOf(m))}${st&&st!=='confirmed'?` · <span class="stx st-${st}">${ST_LABEL[st]}</span>`:''}</span>${mineD!==undefined?`<span class="delta ${dcls(mineD)}">${fmtD(mineD)}</span>`:''}</div>
   ${opts.hist?histBy(m):''}${acts.length?`<div class="macts">${acts.join('')}</div>`:''}</div>
@@ -1675,7 +1681,6 @@ function matchRow(m,opts={}){
 /* ---------- Game history (admins and above) ----------
    Every game logged at the club in the last 7 days, newest first. Older games drop off this list on their own,
    but they stay in everyone's level and the rankings. Admins can edit a game's score or players, or cancel it. */
-const HIST_DAYS=7;
 const histGames=()=>S.matches.filter(okMatch).filter(m=>m.date>=addDays(today(),-(HIST_DAYS-1))).sort(byWhen).reverse();
 /* "Caelan DaCosta (Owner)": the staff member's full name and role at the club, for notices */
 const staffName=(id,v=VID)=>{const p=prof(id);return (p?p.name:'An admin')+' ('+ROLE_NAME[roleAt(id,v)]+')'};
@@ -1690,7 +1695,7 @@ function histSection(){
 /* The edit pop-up keeps its changes in G while a player is being picked */
 let G=null;
 function gameSheet(mid){
- const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;
+ const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;if(lockedGame(m))return toast('This game is over a week old, so its score is final.');
  if(!G||G.mid!==mid)G={mid,a:m.a.map(x=>Object.assign({},x)),b:m.b.map(x=>Object.assign({},x)),rows:[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):i===2&&Array.isArray(m.extra)?m.extra.map(String):['',''])};
  const sl=(t,i)=>{const x=G[t][i],lv=x&&x.uid?lvlOf(m.sport,x.uid):x&&x.level;return`<button type="button" class="slot filled" data-act="egPick" data-v="${t}${i}">${slotAv(x)}<span class="sn"><b>${esc(slotName(x))}</b><span>${lv!=null?'Level '+fmtL(lv,x.uid?2:1):''} · Change</span></span></button>`};
  openSheet(`<h2>Edit game</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))} · logged by ${esc(prof(m.by)?prof(m.by).name:'a member')}</p>
@@ -1779,7 +1784,7 @@ function vRank(){
   <div class="ctrls">${seg('rs','Sport',vSports().map(k=>[k,SPORTS[k].name]),sp,'rankSport')}
   ${seg('rt','Ranking',TIERS.map(([k,n])=>[k,`${n}${counts[k]?' · '+counts[k]:''}`]),t,'rankTier')}
   ${seg('rg','Players',[['all','All'],['male','Men'],['female','Women']],g,'rankGender')}</div>
-  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. ${t==='pro'?'Pro is invite only: the club owner picks players and invites them in.':'Players move up a ranking as their level rises.'} Scores under review are left out until an admin checks them.</p>
+  <p class="small muted" style="margin:-4px 0 14px">${TIER_NAME[t]} ${SPORTS[sp].name.toLowerCase()}: levels ${t==='beginner'?'below '+fmtL(SPORTS[sp].cut[0],1):t==='intermediate'?fmtL(SPORTS[sp].cut[0],1)+' to '+fmtL(SPORTS[sp].cut[1]-.01):fmtL(SPORTS[sp].cut[1],1)+' and up'}. ${t==='pro'?'Pro is invite only: the club owner picks players and invites them in.':'Players move up a ranking as their level rises.'} Every score counts as soon as it’s logged. If a score is disputed it still counts until an admin changes it.</p>
   ${podium}<div class="list">${(pod.length>=3?ranked.slice(3).map((x,i)=>row(x,i+3)):ranked.map(row)).join('')}</div>
   ${!ranked.length?`<div class="card empty rv"><b>No one ranked here yet</b>Add a score and the ranking fills up.</div>`:''}
   ${wait.length?`<div class="sec"><h3>Yet to play</h3><span class="small muted">${wait.length}</span></div><div class="list">${wait.map(x=>`<button class="rrow rv${x.id===S.uid?' mine':''}" data-act="player" data-v="${x.id}"><span class="rk">–</span>${avHTML(x.p)}<span class="nm"><b><span class="nmt">${esc(x.p.name)}</span>${tag(x.id)}</b><span>@${esc(x.p.username)}</span></span><span class="sc"><b class="num">${fmtL(x.e.r,1)}</b></span></button>`).join('')}</div>`:''}`;
@@ -2186,7 +2191,7 @@ async function submitMatch(){
 /* ---------- Inbox ---------- */
 const myConf=mid=>{const m=S.matches.find(x=>x.id===mid),rv=m&&m.review&&m.review.at||'';return S.confs.filter(c=>c.match===mid&&c.user===S.uid&&(!rv||c.at>rv)).pop()};
 function needsAction(g){const d=g.data||{};
- if(g.kind==='confirm'){const m=S.matches.find(x=>x.id===d.match);return !!m&&!myConf(m.id)&&!m.review}
+ if(g.kind==='confirm'){const m=S.matches.find(x=>x.id===d.match);return !!m&&!myConf(m.id)&&!m.review&&!lockedGame(m)}
  if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
  if(g.kind==='friend_req'){const r=S.reqs.find(x=>x.id===d.req);return !!r&&r.status==='pending'}
  if(g.kind==='invite'){const b=S.bookings.find(x=>x.id===d.booking);return !!b&&slotDate(b.date,b.start)>new Date()&&!(b.going||[]).includes(S.uid)&&!(b.declined||[]).includes(S.uid)}
@@ -2210,12 +2215,12 @@ function msgView(g){
  switch(g.kind){
   case 'confirm':{if(!m)return gone;const c=myConf(m.id);
    return{i:MI.check,t:'Is this score right?',p:`${esc(fn)} added the score of your ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}.${score}`,
-    a:m.review?'<span class="chip st-reviewed">An admin has set this score</span>':c?`<span class="chip ${c.verdict==='ok'?'st-confirmed':'st-disputed'}">${c.verdict==='ok'?'You confirmed it':'You asked for a change'}</span>`
+    a:m.review?'<span class="chip st-reviewed">An admin has set this score</span>':c&&c.verdict==='ok'||(!c&&lockedGame(m))?'<span class="chip st-confirmed">'+(c?'You confirmed it':'Final: this game is over a week old')+'</span>':c?`<span class="chip ${c.verdict==='ok'?'st-confirmed':'st-disputed'}">${c.verdict==='ok'?'You confirmed it':'You asked for a change'}</span>`
      :`<button class="btn brand sm" data-act="cfOk" data-v="${g.id}">Yes, confirm</button><button class="btn ghost sm" data-act="cfChange" data-v="${g.id}">Change score</button>`}}
   case 'dispute':{if(!m)return gone;const c=S.confs.find(x=>x.id===d.conf),st=(S.ST[m.id]||{}).st;
    return{i:MI.flag,warn:1,t:'Score disputed',p:`${esc(fn)} says ${esc(prof(m.by)?first(prof(m.by))+'\u2019s':'the')} score for this ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}, is wrong.${score}${c?`<span class="scoreline prop">Their score: ${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}`:''}`,
     a:st==='disputed'?(isAdmin()?`<button class="btn brand sm" data-act="review" data-v="${esc(m.id)}">Review score</button>`:''):'<span class="chip st-reviewed">Reviewed</span>'}}
-  case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game played ${esc(playedWhen(m))} to be changed. An admin will review it. Until then it is left out of the rankings.${score}`}}
+  case 'disputed':{if(!m)return gone;return{i:MI.flag,t:'A score is being checked',p:`${esc(fn)} asked for the score of your game played ${esc(playedWhen(m))} to be changed. An admin will review it. Until then the score counts as it was added. If no admin changes it within a week of the game, it stays as it is.${score}`}}
   case 'game_edit':{const sn=esc(staffName(g.from,vidOf(g))),s=d.snap||{},spn=SPORTS[s.sport]?SPORTS[s.sport].name.toLowerCase():'';
    if(d.removed)return{i:MI.shield,warn:1,t:`${sn} took you out of a game`,p:`You’re no longer in this ${spn} game, played ${esc(playedWhen(s))}, so it doesn’t count for your level any more. Rankings are updated.${snapLine(s)}`};
    if(!m)return gone;const w=(d.what||[]);
@@ -2338,11 +2343,11 @@ function disputeSheet(mid,msgId){
    S.confs.push(c);rate();closeSheet();doneTick('Sent to the admins');
    const admins=vAdmins().filter(a=>a!==S.uid);
    notify([...admins.map(to=>({to,kind:'dispute',data:{match:m.id,conf:c.id}})),...regsOf(m).filter(u=>!admins.includes(u)).map(to=>({to,kind:'disputed',data:{match:m.id}}))]);
-   toast(admins.length?'Sent. An admin will check the score. Until then it is left out of the rankings.':'Sent. No admins are set up yet, so ask the club to check it.',4200);render()}});
+   toast(admins.length?'Sent. An admin will check the score. It keeps counting as added unless an admin changes it within a week of the game.':'Sent. No admins are set up yet, so ask the club to check it.',4200);render()}});
 }
 /* Admins: set the final score. Everyone in the game and the other admins are told who changed it */
 function reviewSheet(mid){
- const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;const st=S.ST[m.id]||{},disp=st.disp||[];
+ const m=S.matches.find(x=>x.id===mid);if(!m||!isAdmin())return;if(lockedGame(m))return toast('This game is over a week old, so its score is final.');const st=S.ST[m.id]||{},disp=st.disp||[];
  const rows=[0,1,2].map(i=>m.sets[i]?m.sets[i].map(String):['','']);
  openSheet(`<h2>${disp.length?'Review score':'Edit score'}</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))} · added by ${esc(prof(m.by)?prof(m.by).name:'a member')}</p>
   <div class="cmp"><div><span class="eyebrow">Added</span><span class="scoreline">${setsStr(m.sets)}</span></div>${disp.map(c=>`<div><span class="eyebrow">${esc(first(prof(c.user))||'A player')} says</span><span class="scoreline prop">${setsStr(c.sets)}</span>${c.note?`<span class="quote">“${esc(c.note)}”</span>`:''}<button class="btn link small" data-use="${esc(c.id)}">Use this score</button></div>`).join('')}</div>
@@ -2889,7 +2894,7 @@ const ACT={
  async cfOk(id){const g=S.msgs.find(x=>x.id===id),m=g&&S.matches.find(x=>x.id===g.data.match);if(!m)return;
   const c={id:'c_'+rid(),match:m.id,user:S.uid,verdict:'ok',at:new Date().toISOString()};
   try{await Store.addConf(c)}catch(e){return toast('Could not confirm. Check your connection.')}S.confs.push(c);rate();doneTick('Score confirmed');render()},
- cfChange(id){const g=S.msgs.find(x=>x.id===id);if(g)disputeSheet(g.data.match,id)},
+ cfChange(id){const g=S.msgs.find(x=>x.id===id);if(!g)return;if(lockedGame(S.matches.find(x=>x.id===g.data.match)))return toast('This game is over a week old, so its score is final.');disputeSheet(g.data.match,id)},
  review(v){reviewSheet(v)},
  pvTab(v){view.pv=v;render()},
  theme(v){setPref('theme',v);sfx('soft');tick();render();const p=me();if(p&&S.uid&&Store.mode!=='demo'&&p.theme!==v){const np=Object.assign({},p,{theme:v});Store.saveProfile(np).then(()=>upsert(S.profiles,np),()=>{})}},
