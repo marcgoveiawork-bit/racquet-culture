@@ -656,3 +656,50 @@ end $$;
 revoke execute on function public.rc_booking_guard() from public, anon, authenticated;
 drop trigger if exists rc_booking_guard on public.rc_bookings;
 create trigger rc_booking_guard before update on public.rc_bookings for each row execute function public.rc_booking_guard();
+
+-- Levels and Pro: players can't put themselves in Pro or pick a level above Intermediate; owners and the developer grant Pro with rc_set_pro
+create or replace function public.rc_profile_guard() returns trigger language plpgsql security invoker set search_path = public as $$
+declare sp text; lv jsonb; cap numeric; a jsonb;
+begin
+  if current_user not in ('authenticated','anon') then return new; end if;   -- rc_set_pro and SQL run as the owner
+  -- Pro status only changes through rc_set_pro
+  if tg_op = 'UPDATE' and old.data ? 'pro' then new.data := jsonb_set(coalesce(new.data,'{}'), '{pro}', old.data->'pro');
+  else new.data := coalesce(new.data,'{}') - 'pro'; end if;
+  -- Levels a player sets themselves stay below Pro
+  if tg_op = 'INSERT' or (new.data->'levels') is distinct from (old.data->'levels') then
+    for sp, lv in select key, value from jsonb_each(case when jsonb_typeof(new.data->'levels')='object' then new.data->'levels' else '{}' end) loop
+      cap := case sp when 'padel' then 4.5 when 'pickleball' then 4.0 else null end;
+      if cap is null or jsonb_typeof(lv) <> 'object' then continue; end if;
+      if lv->>'band' = 'pro' or (jsonb_typeof(lv->'start')='number' and (lv->>'start')::numeric >= cap) then
+        raise exception 'Pro is invite only' using errcode = '42501';
+      end if;
+      if jsonb_typeof(lv->'adj') = 'array' then
+        for a in select value from jsonb_array_elements(lv->'adj') loop
+          if jsonb_typeof(a->'r')='number' and (a->>'r')::numeric >= cap then
+            raise exception 'Pro is invite only' using errcode = '42501';
+          end if;
+        end loop;
+      end if;
+    end loop;
+  end if;
+  return new;
+end $$;
+revoke execute on function public.rc_profile_guard() from public, anon, authenticated;
+drop trigger if exists rc_profile_guard on public.rc_profiles;
+create trigger rc_profile_guard before insert or update on public.rc_profiles for each row execute function public.rc_profile_guard();
+
+create or replace function public.rc_set_pro(target uuid, v text, sp text, on_ boolean) returns jsonb language plpgsql security definer set search_path = public as $$
+declare p jsonb;
+begin
+  if auth.uid() is null or not public.rc_is_owner_at(v) then raise exception 'Only the club owner or the developer can change Pro' using errcode = '42501'; end if;
+  if sp not in ('padel','pickleball') then raise exception 'Unknown sport'; end if;
+  select coalesce(data->'pro','{}') into p from public.rc_profiles where id = target for update;
+  if not found then raise exception 'Player not found'; end if;
+  if coalesce(jsonb_typeof(p->v),'') <> 'object' then p := jsonb_set(p, array[v], '{}'); end if;
+  if on_ then p := jsonb_set(p, array[v, sp], jsonb_build_object('by', auth.uid(), 'at', to_char(now() at time zone 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
+  else p := jsonb_set(p, array[v], (p->v) - sp); if (p->v) = '{}'::jsonb then p := p - v; end if; end if;
+  update public.rc_profiles set data = jsonb_set(coalesce(data,'{}'), '{pro}', p), updated_at = now() where id = target;
+  return p;
+end $$;
+revoke execute on function public.rc_set_pro(uuid, text, text, boolean) from public, anon;
+grant execute on function public.rc_set_pro(uuid, text, text, boolean) to authenticated;
