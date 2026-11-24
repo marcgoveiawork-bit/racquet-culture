@@ -1689,8 +1689,8 @@ let adRows=null,adLoading=false,adNode=null,adKey='',adIdx=0,adT=0,adFull=null,a
 const adType=a=>a.type||(/\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/i.test(a.src||'')?'video':'image');
 const adOwn=v=>!!adRows&&Object.prototype.hasOwnProperty.call(adRows,v);
 function adList(v=VID){const r=adRows||{};return adOwn(v)?r[v]:v!=='default'&&ADS[v]?ADS[v]:adOwn('default')?r.default:ADS.default||[]}
-/* Only the real Developer can change ads, also while viewing the demo as someone else */
-const adDev=()=>!!sb&&(Store.mode==='demo'?demoRank()==='dev':isDev());
+/* Only the Developer can change ads. In demo mode that means your real role is Developer and you are viewing as the Developer */
+const adDev=()=>!!sb&&(Store.mode==='demo'?demoRank()==='dev'&&demoRole()==='dev':isDev());
 async function loadAds(){if(!sb||adLoading)return;adLoading=true;
  try{const {data,error}=await sb.from('rc_ads').select('venue,items');if(!error){const m={};(data||[]).forEach(x=>{m[x.venue]=Array.isArray(x.items)?x.items:[]});adRows=m;if(me()&&!$('app').hidden)paintAds()}}catch(e){}
  adLoading=false}
@@ -1700,8 +1700,8 @@ function adMedia(a,full){const s=esc(a.src);
 /* Called on every redraw: keeps the same window (and where it is in the rotation) unless the ads changed */
 function paintAds(){const host=$('banner');if(!host)return;if(adRows===null&&sb)loadAds();
  const list=adList(),dev=adDev(),key=VID+'|'+dev+'|'+JSON.stringify(list);
- if(!list.length&&!dev){clearTimeout(adT);adT=0;adNode=null;adKey=key;return}
- if(key!==adKey||!adNode){adKey=key;adIdx=0;clearTimeout(adT);adT=0;adNode=document.createElement('div');adNode.className='adbar';adNode.setAttribute('role','region');adNode.setAttribute('aria-label','Advert');
+ if(!list.length&&!dev){clearTimeout(adT);adT=0;host.querySelectorAll('.adbar').forEach(n=>n.remove());adNode=null;adKey=key;return}
+ if(key!==adKey||!adNode){host.querySelectorAll('.adbar').forEach(n=>n.remove());adKey=key;adIdx=0;clearTimeout(adT);adT=0;adNode=document.createElement('div');adNode.className='adbar';adNode.setAttribute('role','region');adNode.setAttribute('aria-label','Advert');
   adNode.innerHTML=(list.length?`<div class="adtrack">${list.map((a,i)=>`<button type="button" class="adslide" data-act="adOpen" data-v="${i}" style="background:${esc(a.bg||'#000')}" aria-label="Open advert ${i+1} of ${list.length} full screen">${adMedia(a)}</button>`).join('')}</div>`:`<div class="adnone">No ads at ${esc(VEN().short)}. Only you can see this.</div>`)
    +(list.length?'<span class="adtag">Ad</span>':'')
    +(list.length>1?`<div class="addots" aria-hidden="true">${list.map(()=>'<i></i>').join('')}</div>`:'')
@@ -1742,18 +1742,18 @@ function adClose(now){if(!adFull)return;const {el,i}=adFull;adFull=null;el.query
 function adEdit(){if(!adDev())return toast('Only the developer can change the ads.');tick();
  openSheet(`<h2>Ads</h2><p class="muted small">The window at the top of every page. Tap an ad to see it full screen. Only you can change them, and they are saved for real (also in demo mode).</p><div id="adEdBody"></div>`);adEdStart(adOwn(VID)||ADS[VID]?VID:'default')}
 function adEdStart(v){adEd={v,items:JSON.parse(JSON.stringify(adList(v)))};adEdPaint()}
-function adEdPaint(){const b=$('adEdBody');if(!b||!adEd)return;const v=adEd.v,it=adEd.items,vn=x=>x==='default'?'Default (venues without their own)':venueOf(x).name,
+function adEdPaint(){const b=$('adEdBody');if(!b||!adEd)return;const v=adEd.v,it=adEd.items,
   own=x=>x==='default'||adOwn(x)||!!ADS[x];
- b.innerHTML=`<label class="small muted" for="adVen" style="display:block;margin:14px 0 6px">Venue</label>
-  <select id="adVen">${['default',...VENUES.map(x=>x.id)].map(x=>`<option value="${x}"${x===v?' selected':''}>${esc(vn(x))}${x==='default'?'':own(x)?' · own ads':' · default'}</option>`).join('')}</select>
-  ${v!=='default'&&!own(v)?`<p class="tiny muted" style="margin-top:8px">${esc(venueOf(v).name)} shows the default ads. Change them below and save to give it its own.</p>`:''}
+ b.innerHTML=`<p class="small muted" style="margin:14px 0 6px">Which ads to change</p>
+  <div class="seg adwhich" role="radiogroup" aria-label="Which ads to change"><button type="button" role="radio" aria-checked="${v==='default'}" data-act="adWhich" data-v="default">Default ads</button><button type="button" role="radio" aria-checked="${v!=='default'}" data-act="adWhich" data-v="${esc(VID)}">${esc(VEN().short)} only</button></div>
+  <p class="tiny muted" style="margin-top:8px">${v==='default'?'Shown at every venue that doesn’t have its own ads.':own(v)?`${esc(VEN().name)} has its own ads. Other venues aren’t affected.`:`${esc(VEN().name)} shows the default ads now. Change them below and save to give it its own. Other venues aren’t affected.`}</p>
   <div class="adlist">${it.length?it.map((a,i)=>`<div class="adrow"><div class="adthumb" style="background:${esc(a.bg||'#000')}">${adMedia(a)}</div>
    <div class="admeta"><b>${adType(a)==='video'?'Video':'Picture'} ${i+1}</b><div class="adbgs" role="radiogroup" aria-label="Background colour">${AD_BGS.map(([c,n])=>`<button type="button" role="radio" aria-checked="${(a.bg||'').toLowerCase()===c}" data-act="adBg" data-v="${i}|${c}" title="${n} background" aria-label="${n} background" style="background:${c}"></button>`).join('')}</div></div>
    <div class="adbtns"><button type="button" class="btn ghost sm" data-act="adMove" data-v="${i}|-1"${i?'':' disabled'} aria-label="Move up">↑</button><button type="button" class="btn ghost sm" data-act="adMove" data-v="${i}|1"${i<it.length-1?'':' disabled'} aria-label="Move down">↓</button><button type="button" class="btn ghost sm" data-act="adDel" data-v="${i}" aria-label="Remove">✕</button></div></div>`).join(''):`<p class="small muted" style="margin:14px 0 0">No ads. Save like this to hide the ad window at ${v==='default'?'every venue without its own ads':esc(venueOf(v).name)}.</p>`}</div>
   <label class="upload" id="adUp">${ICON.upload}<span>Add a picture or video</span><input type="file" accept="image/*,video/*" id="adFile" multiple></label>
   <div class="adurl"><input id="adUrl" type="url" placeholder="Or paste a link to a picture or video" aria-label="Link to a picture or video"><button type="button" class="btn ghost sm" data-act="adAddUrl">Add</button></div>
   <button type="button" class="btn brand wide" style="margin-top:16px" data-act="adSave">Save ads for ${esc(v==='default'?'the default set':venueOf(v).name)}</button>
-  ${v!=='default'&&adOwn(v)&&!ADS[v]?`<button type="button" class="btn ghost wide" style="margin-top:10px" data-act="adUseDefault">Use the default ads at ${esc(venueOf(v).name)}</button>`:''}`}
+  ${v!=='default'&&adOwn(v)&&!ADS[v]?`<button type="button" class="btn ghost wide" style="margin-top:10px" data-act="adUseDefault">Use the default ads at ${esc(venueOf(v).name)}</button>`:''}`;syncGliders()}
 async function adUpload(files){if(!adEd||!files||!files.length)return;const up=$('adUp');
  for(const f of files){const t=(f.type||'').split('/')[0];if(t!=='image'&&t!=='video'){toast('Pick a picture or a video.');continue}
   if(f.size>50*1024*1024){toast(`${f.name} is over 50 MB. Try a shorter or smaller video.`,3600);continue}
@@ -1770,7 +1770,7 @@ async function adSave(){if(!adEd||!adDev())return;const {v,items}=adEd;
 async function adUseDefault(){if(!adEd||adEd.v==='default')return;const v=adEd.v;
  try{const {error}=await sb.from('rc_ads').delete().eq('venue',v);if(error)throw error}catch(e){return toast('Could not save. Check your connection.')}
  const r=Object.assign({},adRows);delete r[v];adRows=r;adKey='';adEdStart(v);paintAds();toast(`${venueOf(v).name} now shows the default ads`)}
-document.addEventListener('change',e=>{if(e.target.id==='adFile'){adUpload([...e.target.files]);e.target.value=''}else if(e.target.id==='adVen')adEdStart(e.target.value)});
+document.addEventListener('change',e=>{if(e.target.id==='adFile'){adUpload([...e.target.files]);e.target.value=''}});
 document.addEventListener('keydown',e=>{if(!adFull)return;if(e.key==='Escape'){e.stopPropagation();adClose()}else if(e.key==='ArrowLeft')adFullShow(adFull.i-1);else if(e.key==='ArrowRight')adFullShow(adFull.i+1)},true);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&sb&&adRows!==null)loadAds()});
 
@@ -3126,7 +3126,7 @@ const ACT={
  adMove(v){if(!adEd)return;const [i,d]=v.split('|').map(Number),it=adEd.items,j=i+d;if(j<0||j>=it.length)return;[it[i],it[j]]=[it[j],it[i]];tick();adEdPaint()},
  adDel(v){if(!adEd)return;adEd.items.splice(+v,1);tick();adEdPaint()},
  adAddUrl(){if(!adEd)return;const u=($('adUrl').value||'').trim();if(!/^https:\/\/\S+$/i.test(u))return toast('Paste a full link starting with https://');adEd.items.push({src:u,bg:adType({src:u})==='video'?'#000000':'#f2eee9'});tick();adEdPaint()},
- adSave(){adSave()},adUseDefault(){adUseDefault()},
+ adSave(){adSave()},adWhich(v){if(!adEd||!adDev())return;tick();adEdStart(v==='default'?'default':VID)},adUseDefault(){adUseDefault()},
  async frMode(v){const p=Object.assign({},me(),{friends:v});try{await Store.saveProfile(p)}catch(e){return toast('Could not save. Check your connection.')}upsert(S.profiles,p);tick();toast(v==='open'?'Open account: anyone can add you as a friend':'Friend requests now need your approval');render()},
 };
 document.addEventListener('click',e=>{
