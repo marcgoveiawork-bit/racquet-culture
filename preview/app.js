@@ -225,7 +225,7 @@ let VID=(()=>{const q=new URLSearchParams(location.search).get('venue'),s=ls.get
 const VEN=()=>venueOf(VID);
 const hasSlots=()=>VEN().book.kind==='slots';
 function applyVenue(){const r=document.documentElement;r.dataset.venue=VID;applyPrefs()}
-/* Sign-in, the first-time questions and the court picker are My Padel's own pages, in the My Padel blue */
+/* Sign-in, the first-time questions and the court picker are OneCourt's own pages, in the OneCourt blue */
 function applyMP(){document.documentElement.dataset.venue='mp';applyPrefs()}
 const COURTS={padel:'Padel · Court 1',pickleball:'Pickleball · Court 1'};
 const courtNos=sp=>VEN().courtNos[sp]||[1];
@@ -614,7 +614,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_flo',match:fD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [fOwner.id,fAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'df_d'+i,to,from:loser.uid,kind:'dispute',data:{match:fD.id,conf:c.id,venue:'floresta'},read:false,at:c.at}))}}
  const fAsk=floP[12];if(fAsk){const data={thread:'dth_f1',topic:'court',text:'Could we get a few more pickleball paddles at the front desk for people trying it out?',player:fAsk.id,venue:'floresta'};[fOwner.id,fAdmin.id,you.id,fAsk.id].forEach(t=>msgs.push({id:'df_am'+t,to:t,from:fAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const fNews=[{text:'Welcome to Clube De Floresta on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Floresta rankings.',link:'',lt:''},{text:'Padel and pickle social under the trees this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
+ const fNews=[{text:'Welcome to Clube De Floresta on OneCourt! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Floresta rankings.',link:'',lt:''},{text:'Padel and pickle social under the trees this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
  fNews.forEach((nw,k)=>[...floP,...both2].forEach(p=>msgs.push({id:'df_cm'+k+p.id,to:p.id,from:k?fAdmin.id:fOwner.id,kind:'community',data:Object.assign({venue:'floresta'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(floAll),b=pick(floAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  floAll.slice(4,12).forEach((p,i)=>reqs.push({id:'df_f'+i,from:fPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -654,7 +654,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_aer',match:aD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [aOwner.id,aAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'da_d'+i,to,from:loser.uid,kind:'dispute',data:{match:aD.id,conf:c.id,venue:'aer'},read:false,at:c.at}))}}
  const aAsk=aerP[12];if(aAsk){const data={thread:'dth_a1',topic:'court',text:'Could we keep a few evening slots for open play on the padel court?',player:aAsk.id,venue:'aer'};[aOwner.id,aAdmin.id,you.id,aAsk.id].forEach(t=>msgs.push({id:'da_am'+t,to:t,from:aAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const aNews=[{text:'Welcome to AER on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the AER rankings.',link:'',lt:''},{text:'Sunset padel and pickleball mixer this Friday from 6 pm. All levels welcome.',link:'',lt:''}];
+ const aNews=[{text:'Welcome to AER on OneCourt! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the AER rankings.',link:'',lt:''},{text:'Sunset padel and pickleball mixer this Friday from 6 pm. All levels welcome.',link:'',lt:''}];
  aNews.forEach((nw,k)=>[...aerP,...both3].forEach(p=>msgs.push({id:'da_cm'+k+p.id,to:p.id,from:k?aAdmin.id:aOwner.id,kind:'community',data:Object.assign({venue:'aer'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(aerAll),b=pick(aerAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  aerAll.slice(4,12).forEach((p,i)=>reqs.push({id:'da_f'+i,from:aPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -694,7 +694,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_cop',match:cD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [cOwner.id,cAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dk_d'+i,to,from:loser.uid,kind:'dispute',data:{match:cD.id,conf:c.id,venue:'coplay'},read:false,at:c.at}))}}
  const cAsk=cpP[12];if(cAsk){const data={thread:'dth_k1',topic:'court',text:'Could we have a padel ladder night on weekdays?',player:cAsk.id,venue:'coplay'};[cOwner.id,cAdmin.id,you.id,cAsk.id].forEach(t=>msgs.push({id:'dk_am'+t,to:t,from:cAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const cNews=[{text:'Welcome to CoPlay on My Padel! Book your court on Hudle as usual, then log your padel scores here to climb the CoPlay rankings.',link:'',lt:''},{text:'Riverside padel social at Campal this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
+ const cNews=[{text:'Welcome to CoPlay on OneCourt! Book your court on Hudle as usual, then log your padel scores here to climb the CoPlay rankings.',link:'',lt:''},{text:'Riverside padel social at Campal this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
  cNews.forEach((nw,k)=>[...cpP,...both4].forEach(p=>msgs.push({id:'dk_cm'+k+p.id,to:p.id,from:k?cAdmin.id:cOwner.id,kind:'community',data:Object.assign({venue:'coplay'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(cpAll),b=pick(cpAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  cpAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dk_f'+i,from:cPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -734,7 +734,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_rt',match:rD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [rOwner.id,rAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dr_d'+i,to,from:loser.uid,kind:'dispute',data:{match:rD.id,conf:c.id,venue:'roundtwo'},read:false,at:c.at}))}}
  const rAsk=rtP[12];if(rAsk){const data={thread:'dth_r1',topic:'court',text:'Any chance of a late-night padel slot after 10 pm on weekends?',player:rAsk.id,venue:'roundtwo'};[rOwner.id,rAdmin.id,you.id,rAsk.id].forEach(t=>msgs.push({id:'dr_am'+t,to:t,from:rAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const rNews=[{text:'Welcome to Round Two on My Padel! Book the court on Hudle as usual, then log your padel scores here to climb the Round Two rankings.',link:'',lt:''},{text:'Sundowner padel social in Vagator this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
+ const rNews=[{text:'Welcome to Round Two on OneCourt! Book the court on Hudle as usual, then log your padel scores here to climb the Round Two rankings.',link:'',lt:''},{text:'Sundowner padel social in Vagator this Saturday from 5 pm. All levels welcome.',link:'',lt:''}];
  rNews.forEach((nw,k)=>[...rtP,...both6].forEach(p=>msgs.push({id:'dr_cm'+k+p.id,to:p.id,from:k?rAdmin.id:rOwner.id,kind:'community',data:Object.assign({venue:'roundtwo'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(rtAll),b=pick(rtAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  rtAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dr_f'+i,from:rPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -774,7 +774,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_coco',match:zD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [zOwner.id,zAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dz_d'+i,to,from:loser.uid,kind:'dispute',data:{match:zD.id,conf:c.id,venue:'coco'},read:false,at:c.at}))}}
  const zAsk=coP[12];if(zAsk){const data={thread:'dth_z1',topic:'court',text:'Could we get a beginners’ padel clinic on weekday mornings?',player:zAsk.id,venue:'coco'};[zOwner.id,zAdmin.id,you.id,zAsk.id].forEach(t=>msgs.push({id:'dz_am'+t,to:t,from:zAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const zNews=[{text:'Welcome to Coco Padel on My Padel! Book the court on Hudle as usual, then log your padel scores here to climb the Coco Padel rankings.',link:'',lt:''},{text:'Coconut water and padel morning this Sunday from 7 am. All levels welcome.',link:'',lt:''}];
+ const zNews=[{text:'Welcome to Coco Padel on OneCourt! Book the court on Hudle as usual, then log your padel scores here to climb the Coco Padel rankings.',link:'',lt:''},{text:'Coconut water and padel morning this Sunday from 7 am. All levels welcome.',link:'',lt:''}];
  zNews.forEach((nw,k)=>[...coP,...both7].forEach(p=>msgs.push({id:'dz_cm'+k+p.id,to:p.id,from:k?zAdmin.id:zOwner.id,kind:'community',data:Object.assign({venue:'coco'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(coAll),b=pick(coAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  coAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dz_f'+i,from:zPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -854,7 +854,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_pdl',match:pD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [pOwner.id,pAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dp_d'+i,to,from:loser.uid,kind:'dispute',data:{match:pD.id,conf:c.id,venue:'padelinho'},read:false,at:c.at}))}}
  const pAsk=pdP[12];if(pAsk){const data={thread:'dth_p1',topic:'court',text:'Could guests at Castelinho’s get early morning court slots?',player:pAsk.id,venue:'padelinho'};[pOwner.id,pAdmin.id,you.id,pAsk.id].forEach(t=>msgs.push({id:'dp_am'+t,to:t,from:pAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const pNews=[{text:'Welcome to Padelinho by Castelinho on My Padel! Book the court on Hudle as usual, then log your padel scores here to climb the Padelinho rankings.',link:'',lt:''},{text:'Opening mixer this Friday from 5 pm, rackets and balls on us. All levels welcome.',link:'',lt:''}];
+ const pNews=[{text:'Welcome to Padelinho by Castelinho on OneCourt! Book the court on Hudle as usual, then log your padel scores here to climb the Padelinho rankings.',link:'',lt:''},{text:'Opening mixer this Friday from 5 pm, rackets and balls on us. All levels welcome.',link:'',lt:''}];
  pNews.forEach((nw,k)=>[...pdP,...both9].forEach(p=>msgs.push({id:'dp_cm'+k+p.id,to:p.id,from:k?pAdmin.id:pOwner.id,kind:'community',data:Object.assign({venue:'padelinho'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(pdAll),b=pick(pdAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  pdAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dp_f'+i,from:pPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -894,7 +894,7 @@ function buildDemo(you,rank='dev'){
   const wa=prop.filter(s=>s[0]>s[1]).length,c={id:'dc_ass',match:hD.id,user:loser.uid,verdict:'dispute',sets:prop,winner:wa*2>prop.length?'a':'b',note:'We won the last set. Please check.',at:ago(6)};confs.push(c);
   [hOwner.id,hAdmin.id,you.id].forEach((to,i)=>msgs.push({id:'dh_d'+i,to,from:loser.uid,kind:'dispute',data:{match:hD.id,conf:c.id,venue:'assagao'},read:false,at:c.at}))}}
  const hAsk=asP[12];if(hAsk){const data={thread:'dth_h1',topic:'court',text:'Could one of the pickleball courts be kept for open play on Sunday mornings?',player:hAsk.id,venue:'assagao'};[hOwner.id,hAdmin.id,you.id,hAsk.id].forEach(t=>msgs.push({id:'dh_am'+t,to:t,from:hAsk.id,kind:'admin_msg',data,read:false,at:ago(7)}))}
- const hNews=[{text:'Welcome to CoPlay @ Assagao House on My Padel! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Assagao rankings.',link:'',lt:''},{text:'Pickleball round robin on both courts this Sunday from 8 am, with padel open play after. All levels welcome.',link:'',lt:''}];
+ const hNews=[{text:'Welcome to CoPlay @ Assagao House on OneCourt! Book your court on Hudle as usual, then log your padel and pickleball scores here to climb the Assagao rankings.',link:'',lt:''},{text:'Pickleball round robin on both courts this Sunday from 8 am, with padel open play after. All levels welcome.',link:'',lt:''}];
  hNews.forEach((nw,k)=>[...asP,...both5].forEach(p=>msgs.push({id:'dh_cm'+k+p.id,to:p.id,from:k?hAdmin.id:hOwner.id,kind:'community',data:Object.assign({venue:'assagao'},nw),read:k===0,at:ago(40-k*30)})));
  for(let k=0;k<160;k++){const a=pick(asAll),b=pick(asAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  asAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dh_f'+i,from:hPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
@@ -969,7 +969,7 @@ async function exitDemo(){
 }
 
 /* ---------- Switching clubs ----------
-   One account works at every club. Players sign in once to My Padel; opening any club after that goes straight
+   One account works at every club. Players sign in once to OneCourt; opening any club after that goes straight
    to its loading screen and in, with no more sign-ins. At a club they're new to, they're yet to play. */
 async function ensureVenue(){const p=me();if(p&&p.setup&&!inVenue(p)){VID=firstClub();ls.set('rc_venue',VID);applyVenue();await reload();return true}return false}
 async function setVenue(vid,tab){
@@ -1306,24 +1306,24 @@ let authMode='in',fails=0,lockUntil=0,tkT=0,tkSeq=0;
 const UN_RE=/^[A-Za-z0-9._-]+$/;
 /* The demo version is only open to the developer and the players they give demo access to */
 function previewLocked(){$('welcome').hidden=true;applyMP();$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
- $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><img class="alogo" src="brand/icon-192.png" alt="My Padel" style="max-width:120px;border-radius:26px"><h1 style="margin-top:18px">Demo mode is invite only</h1><p class="muted" style="margin-top:8px">This is where new updates are tried out before they go live. Your account doesn't have demo access yet.</p><a class="btn brand wide" style="margin-top:18px" href="../">Go to the app</a><button class="btn ghost wide" style="margin-top:10px" data-act="signOut">Sign out</button><p class="small muted vline">V${esc(APP_VER)}</p></div>`}
+ $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><img class="alogo" src="brand/icon-192.png" alt="OneCourt" style="max-width:120px;border-radius:26px"><h1 style="margin-top:18px">Demo mode is invite only</h1><p class="muted" style="margin-top:8px">This is where new updates are tried out before they go live. Your account doesn't have demo access yet.</p><a class="btn brand wide" style="margin-top:18px" href="../">Go to the app</a><button class="btn ghost wide" style="margin-top:10px" data-act="signOut">Sign out</button><p class="small muted vline">V${esc(APP_VER)}</p></div>`}
 function showAuth(mode){if(mode)authMode=mode;
  applyMP();$('welcome').hidden=true;$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);mountBar();window.scrollTo(0,0);
  $('modeNote').textContent=Store.mode==='demo'?'Demo: you’re trying the first-time sign-in as a new player. Any email and password work, and nothing is saved.':Store.mode==='live'?'':'Preview mode: accounts and scores are saved on this device only.';
  paintAuthVenue();paintAuth(0);
 }
-/* Sign-in page: My Padel's own, one account for every club. Sign in once, then jump between clubs */
+/* Sign-in page: OneCourt's own, one account for every club. Sign in once, then jump between clubs */
 function paintAuthVenue(){const el=$('aVenue');
- if(el)el.innerHTML=`<img class="mpmini" src="brand/icon-192.png" alt=""><span class="small"><b>My Padel</b><span class="muted" style="display:block">One sign-in for every club</span></span>`;
- const lg=document.querySelector('#auth .alogo');if(lg){lg.src='brand/icon-512.png';lg.alt='My Padel';lg.classList.add('mp')}
- const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>Every court. One app.</b>Sign in once to My Padel and play at ${VENUES.map(v=>esc(v.name)).join(', ').replace(/, ([^,]*)$/,' and $1')}.`;
+ if(el)el.innerHTML=`<img class="mpmini" src="brand/icon-192.png" alt=""><span class="small"><b>OneCourt</b><span class="muted" style="display:block">One sign-in for every club</span></span>`;
+ const lg=document.querySelector('#auth .alogo');if(lg){lg.src='brand/icon-512.png';lg.alt='OneCourt';lg.classList.add('mp')}
+ const tg=document.querySelector('#auth .atag');if(tg)tg.innerHTML=`<b>Every court. One app.</b>Sign in once to OneCourt and play at ${VENUES.map(v=>esc(v.name)).join(', ').replace(/, ([^,]*)$/,' and $1')}.`;
  const fl=document.querySelector('#auth .afeat');if(fl)fl.innerHTML='<li>Sign in once, then switch courts any time</li><li>Your level and play style come with you</li><li>Each club has its own rankings</li>';
- const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='My Padel · V'+APP_VER}
+ const ft=document.querySelector('#auth .afoot');if(ft)ft.textContent='OneCourt · V'+APP_VER}
 function paintAuth(dir){
  qsa('#authSeg>button').forEach(b=>b.setAttribute('aria-checked',String(b.dataset.v===authMode)));
  const up=authMode==='up';
  $('authPane').innerHTML=`<div class="pane" style="--from:${dir*18}px">
-  <h1>${up?'Join My Padel':'Welcome back'}</h1>
+  <h1>${up?'Join OneCourt':'Welcome back'}</h1>
   <p class="muted">${up?'One account for every club. Next, a few quick questions about your game.':'Sign in once and you can jump between clubs without signing in again.'}</p>
   <form id="aForm" novalidate autocomplete="on">
    ${up?`<label for="aName">Your name</label><input id="aName" name="name" autocomplete="name" maxlength="60" placeholder="e.g. Rhea Fernandes">`:''}
@@ -1656,7 +1656,7 @@ function openVenues(grp){tick();const list=venueOrder(grp?VENUES.filter(v=>group
  openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
   <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
-   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}${grp?'':SOON.map((v,i)=>`<button type="button" class="vsrow rv soon" style="--vc:${esc(v.color)};--d:${(list.length+i)*60}ms" data-act="venueSoon" data-v="${esc(v.id)}" data-find="${soonFind(v)}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>Joining My Padel soon</small><em class="vstag soon">Coming soon</em></span></button>`).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
+   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}${grp?'':SOON.map((v,i)=>`<button type="button" class="vsrow rv soon" style="--vc:${esc(v.color)};--d:${(list.length+i)*60}ms" data-act="venueSoon" data-v="${esc(v.id)}" data-find="${soonFind(v)}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>Joining OneCourt soon</small><em class="vstag soon">Coming soon</em></span></button>`).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
   <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
   requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
   const q=bg.querySelector('#vsQ');
@@ -2058,7 +2058,7 @@ function bookCard(small){const v=VEN(),n=sp=>(v.courtNos[sp]||[]).length;
   ${!small&&v.also?`<p class="small muted" style="margin:${SP_KEYS.some(sp=>n(sp))?0:10}px 0 14px">${esc(v.also)} are on ${esc(v.book.name)} too. Rankings here are for padel and pickleball.</p>`:''}
   <div style="margin-top:${small?12:0}px">${bookLinkBtn(v)}</div></div>`}
 function otherClubs(){const o=VENUES.filter(v=>v.id!==VID);if(!o.length)return'';
- return `<div class="sec"><h2>More clubs on My Padel</h2><span class="small muted">${o.length}</span></div><div class="vlist">${o.map(v=>`<button class="card vrow hov rv" data-act="venue" data-v="${v.id}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.place||v.area)} · ${esc(v.courts)}</span></span><span class="small muted">${isMember(S.uid,v.id)?'Switch':'Sign in'} ›</span></button>`).join('')}</div>`}
+ return `<div class="sec"><h2>More clubs on OneCourt</h2><span class="small muted">${o.length}</span></div><div class="vlist">${o.map(v=>`<button class="card vrow hov rv" data-act="venue" data-v="${v.id}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.place||v.area)} · ${esc(v.courts)}</span></span><span class="small muted">${isMember(S.uid,v.id)?'Switch':'Sign in'} ›</span></button>`).join('')}</div>`}
 function vLinkBook(){const ns=nudges();
  return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div>${bookCard()}
   ${ns.length?`<div class="sec"><h2>For you</h2></div><div class="list">${ns.map(([i,t,p])=>`<div class="card nudge rv"><span class="ng-i" aria-hidden="true">${i}</span><div><b>${esc(t)}</b><p class="small muted">${esc(p)}</p></div></div>`).join('')}</div>`:''}
@@ -2706,7 +2706,7 @@ function vSettings(){
  <div class="card rv">${row(themeNow()==='light'?ICON.sun:ICON.moon,themeNow()==='light'?'spin':'rock','Theme',th==='device'?'Follows your phone or computer':th==='light'?'Light':'Dark, the club look')}
   <div class="seg full themeseg" data-key="theme" role="radiogroup" aria-label="Theme" style="margin-top:12px">${[['device','Device',ICON.device,'pop'],['light','Light',ICON.sun,'spin'],['dark','Dark',ICON.moon,'rock']].map(([v,n,ic,a])=>`<button type="button" role="radio" aria-checked="${th===v}" data-act="theme" data-v="${v}"><span class="ti" data-a="${a}">${ic}</span>${n}</button>`).join('')}</div></div>
  <p class="eyebrow period">App</p>
- <div class="card rv">${row(ICON.phone,'shake','Add to Home Screen',isInstalled()?'Done. You’re using My Padel from your Home Screen.':'Put the app icon on your phone so it opens full screen, like a normal app.',isInstalled()?'<span class="chip st-confirmed">Added</span>':`<button class="btn brand sm" data-act="${installEvt?'hsInstall':'hsHow'}">${installEvt?'Add':'Show me'}</button>`)}</div>
+ <div class="card rv">${row(ICON.phone,'shake','Add to Home Screen',isInstalled()?'Done. You’re using OneCourt from your Home Screen.':'Put the app icon on your phone so it opens full screen, like a normal app.',isInstalled()?'<span class="chip st-confirmed">Added</span>':`<button class="btn brand sm" data-act="${installEvt?'hsInstall':'hsHow'}">${installEvt?'Add':'Show me'}</button>`)}</div>
  <p class="eyebrow period">Notifications and feedback</p>
  <div class="card rv">${row(ICON.bell,'ring','Notifications',nsub,nctl)}${row(ICON.speaker,'pulse','Sounds','A soft chime for new messages and a pop when something is done.',sw('sound'),'r-sound')}${row(ICON.phone,'shake','Vibration','A light tap when you slide, choose or confirm (phones that support it).',sw('haptics'),'r-haptics')}${row(ICON.spark,'pop','Pop-ups','The padel ball tick when a score is added, a friend is added and more. <button class="btn link small" data-act="popPreview">Preview</button>',sw('popups'),'r-popups')}${row(ICON.wave,'rock','Reduce motion','Fewer animations and no sliding effects.',sw('calm'),'r-calm')}</div>
  <p class="eyebrow period">Your level</p>
@@ -2721,7 +2721,7 @@ function vSettings(){
  <div class="card rv" style="margin-top:12px">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
  ${Store.mode==='demo'?'':canDemo()?`<div class="card rv" style="margin-top:12px"><b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See new updates before they go live, with 100 made-up players and games. Nothing you do there touches the real club.</p>${PREVIEW?`<button class="btn ghost sm" data-act="demo">Start demo mode</button>`:`<a class="btn ghost sm" href="preview/">Open demo mode</a>`}</div>`:''}
  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}
- <p class="small muted vline">My Padel · V${esc(APP_VER)}</p>`;
+ <p class="small muted vline">OneCourt · V${esc(APP_VER)}</p>`;
 }
 /* Ask once per device, a few seconds after signing in */
 function maybeAskNotif(){
@@ -2924,16 +2924,16 @@ const isAndroid=/Android/i.test(UA);
 const isInstalled=()=>matchMedia('(display-mode: standalone)').matches||matchMedia('(display-mode: fullscreen)').matches||navigator.standalone===true;
 let installEvt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e});
-window.addEventListener('appinstalled',()=>{installEvt=null;ls.set('rc_installed',1);closeSheet();toast('My Padel is on your Home Screen')});
+window.addEventListener('appinstalled',()=>{installEvt=null;ls.set('rc_installed',1);closeSheet();toast('OneCourt is on your Home Screen')});
 /* Always shown at the top of the inbox */
 function homeCard(){
- return`<div class="card msg hscard rv" style="margin-top:14px"><span class="mi">${ICON.phone}</span><div class="mb"><b class="mt">Add My Padel to your Home Screen</b><p>Get the app icon on your phone. It opens full screen like a normal app, and you'll never need to find the link again.</p><div class="cta"><button class="btn ball sm" data-act="hsHow">Show me how</button></div></div></div>`;
+ return`<div class="card msg hscard rv" style="margin-top:14px"><span class="mi">${ICON.phone}</span><div class="mb"><b class="mt">Add OneCourt to your Home Screen</b><p>Get the app icon on your phone. It opens full screen like a normal app, and you'll never need to find the link again.</p><div class="cta"><button class="btn ball sm" data-act="hsHow">Show me how</button></div></div></div>`;
 }
-const HS_IOS=`<ol class="hsteps"><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow pointing up).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. The My Padel icon appears on your Home Screen.</li></ol>`;
-const HS_AND=`<ol class="hsteps"><li>Open this page in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li><li>Tap <b>Install</b> or <b>Add</b>. The My Padel icon appears on your Home Screen.</li></ol>`;
+const HS_IOS=`<ol class="hsteps"><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow pointing up).</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. The OneCourt icon appears on your Home Screen.</li></ol>`;
+const HS_AND=`<ol class="hsteps"><li>Open this page in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li><li>Tap <b>Install</b> or <b>Add</b>. The OneCourt icon appears on your Home Screen.</li></ol>`;
 function homeSheet(fromFs){
  const head=fromFs?`<h2>Full screen on iPhone</h2><p class="muted" style="margin:6px 0 4px">iPhone doesn't let websites go full screen on their own. Add the app to your Home Screen instead. It then opens full screen every time, like a normal app.</p>`
-  :`<h2>Add to your Home Screen</h2><p class="muted" style="margin:6px 0 4px">You get the My Padel icon on your phone. It opens full screen, like an app from the App Store or Google Play, and you'll always have it even if you lose the link.</p>`;
+  :`<h2>Add to your Home Screen</h2><p class="muted" style="margin:6px 0 4px">You get the OneCourt icon on your phone. It opens full screen, like an app from the App Store or Google Play, and you'll always have it even if you lose the link.</p>`;
  const ios=`<p class="hsplat">iPhone and iPad</p>${HS_IOS}`,and=`<p class="hsplat">Android</p>${installEvt?'<button class="btn ball wide" style="margin-bottom:14px" data-act="hsInstall">Add to Home Screen</button><p class="small muted" style="margin:-6px 0 10px">Or do it yourself:</p>':''}${HS_AND}`;
  openSheet(`${head}${fromFs?HS_IOS:isAndroid?and+ios:ios+and}<button class="btn ghost wide" data-act="closeSheet">Got it</button>`);
 }
@@ -3132,7 +3132,7 @@ const ACT={
  theme(v){setPref('theme',v);sfx('soft');tick();render();const p=me();if(p&&S.uid&&Store.mode!=='demo'&&p.theme!==v){const np=Object.assign({},p,{theme:v});Store.saveProfile(np).then(()=>upsert(S.profiles,np),()=>{})}},
  popPreview(){celebrate('This is a pop-up')},
  async notifAsk(){if(!NOTIF_OK())return toast('This browser can’t show notifications.');closeSheet(true);
-  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('My Padel',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'brand/icon-192.png',badge:'brand/icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
+  try{const r=await Notification.requestPermission();if(r==='granted'){doneTick('Notifications on');try{new Notification('OneCourt',{body:'You’ll hear about scores, friend requests and kudos here.',icon:'brand/icon-192.png',badge:'brand/icon-192.png'})}catch(e){}}else toast('Notifications stay off. You can turn them on in Settings.')}catch(e){}
   if(view.tab==='settings')render()},
  rankRefresh(v,el){if(el)el.classList.add('spinning');loadRank(true)},
  demoSwitch(v){demoSwitch(v)},demoAcc(v){setDemoAcc(v)},demoResetAsk(){demoResetAsk()},demoResetYes(){demoReset()},
@@ -3179,13 +3179,13 @@ document.addEventListener('keydown',e=>{
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
 function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
- paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;sfx('ding');buzz([20,80,20]);toast('New message: '+t.textContent,3600);sysNotify('My Padel',t.textContent)}}
+ paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;sfx('ding');buzz([20,80,20]);toast('New message: '+t.textContent,3600);sysNotify('OneCourt',t.textContent)}}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);
  if($('app').hidden||typing||$('sheetBg')||view.tab==='add'){rmPending=true;return}render()},400)}
 document.addEventListener('focusout',()=>setTimeout(()=>{if(rmPending&&!$('app').hidden&&!$('sheetBg')&&view.tab!=='add'){rmPending=false;render()}},60));
 
 /* ================= Start ================= */
-/* My Padel's opening screen. Sign in once at the start; after that, pick a court and go straight in.
+/* OneCourt's opening screen. Sign in once at the start; after that, pick a court and go straight in.
    Picking a club you haven't played at joins it on the spot (no second sign-in) and you start there as yet to play. */
 function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  const pick=mode==='pick',p=pick&&me();
@@ -3193,10 +3193,10 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
  $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
   :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
-   +SOON.map(v=>`<button type="button" class="wcourt soon" data-soon="${esc(v.id)}" data-find="${soonFind(v)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>Joining My Padel soon</small><em class="wnew soon">Coming soon</em></span></button>`).join('')
+   +SOON.map(v=>`<button type="button" class="wcourt soon" data-soon="${esc(v.id)}" data-find="${soonFind(v)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>Joining OneCourt soon</small><em class="wnew soon">Coming soon</em></span></button>`).join('')
    +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
   :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
- $('wFoot').textContent='My Padel · V'+APP_VER;
+ $('wFoot').textContent='OneCourt · V'+APP_VER;
  qsa('#wCourts [data-court]').forEach(b=>b.onclick=()=>enterCourt(b.dataset.court));
  qsa('#wCourts [data-soon]').forEach(b=>b.onclick=()=>soonToast(b.dataset.soon));
  if($('wIn'))$('wIn').onclick=()=>{tick();showAuth('in')};
@@ -3208,7 +3208,7 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
   if(no){no.hidden=!!n;no.textContent=n?'':'No venues match “'+f.value.trim()+'” yet.'}}}
  $('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=true;closeSheet(true);el.hidden=false;el.scrollTop=0;
 }
-function soonToast(id){const v=SOON.find(x=>x.id===id);if(!v)return;tick();toast(v.name+' is coming soon to My Padel. Check back for courts and booking.')}
+function soonToast(id){const v=SOON.find(x=>x.id===id);if(!v)return;tick();toast(v.name+' is coming soon to OneCourt. Check back for courts and booking.')}
 function showPicker(){showWelcome('pick')}
 /* Into a court: its loading screen, then straight into the club */
 async function enterCourt(vid){if(!VENUES.some(x=>x.id===vid))return;tick();

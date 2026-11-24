@@ -1,6 +1,6 @@
 {
-  "name": "My Padel",
-  "short_name": "My Padel",
+  "name": "OneCourt",
+  "short_name": "OneCourt",
   "description": "Padel and pickleball clubs in one app: log scores, climb each club's rankings and book courts.",
   "start_url": "./",
   "scope": "./",
