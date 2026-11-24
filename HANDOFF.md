@@ -73,6 +73,7 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - Final prices and peak hours after my meeting with Caelan.
 - Making Caelan and Surya admins once they've signed up.
 - Online payment for bookings: not built, and the app only shows prices.
+- **Stop fake games (idea box, Marc 24 Nov 2026, not started):** players can log scores on any free slot, and today only owners and admins cancelling them catches fakes. Options, strongest first: (1) at clubs with in-app booking, only allow a score on a slot that was booked and confirmed, by someone on that booking; (2) flag suspicious patterns for staff (same 4 players again and again, many games a day, one player always winning big); (3) limits such as 3 games a day per player and no logging games more than 2 days old; (4) opponent confirms before it counts (weakest, brings back waiting). Clubs booking outside the app (District, Hudle) can only use 2 and 3. Build on preview first when Marc asks.
 - More courts or locations: add them to `COURT_NOS` and `VENUES`. The `court` check in `setup.sql` only allows `padel` and `pickleball`, and bookings don't store a court number yet.
 
 ## Release workflow (from V1.1 on)
