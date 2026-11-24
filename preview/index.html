@@ -157,7 +157,7 @@ input:focus-visible{outline:none}
 .splash{position:fixed;inset:0;z-index:9998;display:grid;place-items:center;text-align:center;padding:24px;background:radial-gradient(70% 60% at 50% 40%,var(--splash-d),var(--bg));animation:sOut 2s ease forwards}
 .splash img{width:min(300px,70vw);height:auto;animation:sLogo 2s var(--ease) forwards}
 /* every club opens on its logo inside a rounded card in the club's colours (Sunday and Floresta have the card drawn into their logo files) */
-.splash .v-rc img,.splash .v-aer img,.splash .v-coplay img,.splash .v-assagao img,.splash .v-roundtwo img,.splash .v-coco img,.splash .v-cocoanjuna img{--cw:min(260px,64vw);box-sizing:border-box;width:var(--cw);height:auto;aspect-ratio:600/330;object-fit:contain;padding:calc(var(--cw)*.1) calc(var(--cw)*.13);border-radius:calc(var(--cw)*.08)}
+.splash .v-rc img,.splash .v-aer img,.splash .v-coplay img,.splash .v-assagao img,.splash .v-roundtwo img,.splash .v-coco img,.splash .v-cocoanjuna img,.splash .v-padelinho img{--cw:min(260px,64vw);box-sizing:border-box;width:var(--cw);height:auto;aspect-ratio:600/330;object-fit:contain;padding:calc(var(--cw)*.1) calc(var(--cw)*.13);border-radius:calc(var(--cw)*.08)}
 .splash .v-rc img{background:linear-gradient(135deg,#6d52bb,#5a3f9f 60%,#4a3289);padding:calc(var(--cw)*.07) calc(var(--cw)*.12)}
 .splash .s1{margin-top:26px;color:var(--muted);font-size:15px;animation:rise .8s var(--ease) .2s both}
 .splash .s2{margin-top:6px;font:500 30px/1.2 var(--display);animation:rise .8s var(--ease) .32s both}
@@ -983,6 +983,15 @@ a.btn{text-decoration:none}
 .splash .v-cocoanjuna img{background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18),inset 0 0 0 3px #b7d968,inset 0 0 0 6px #fff,inset 0 0 0 7px #c8a27a;padding:calc(var(--cw)*.035) calc(var(--cw)*.1)}
 :root:not([data-theme="light"]) .vsrow[data-v="coco"]{--vc:#b7d968}
 :root:not([data-theme="light"]) .vsrow[data-v="cocoanjuna"]{--vc:#b7d968}
+:root[data-venue="padelinho"]{--brand:#1049f0;--brand-hi:#e2eb42;--br-rgb:16,73,240;--hi-rgb:226,235,66;--brand-pale:#dbe5ff;--brand-hi2:#f0f59a;--g1:#3a6bff;--g2:#1049f0;--g3:#0731ad;--sh1:#0a1f66;--sh2:#061444;--splash-d:#0a2a8a;--splash-l:#eaf0ff;--pop-rgb:10,22,70;--bg-rgb:4,10,36;--dock-rgb:8,18,56;--bgl-rgb:244,247,255;--ln-rgb:30,70,190}
+:root[data-venue="padelinho"]:not([data-theme="light"]){--bg:#040a24;--bg2:#071233;--card:#0b1a48;--card2:#10225a;--ink:#f4f7ff;--muted:#aab6dc;--faint:#6b78a6;--brand-soft:rgba(226,235,66,.14)}
+:root[data-venue="padelinho"][data-theme="light"]{--brand-hi:#1049f0;--hi-rgb:16,73,240;--bg:#f4f7ff;--bg2:#e6edff;--card2:#eef2ff;--wr:10,40,140;--ink:#0a1433;--muted:#4b5a80;--faint:#8591b4;--brand-soft:rgba(16,73,240,.08)}
+.vjoin[data-venue="padelinho"]{--brand:#1049f0;--brand-hi:#e2eb42;--br-rgb:16,73,240;--hi-rgb:226,235,66;--g1:#3a6bff;--g2:#1049f0;--g3:#0731ad}
+/* Padelinho: its bright blue logo square with a lemon edge, brighter than CoPlay's deep blue */
+.vmark.v-padelinho{background:#1049f0;box-shadow:0 6px 18px rgba(16,73,240,.3),inset 0 0 0 2px #e2eb42}.wmark.w-padelinho{background:#1049f0;box-shadow:0 6px 18px rgba(16,73,240,.3),inset 0 0 0 2px #e2eb42}
+.vmark.sm.v-padelinho{box-shadow:inset 0 0 0 1.5px #e2eb42}
+.splash .v-padelinho img{background:#1049f0;box-shadow:0 10px 30px rgba(16,73,240,.35),inset 0 0 0 3px #e2eb42;padding:calc(var(--cw)*.03) calc(var(--cw)*.08)}
+:root:not([data-theme="light"]) .vsrow[data-v="padelinho"]{--vc:#4d7bff}
 /* every club's logo card is the same size wherever it shows; the logo sits centred inside it */
 .vmark,.wmark{box-sizing:border-box;grid-template:minmax(0,1fr)/minmax(0,1fr);width:76px!important;min-width:0!important;height:46px!important;padding:5px 10px!important}
 .wmark{width:92px!important;height:56px!important;padding:7px 12px!important}
@@ -993,6 +1002,7 @@ a.btn{text-decoration:none}
 .vmark img,.wmark img{width:100%!important;height:100%!important;min-width:0;min-height:0;object-fit:contain}
 /* Coco Padel: keep the whole racquet inside its card at every size */
 .vmark.v-coco,.wmark.w-coco,.vmark.v-cocoanjuna,.wmark.w-cocoanjuna{padding:3px 8px!important}
+.vmark.v-padelinho,.wmark.w-padelinho{padding:3px 6px!important}.vmark.sm.v-padelinho{padding:2px 3px!important}
 .vmark.big.v-coco,.vmark.big.v-cocoanjuna{padding:6px 14px!important}
 .vmark.sm.v-coco,.vmark.sm.v-cocoanjuna{padding:2px 4px!important}
 /* ============ My Padel's own pages (sign-in, first-time questions): the My Padel blue ============ */
@@ -1083,7 +1093,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=68"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=96"></script>
+<script src="app.js?v=97"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
