@@ -276,6 +276,7 @@ let sb=null;
 function memStore(mode,get,put){return{mode,
  async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),owners:(d.owners||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
+ async setPro(p){const d=get();upsert(d.profiles,p);put(d);return p.pro||{}},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
  async updateMatch(m){const d=get();upsert(d.matches,m);put(d)},
  async delMatch(id){const d=get();d.matches=d.matches.filter(m=>m.id!==id);d.confs=d.confs.filter(c=>c.match!==id);put(d)},
@@ -369,6 +370,7 @@ const Live={
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
+ async setPro(p,v,sp,on){const {data,error}=await sb.rpc('rc_set_pro',{target:p.id,v,sp,on_:on});if(error){if(error.code==='42501')throw errc('denied');throw error}return data||{}},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
  async updateMatch(m){const {data,error}=await sb.from('rc_matches').update({data:m}).eq('id',m.id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
  async delMatch(id){const {data,error}=await sb.from('rc_matches').delete().eq('id',id).select('id');if(error)throw error;if(!data.length)throw errc('denied')},
@@ -1345,8 +1347,8 @@ function paintAuth(dir){
    <input id="aUser" name="nickname" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="100" placeholder="How other players will see you">
    <div class="fieldnote"><span id="uNote"></span><span id="uCount" class="num">0/100</span></div>`:''}
    <label for="aPass">${up?'Create a password':'Password'}</label>
-   <div class="pw"><input id="aPass" name="password" type="password" autocomplete="${up?'new-password':'current-password'}" ${up?'minlength="6"':''}><button type="button" class="pwtoggle" id="pwT" aria-controls="aPass" aria-pressed="false">Show</button></div>
-   ${up?`<div class="strength" aria-hidden="true"><i id="pwS"></i></div><div class="fieldnote"><span id="pwN">At least 6 characters.</span></div>`:''}
+   <div class="pw"><input id="aPass" name="password" type="password" autocomplete="${up?'new-password':'current-password'}" ${up?'minlength="8"':''}><button type="button" class="pwtoggle" id="pwT" aria-controls="aPass" aria-pressed="false">Show</button></div>
+   ${up?`<div class="strength" aria-hidden="true"><i id="pwS"></i></div><div class="fieldnote"><span id="pwN">At least 8 characters.</span></div>`:''}
    <input id="aWeb" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
    <span class="sr" id="hvLabel">Verify you are human</span>
    <div class="slider" id="hv" role="slider" tabindex="0" aria-labelledby="hvLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="Not verified"><svg class="strack" aria-hidden="true"><defs><clipPath id="hvClip"><path class="tp"/></clipPath></defs><path class="tp tbg"/><rect class="tlit" x="0" y="-12" height="80" clip-path="url(#hvClip)"/><path class="tp tline"/></svg><span class="stclip" aria-hidden="true"><span class="stext s1">Slide to verify</span><span class="stext s2">I'm not a robot</span></span><div class="knob" aria-hidden="true"><span class="kface">›</span></div></div>
@@ -1371,9 +1373,9 @@ function checkUser(){
  tkT=setTimeout(async()=>{try{const t=await Store.taken(u);if(seq!==tkSeq)return;n.className=t?'bad':'ok';n.textContent=t?'This username is already taken. Try another one.':'✓ Available'}catch(e){if(seq===tkSeq)n.textContent=''}},350);
 }
 function paintStrength(){
- const p=$('aPass').value;let s=0;if(p.length>=6)s++;if(p.length>=10)s++;if(/[A-Z]/.test(p)&&/[a-z]/.test(p))s++;if(/\d/.test(p))s++;if(/[^A-Za-z0-9]/.test(p))s++;
+ const p=$('aPass').value;let s=0;if(p.length>=8)s++;if(p.length>=12)s++;if(/[A-Z]/.test(p)&&/[a-z]/.test(p))s++;if(/\d/.test(p))s++;if(/[^A-Za-z0-9]/.test(p))s++;
  const i=$('pwS');i.style.width=(p?Math.max(12,s*20):0)+'%';i.style.background=s<2?'var(--bad)':s<4?'#ffc76b':'var(--good)';
- $('pwN').textContent=p.length<6?'At least 6 characters.':['Weak','Weak','Okay','Good','Strong','Very strong'][s]+' password.';
+ $('pwN').textContent=p.length<8?'At least 8 characters.':['Weak','Weak','Okay','Good','Strong','Very strong'][s]+' password.';
 }
 async function doSignIn(){
  if(Date.now()<lockUntil)return aerr(`Too many attempts. Try again in ${Math.ceil((lockUntil-Date.now())/1000)} seconds.`);
@@ -1398,7 +1400,7 @@ async function doSignUp(){
  if(!EMAIL_RE.test(em))return aerr('Enter a valid email address.');
  const ph=phoneOf($('aCC').value,$('aPhone').value);if(!ph)return aerr('Enter your phone number, so the club can reach you about bookings.');
  const bad=userProblem(u);if(bad)return aerr(bad);
- if(p.length<6)return aerr('Your password needs at least 6 characters.');
+ if(p.length<8)return aerr('Your password needs at least 8 characters.');
  if(!V.ok)return aerr('Slide the handle to verify you are human first.');
  if($('aWeb').value)return aerr('Something went wrong. Refresh the page and try again.');
  busy(true,'Creating your account…');
@@ -1408,7 +1410,7 @@ async function doSignUp(){
   if(e.code==='taken'){const el=$('uNote');if(el){el.className='bad';el.textContent='This username is already taken. Try another one.'}$('aUser').focus();return aerr('This username is already taken. Try another one.')}
   if(e.code==='emailtaken')return aerr('There is already an account with this email. Sign in instead.');
   if(e.code==='bademail')return aerr('That email address was not accepted. Check it and try again.');
-  if(e.code==='weak')return aerr('Choose a stronger password.');
+  if(e.code==='weak')return aerr('Choose a stronger password. That one is too easy to guess or has turned up in a data leak.');
   if(e.code==='rate')return aerr('Too many attempts right now. Wait a few minutes and try again.');
   if(e.code==='confirm'){authMode='in';paintAuth(-1);$('aEmail').value=em;return aerr('Nearly there. We sent a link to '+em+'. Open it to confirm your account, then sign in.',true)}
   return aerr('Could not create your account. Check your connection and try again.')}
@@ -1507,13 +1509,13 @@ function showCode(em){
 }
 /* Arrived from a password reset email, or changing the password from Profile */
 function showReset(){
- openSheet(`<h2 data-noback>Set a new password</h2><p class="muted small">At least 6 characters.</p>
-  <label for="rPass">New password</label><div class="pw"><input id="rPass" type="password" autocomplete="new-password" minlength="6"><button type="button" class="pwtoggle" id="rT">Show</button></div>
+ openSheet(`<h2 data-noback>Set a new password</h2><p class="muted small">At least 8 characters.</p>
+  <label for="rPass">New password</label><div class="pw"><input id="rPass" type="password" autocomplete="new-password" minlength="8"><button type="button" class="pwtoggle" id="rT">Show</button></div>
   <p class="ferr" id="rErr"></p><button class="btn brand wide" id="rSave">Save password</button>`,bg=>{
   bg.querySelector('#rT').onclick=()=>{const i=$('rPass'),sh=i.type==='password';i.type=sh?'text':'password';$('rT').textContent=sh?'Hide':'Show'};
-  bg.querySelector('#rSave').onclick=async()=>{const pw=$('rPass').value;if(pw.length<6){$('rErr').textContent='Use at least 6 characters.';return}
+  bg.querySelector('#rSave').onclick=async()=>{const pw=$('rPass').value;if(pw.length<8){$('rErr').textContent='Use at least 8 characters.';return}
    try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
-   catch(e){$('rErr').textContent='Could not update the password. Ask for a new code, or try once more.'}}});
+   catch(e){$('rErr').textContent=/password/i.test((e&&e.message)||'')&&!/same/i.test(e.message)?'Choose a stronger password. That one is too easy to guess or has turned up in a data leak.':'Could not update the password. Ask for a new code, or try once more.'}}});
 }
 function showApp(){$('welcome').hidden=true;$('auth').hidden=true;$('wiz').hidden=true;applyVenue();$('app').hidden=false;render();}
 
@@ -2846,8 +2848,8 @@ function proCard(id){const p=prof(id);if(!canPro()||!p||!p.setup||!inVenue(p))re
 async function setPro(v){const [id,sp]=v.split('|'),p=prof(id);if(!p||!SPORTS[sp]||!canPro())return;const on=!proOf(id,sp);
  const np=JSON.parse(JSON.stringify(p));np.pro=np.pro||{};np.pro[VID]=np.pro[VID]||{};
  if(on)np.pro[VID][sp]={by:S.uid,at:new Date().toISOString()};else{delete np.pro[VID][sp];if(!Object.keys(np.pro[VID]).length)delete np.pro[VID]}
- try{await Store.saveProfile(np)}catch(e){return toast('Could not save. Check your connection and try again.')}
- upsert(S.profiles,np);rate();notify([{to:id,kind:'pro',data:{on,sport:sp,venue:VID}}]);playerSheet(id);
+ try{np.pro=await Store.setPro(np,VID,sp,on)}catch(e){return toast(e.code==='denied'?'Only the club owner or the developer can change Pro.':'Could not save. Check your connection and try again.')}
+ if(!Object.keys(np.pro||{}).length)delete np.pro;upsert(S.profiles,np);rate();notify([{to:id,kind:'pro',data:{on,sport:sp,venue:VID}}]);playerSheet(id);
  toast(on?`${first(p)} is now in the ${SPORTS[sp].name.toLowerCase()} Pro ranking`:`${first(p)} is back in Intermediate ${SPORTS[sp].name.toLowerCase()}`)}
 function demoRow(id){if(!isDev()||isDev(id))return'';const on=canDemo(id);
  return `<div class="card rolecard democard" style="margin-top:12px"><span class="eyebrow">Developer · demo mode</span><div class="setline" style="margin-top:10px"><div><b>Demo access</b><p class="small muted">${on?`${esc(first(prof(id)))} can open demo mode from Settings to try new updates before they go live.`:'Let them try new updates in demo mode before they go live.'}</p></div><button class="switch" role="switch" aria-checked="${on}" data-act="demoAcc" data-v="${id}" aria-label="Demo access"></button></div></div>`}
