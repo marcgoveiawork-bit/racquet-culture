@@ -165,14 +165,17 @@ const HUDLE_URL=(window.RC_LIVE&&window.RC_LIVE.hudle)||'https://hudle.in/venues
 const VENUES=[
  {id:'rc',pin:{g:'0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7',lat:15.3922869,lng:73.8459347,n:'RACQUET CULTURE'},name:'Racquet Culture',short:'Racquet Culture',place:'Chicalim, Goa, India',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
+  insta:'https://www.instagram.com/racquetculture.goa/',
   url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'},
  {id:'sunday',pin:{g:'0x3bbfeb2d7cb99359:0x26da1bb433ed73b8',lat:15.6220728,lng:73.7844174,n:'Sunday Racquet & Social Club'},name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',place:'Siolim, Goa, India',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
+  insta:'https://www.instagram.com/sunday.goa/',
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'},
  {id:'floresta',pin:{g:'0x3bbfeb122364565b:0x9839eddb3c8e4b57',lat:15.5912088,lng:73.7730173,n:'Clube de Floresta'},name:'Clube De Floresta',short:'Clube De Floresta',place:'Assagao, Goa, India',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
   courtNos:{padel:[1],pickleball:[1]},also:'1 badminton court and 1 table tennis table',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
+  insta:'https://www.instagram.com/clubedefloresta/',
   url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'},
  {id:'aer',embed:'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1269.9236849310637!2d73.81313685513642!3d15.458309561027987!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1004336e4f9%3A0xfc92639f35aa43e8!2sAER!5e1!3m2!1sen!2suk!4v1795486402363!5m2!1sen!2suk',name:'AER',short:'AER',place:'Dona Paula, Goa, India',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'venues/aer.png',splash:'venues/aer-big.png',mark:'wide',color:'#111111',
@@ -197,10 +200,12 @@ const VENUES=[
  {id:'coco',pin:{g:'0x3bbfeb5990434feb:0xd5c755a402317054',lat:15.5936254,lng:73.7759457,n:'Coco Padel - Assagao'},brand:'Coco Padel',name:'Coco Padel Assagao',short:'Coco Padel Assagao',place:'Assagao, Goa, India',area:'Bouta Waddo, Assagao, Goa, India',map:'Coco Padel, Bouta Waddo, Assagao, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-assagao/585376'},
+  insta:'https://www.instagram.com/cocopadel_goa/',
   url:'https://maps.app.goo.gl/TbGqGZ2eZE9B4nRV8'},
  {id:'cocoanjuna',pin:{g:'0x3bbfebb837a80fb9:0xfe7da017f2ee2557',lat:15.5904234,lng:73.7482902,n:'Coco Padel'},brand:'Coco Padel',name:'Coco Padel Dot in the Park, Anjuna',short:'Coco Padel Dot in the Park, Anjuna',place:'Anjuna, Goa, India',area:'House No. 1688, Anjuna Panchayat Road, Anjuna, Goa, India',map:'Coco Padel Dot in the Park, Anjuna, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-circle-anjuna/615130'},
+  insta:'https://www.instagram.com/cocopadel_goa/',
   url:'https://maps.app.goo.gl/KtDvVb7fBq9CnV5U7'},
  {id:'padelinho',pin:{g:'0x3bbfe992afde15ab:0x3ba839805bcc5310',lat:15.5890452,lng:73.7456702,n:'Padelinho'},name:'Padelinho',short:'Padelinho',place:'Anjuna, Goa, India',area:'Near Castelinho’s Guesthouse, Gumal Vaddo, Anjuna, Goa 403509, India',lat:15.5890452,lng:73.7456702,courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/padelinho.jpg',splash:'venues/padelinho-big.jpg',mark:'wide',color:'#1049f0',
@@ -899,7 +904,7 @@ function buildDemo(you,rank='dev'){
  const votes=[];ms.slice(-260).forEach((m,k)=>{const rg=regs(m);if(rg.length<2||r()<.45)return;const voter=rg[0];rg.slice(1).forEach(t=>{const P=all.find(x=>x.id===t);if(!P||!P._skill)return;
   const gap=P._skill[m.sport]-P.levels[m.sport].start,x=r()+gap*.8,vote=x>.85?'higher':x<.2?'lower':'right';votes.push({id:'dv_'+k+'_'+t,voter,target:t,sport:m.sport,match:m.id,vote,at:m.at})})});
  /* club news, and messages with the admins */
- const news=[{text:'Floodlights on court 1 are fixed, so evening padel is back on. See you on court!',link:'',lt:''},{text:'Club social and mixed doubles Americano this Saturday from 5 pm. Bring a friend, all levels welcome.',link:'https://www.instagram.com/',lt:'See the photos from last time'}];
+ const news=[{text:'Floodlights on court 1 are fixed, so evening padel is back on. See you on court!',link:'',lt:''},{text:'Club social and mixed doubles Americano this Saturday from 5 pm. Bring a friend, all levels welcome.',link:'https://www.instagram.com/racquetculture.goa/',lt:'See the photos from last time'}];
  news.forEach((n,k)=>[you.id,arjun.id].forEach(t=>msgs.push({id:'dg_cm'+k+t,to:t,from:k?caelan.id:surya.id,kind:'community',data:n,read:k===0,at:ago(30+k*-22)})));
  const asker=pool2[20];if(asker){const data={thread:'dth_1',topic:'court',text:'The net on pickleball court 1 looks a bit low on one side.',player:asker.id};[you.id,caelan.id,surya.id].forEach(t=>msgs.push({id:'dg_am'+t,to:t,from:asker.id,kind:'admin_msg',data,read:false,at:ago(3)}))}
  {const q={thread:'dth_2',topic:'booking',text:'Can I pay by UPI at the court?',player:arjun.id},r2={thread:'dth_2',topic:'booking',text:'Yes, UPI and cash are both fine at the desk. See you there!',player:arjun.id};
