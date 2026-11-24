@@ -8,12 +8,12 @@
 <script>/* club colours before first paint */try{var vq=new URLSearchParams(location.search).get('venue');document.documentElement.dataset.venue=vq||JSON.parse(localStorage.getItem('rc_venue'))||'rc'}catch(e){document.documentElement.dataset.venue='rc'}</script>
 <script>/* theme before first paint, so there is no flash */try{var t=(JSON.parse(localStorage.getItem('rc_prefs'))||{}).theme||'light';document.documentElement.dataset.theme=t==='device'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){document.documentElement.dataset.theme='dark'}</script>
 <meta name="robots" content="noindex">
-<title>My Padel</title>
-<!-- App icon: the My Padel logo. To change it, replace the files in brand/ (same names and sizes). -->
+<title>OneCourt</title>
+<!-- App icon: the OneCourt logo. To change it, replace the files in brand/ (same names and sizes). -->
 <link rel="icon" type="image/png" href="brand/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="My Padel">
+<meta name="apple-mobile-web-app-title" content="OneCourt">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -930,7 +930,7 @@ a.btn{text-decoration:none}
 .vjpage{position:fixed;inset:0;z-index:55;overflow:auto;background:var(--bg)}.vjpage[hidden]{display:none}.vjpage .alogo{border-radius:22px}
 .auth .avenue{display:flex;align-items:center;gap:10px;margin:0 0 16px}.auth .avenue .vbtn{transform:scale(.8)}.auth .avenue .vbtn.on{transform:scale(.9)}
 
-/* ============ Opening screen: My Padel, then pick a court ============ */
+/* ============ Opening screen: OneCourt, then pick a court ============ */
 .welcome{position:fixed;inset:0;z-index:60;overflow:auto;display:grid;place-items:center;padding:32px 22px calc(32px + var(--safe-b));background:radial-gradient(70% 55% at 50% 22%,rgba(29,90,155,.55),transparent 70%),radial-gradient(60% 50% at 50% 100%,rgba(29,90,155,.25),transparent 70%),#0b1220;color:#fff}
 .welcome[hidden]{display:none}
 .wcin{width:100%;max-width:420px;text-align:center}
@@ -1068,7 +1068,7 @@ a.btn{text-decoration:none}
 .vmark.v-padelinho,.wmark.w-padelinho{padding:3px 6px!important}.vmark.sm.v-padelinho{padding:2px 3px!important}
 .vmark.big.v-coco,.vmark.big.v-cocoanjuna{padding:6px 14px!important}
 .vmark.sm.v-coco,.vmark.sm.v-cocoanjuna{padding:2px 4px!important}
-/* ============ My Padel's own pages (sign-in, first-time questions): the My Padel blue ============ */
+/* ============ OneCourt's own pages (sign-in, first-time questions): the OneCourt blue ============ */
 :root[data-venue="mp"]{--brand:#1d589a;--brand-hi:#3d8be0;--br-rgb:29,88,154;--hi-rgb:61,139,224;--brand-pale:#bcd8f7;--brand-hi2:#2f74c4;--g1:#2265ae;--g2:#1d589a;--g3:#123c6c;--sh1:#14243d;--sh2:#0c1729;--splash-d:#10335c;--splash-l:#dce9f8;--pop-rgb:16,28,48;--bg-rgb:11,18,32;--dock-rgb:16,26,44;--bgl-rgb:243,247,252;--ln-rgb:20,60,110}
 :root[data-venue="mp"]:not([data-theme="light"]){--bg:#0b1220;--bg2:#0f1829;--card:#131e33;--card2:#19263f;--ink:#f1f5fb;--muted:#9fb0c9;--faint:#64748f;--brand-soft:rgba(61,139,224,.16)}
 :root[data-venue="mp"][data-theme="light"]{--bg:#f3f7fc;--bg2:#e7eef8;--card2:#edf2f9;--wr:20,60,110;--ink:#0f1b2d;--muted:#51607a;--faint:#8592a8;--brand-soft:rgba(29,88,154,.1)}
@@ -1099,11 +1099,11 @@ a.btn{text-decoration:none}
 <div class="sprog" id="sprog" aria-hidden="true"></div>
 <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
-<!-- Opening screen: the My Padel logo, then pick a court -->
+<!-- Opening screen: the OneCourt logo, then pick a court -->
 <section class="welcome" id="welcome" hidden>
   <div class="wcin">
-    <img class="wlogo" src="brand/icon-512.png" alt="My Padel">
-    <h1 class="wname">My Padel</h1>
+    <img class="wlogo" src="brand/icon-512.png" alt="OneCourt">
+    <h1 class="wname">OneCourt</h1>
     <p class="wtag">Every court. One app.</p>
     <p class="whi" id="wHi" hidden></p>
     <p class="eyebrow wpick" id="wPick" hidden></p>
@@ -1116,12 +1116,12 @@ a.btn{text-decoration:none}
 <section class="auth" id="auth" hidden>
   <div class="aside">
     <svg class="court" viewBox="0 0 400 200" aria-hidden="true"><rect class="draw" x="4" y="4" width="392" height="192" rx="6"/><line class="draw" x1="200" y1="0" x2="200" y2="200"/><line class="draw" x1="60" y1="4" x2="60" y2="196"/><line class="draw" x1="340" y1="4" x2="340" y2="196"/><line class="draw" x1="60" y1="100" x2="340" y2="100"/></svg>
-    <img class="alogo mp" src="brand/icon-512.png" alt="My Padel">
+    <img class="alogo mp" src="brand/icon-512.png" alt="OneCourt">
     <div>
       <p class="atag"><b>Goa's padel and pickleball club.</b>One padel court, one pickleball court and a community that keeps growing.</p>
       <ul class="afeat"><li>Find players at your level</li><li>Log scores, climb the rankings</li><li>Fair points, whoever you play with</li></ul>
     </div>
-    <p class="afoot">My Padel</p>
+    <p class="afoot">OneCourt</p>
   </div>
   <div class="amain">
     <div class="acard">
