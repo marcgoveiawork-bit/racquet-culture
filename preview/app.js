@@ -933,7 +933,7 @@ async function demoSwitch(to){const d=Demo.d;if(!d||!demoOk(to))return;const nex
 function demoChooser(){
  const info={player:'Book courts, add scores, confirm games, climb the rankings',coach:'Everything a player does, plus blocking court time for coaching',admin:'Confirms bookings, reviews scores and reports, posts club news, switches players and coaches',owner:'Everything an admin does, plus giving or removing admin access',dev:'Everything an owner does, plus making owners and giving or removing admin access'};
  const rank=topRole(S.uid),ok=k=>DEMO_RANK[k]<=DEMO_RANK[rank],list=['player','coach','admin','owner','dev'].filter(ok);
- openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched.${list.length>1?' You can switch between the demo accounts at any time from the bar at the top.':''}</p>
+ openSheet(`<h2>Try the demo</h2><p class="muted small">A made-up club of 100 players with games and messages. Nothing is saved and real accounts are never touched.${list.length>1?' You can switch between the demo accounts at any time in Settings, under Demo mode.':''}</p>
   <div class="demopick">${list.map((k,i)=>`<button type="button" class="btn ${i?'ghost':'brand'} wide" data-act="demoGo" data-v="${k}"><b>${lbl(DEMO_AS,k)}</b><span>${info[k]}</span></button>`).join('')}</div>`)}
 async function startDemo(role){
  const rank=me()?topRole(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
@@ -1679,7 +1679,7 @@ function render(){
  $('main').innerHTML=`<div class="view">${html}</div>`;mountBar();
  $('meBtn').innerHTML=avHTML(me());paintBadge();paintVenues();
  paintDock(t);
- $('banner').innerHTML=Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<div class="demobar"><span><b>Demo mode · V${esc(APP_VER)}.</b> You are <b>${who}</b>, ${esc(roleWords())}. Nothing is saved. <button type="button" class="dreset" data-act="demoResetAsk">Reset demo</button></span><span class="dbtns"><span class="seg dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}<button type="button" role="radio" aria-checked="${r==='new'}" data-act="demoNew" title="Start again as a brand-new player: sign-up, questions, then pick a court">New player</button></span><button class="btn ball sm" data-act="exitDemo">Exit</button></span></div>`})()
+ $('banner').innerHTML=Store.mode==='demo'?''
   :S.needSql?`<div class="banner"><b>Almost ready.</b> The inbox and score confirmations switch on once a club admin runs the latest <b>setup.sql</b> in Supabase.</div>`
   :Store.mode==='local'&&t==='home'?`<div class="banner"><b>Preview mode.</b> Accounts and scores stay on this device until the live database is connected (see SETUP.md).</div>`:'';
  syncGliders();reveal($('main'));after();onScroll();
@@ -2560,6 +2560,11 @@ function vSettings(){
  const nsub=np==='granted'?'You’ll be told about game invites, booking confirmations, scores to confirm and kudos.':np==='denied'?'Blocked in your browser. Allow them in your browser’s site settings.':np==='unsupported'?'This browser can’t show notifications. On iPhone, add the app to your home screen first.':'Get told about scores to confirm, friend requests and kudos.';
  const th=prefs.theme||'dark';
  return `<div class="hd"><div><button class="btn link small" data-act="go" data-v="me" style="padding-left:0">‹ Profile</button><h1 class="sethead"><span class="bgear">${ICON.gear}</span>Settings</h1></div></div>
+ ${Store.mode==='demo'?(()=>{const r=demoRole(),who=me()?esc(first(me())):'';return`<p class="eyebrow period">Demo mode</p>
+ <div class="card rv demoset"><b>Demo mode · V${esc(APP_VER)}</b><p class="small muted" style="margin:4px 0 12px">You are <b>${who}</b>, ${esc(roleWords())}. You're trying the next version of the app with made-up players and games. Nothing is saved and the real club is not touched.</p>
+  <p class="small muted" style="margin:0 0 8px">View the demo as</p>
+  <div class="seg full dseg" role="radiogroup" aria-label="View the demo as">${demoAs().map(([k,t])=>`<button type="button" role="radio" aria-checked="${r===k}" data-act="demoSwitch" data-v="${k}">${t}</button>`).join('')}<button type="button" role="radio" aria-checked="${r==='new'}" data-act="demoNew" title="Start again as a brand-new player: sign-up, questions, then pick a court">New player</button></div>
+  <div class="dbtns"><button class="btn ghost sm" data-act="demoResetAsk">Reset demo</button><button class="btn ball sm" data-act="exitDemo">Exit demo</button></div></div>`})():''}
  <p class="eyebrow period">Appearance</p>
  <div class="card rv">${row(themeNow()==='light'?ICON.sun:ICON.moon,themeNow()==='light'?'spin':'rock','Theme',th==='device'?'Follows your phone or computer':th==='light'?'Light':'Dark, the club look')}
   <div class="seg full themeseg" data-key="theme" role="radiogroup" aria-label="Theme" style="margin-top:12px">${[['device','Device',ICON.device,'pop'],['light','Light',ICON.sun,'spin'],['dark','Dark',ICON.moon,'rock']].map(([v,n,ic,a])=>`<button type="button" role="radio" aria-checked="${th===v}" data-act="theme" data-v="${v}"><span class="ti" data-a="${a}">${ic}</span>${n}</button>`).join('')}</div></div>
@@ -2577,7 +2582,7 @@ function vSettings(){
  <div class="card rv">${row(ICON.phone,'shake','Phone number',myPhone()?esc(myPhone().phone):'Not added yet. Admins use it to reach you about bookings.',`<button class="btn ghost sm" data-act="phEdit">${myPhone()?'Change':'Add'}</button>`,'r-phone')}
   ${myPhone()?`<p class="small muted" style="margin:12px 0 8px">Who can see your number?</p>${seg('phv','Who can see your number',PH_VIS,myPhone().vis||'admins','phVis')}`:''}</div>
  <div class="card rv" style="margin-top:12px">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
- ${Store.mode==='demo'?`<div class="card rv" style="margin-top:12px"><b>You're in demo mode · V${esc(APP_VER)}</b><p class="small muted" style="margin:4px 0 12px">You're trying the next version of the app with made-up players and games. None of it is saved and the real club is not touched.</p><button class="btn ball sm" data-act="exitDemo">${PREVIEW?'Back to the app':'Exit demo'}</button></div>`:canDemo()?`<div class="card rv" style="margin-top:12px"><b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See new updates before they go live, with 100 made-up players and games. Nothing you do there touches the real club.</p>${PREVIEW?`<button class="btn ghost sm" data-act="demo">Start demo mode</button>`:`<a class="btn ghost sm" href="preview/">Open demo mode</a>`}</div>`:''}
+ ${Store.mode==='demo'?'':canDemo()?`<div class="card rv" style="margin-top:12px"><b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See new updates before they go live, with 100 made-up players and games. Nothing you do there touches the real club.</p>${PREVIEW?`<button class="btn ghost sm" data-act="demo">Start demo mode</button>`:`<a class="btn ghost sm" href="preview/">Open demo mode</a>`}</div>`:''}
  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}
  <p class="small muted vline">My Padel · V${esc(APP_VER)}</p>`;
 }
