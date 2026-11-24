@@ -208,6 +208,11 @@ const VENUES=[
   insta:'https://www.instagram.com/padelinhogoa/',
   url:'https://maps.app.goo.gl/NzyqXrTAZhVFvc7i9'}
 ];
+/* Clubs joining soon: shown in the club lists as "Coming soon", but can't be entered yet. Add details only once the club shares them. */
+const SOON=[
+ {id:'padelpeople',name:'Padel People',logo:'venues/padelpeople.png',mark:'wide',color:'#1d648e'},
+];
+const soonFind=v=>esc((v.name+' coming soon').toLowerCase());
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
 const vidOf=x=>{const v=x&&(x.venue||(x.data&&x.data.venue));return!v||v==='chicalim'?'rc':v};
@@ -1639,7 +1644,7 @@ function openVenues(grp){tick();const list=grp?VENUES.filter(v=>groupOf(v)===grp
  openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
   <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
-   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
+   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}${grp?'':SOON.map((v,i)=>`<button type="button" class="vsrow rv soon" style="--vc:${esc(v.color)};--d:${(list.length+i)*60}ms" data-act="venueSoon" data-v="${esc(v.id)}" data-find="${soonFind(v)}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>Joining My Padel soon</small><em class="vstag soon">Coming soon</em></span></button>`).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
   <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
   requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
   const q=bg.querySelector('#vsQ');
@@ -2780,6 +2785,7 @@ const ACT={
  venue(v){switchVenue(v)},
  venueAll(){openVenues()},
  venueGroup(v){openVenues(v)},
+ venueSoon(v){soonToast(v)},
  venueGo(v){closeSheet();if(v!==VID)setTimeout(()=>switchVenue(v),calm()?0:220)},
  authVenue(v){if(!VENUES.some(x=>x.id===v)||v===VID)return;VID=v;ls.set('rc_venue',v);applyVenue();tick();paintAuthVenue()},
  /* bookings */
@@ -3004,10 +3010,12 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
  $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
   :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
+   +SOON.map(v=>`<button type="button" class="wcourt soon" data-soon="${esc(v.id)}" data-find="${soonFind(v)}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>Joining My Padel soon</small><em class="wnew soon">Coming soon</em></span></button>`).join('')
    +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
   :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
  $('wFoot').textContent='My Padel · V'+APP_VER;
  qsa('#wCourts [data-court]').forEach(b=>b.onclick=()=>enterCourt(b.dataset.court));
+ qsa('#wCourts [data-soon]').forEach(b=>b.onclick=()=>soonToast(b.dataset.soon));
  if($('wIn'))$('wIn').onclick=()=>{tick();showAuth('in')};
  if($('wUp'))$('wUp').onclick=()=>{tick();showAuth('up')};
  if($('wDemoNew'))$('wDemoNew').onclick=demoNewPlayer;
@@ -3017,6 +3025,7 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
   if(no){no.hidden=!!n;no.textContent=n?'':'No venues match “'+f.value.trim()+'” yet.'}}}
  $('auth').hidden=true;$('wiz').hidden=true;$('app').hidden=true;closeSheet(true);el.hidden=false;el.scrollTop=0;
 }
+function soonToast(id){const v=SOON.find(x=>x.id===id);if(!v)return;tick();toast(v.name+' is coming soon to My Padel. Check back for courts and booking.')}
 function showPicker(){showWelcome('pick')}
 /* Into a court: its loading screen, then straight into the club */
 async function enterCourt(vid){if(!VENUES.some(x=>x.id===vid))return;tick();
