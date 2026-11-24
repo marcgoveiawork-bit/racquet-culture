@@ -972,6 +972,14 @@ async function demoAuthDone(name,user,email){const d=Demo.d,base=(email||'').spl
 function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for every demo account. Your real account is not touched.</p>
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
 async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);S.uid=demoId(role);closeSheet(true);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
+/* Demo access taken away while someone is in demo mode: check with the real database, then take them straight out */
+async function demoAccessCheck(){const pv=demoPrev;if(!pv||!pv.uid||!sb)return;
+ const [a,d]=await Promise.all([sb.from('rc_demo_access').select('user_id').eq('user_id',pv.uid),sb.from('rc_developers').select('user_id').eq('user_id',pv.uid)]);
+ if(a.error||d.error||a.data.length||d.data.length||demoPrev!==pv)return;
+ ls.set('rc_demo_ended',1);await exitDemo();if(!PREVIEW)demoEndedNote()}
+function demoEndedNote(){if(!ls.get('rc_demo_ended',0))return;ls.del('rc_demo_ended');
+ openSheet(`<h2>Your demo preview has ended</h2><p class="muted">Your access to demo mode was removed, so you’re back in the real app. Everything in your real account is just as you left it.</p>
+  <button class="btn brand wide" style="margin-top:16px" data-act="closeSheet">OK</button>`)}
 async function exitDemo(){
  if(PREVIEW){location.href='../';return}
  const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;setVenues(PREVIEW);if(!VENUES.some(v=>v.id===VID)){VID='rc';ls.set('rc_venue',VID);applyVenue()}A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
@@ -3205,7 +3213,7 @@ document.addEventListener('keydown',e=>{
 
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
-function onRemote(){if(Store.mode==='demo')return;clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
+function onRemote(pl){if(Store.mode==='demo'){if(pl&&pl.table==='rc_demo_access')demoAccessCheck();return}clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
  paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;sfx('ding');buzz([20,80,20]);toast('New message: '+t.textContent,3600);sysNotify('OneCourt',t.textContent)}}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);
  if($('app').hidden||typing||$('sheetBg')||view.tab==='add'){rmPending=true;return}render()},400)}
@@ -3253,5 +3261,5 @@ async function enterCourt(vid){if(!VENUES.some(x=>x.id===vid))return;tick();
  let id=null;try{id=await Store.session()}catch(e){}
  if(recovery){applyVenue();if(id){S.uid=id;await enter(false)}else showAuth();booted=true;return setTimeout(showReset,300)}
  if(id){showWelcome('wait');S.uid=id;await enter(false)}else showWelcome('start');
- booted=true;
+ booted=true;setTimeout(demoEndedNote,600);
 })();
