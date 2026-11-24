@@ -2344,7 +2344,7 @@ async function submitMatch(){
  const d=S.D[rec.id]&&S.D[rec.id].d[S.uid];doneTick('Score added');
  notify(ids.filter(u=>u!==S.uid).map(to=>({to,kind:'confirm',data:{match:rec.id}})));
  toast(`Score saved. Your ${SPORTS[rec.sport].name.toLowerCase()} level ${d>0?'rises':'drops'} ${Math.abs(d||0).toFixed(2)} to ${fmtL(lvlOf(rec.sport,S.uid))}. The other players are asked to confirm.`,4200);
- view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>levelAsk(rec.id,()=>kudosSheet(rec.id,true)),900)},500);
+ view.rs=rec.sport;view.rt=tierOf(rec.sport,lvlOf(rec.sport,S.uid));A=null;view.tab='rank';setTimeout(()=>{window.scrollTo(0,0);render();if(regsOf(rec).some(u=>u!==S.uid))setTimeout(()=>postGame(rec.id),900)},500);
 }
 
 /* ---------- Inbox ---------- */
@@ -2631,25 +2631,55 @@ function levelVotes(sp,id){const them=id===S.uid?'you':'them';
  (S.votes||[]).filter(v=>v.target===id&&v.sport===sp&&v.voter!==id&&(v.at||'')>=since).sort((a,b)=>(a.at||'').localeCompare(b.at||'')).forEach(v=>last[v.voter]=v.vote);
  const vs=Object.values(last).filter(v=>VOTE_TXT[v]),n=vs.length;if(n<3)return null;
  const c={higher:0,right:0,lower:0};vs.forEach(v=>c[v]++);const ord=['right','higher','lower'].sort((a,b)=>c[b]-c[a]),top=ord[0],share=c[top]/n;
- if(c[ord[1]]===c[top])return{top:'split',n,k:c[top],html:`<p class="lvvote v-split"><span aria-hidden="true">⚖️</span><span>Players who played ${them} are split on this level <span class="muted">· ${n} said</span></span></p>`};
+ if(c[ord[1]]===c[top])return{top:'split',n,k:c[top],html:`<p class="lvvote v-split"><span class="lvi" aria-hidden="true">${LV_IC.split}</span><span>Players who played ${them} are split on this level <span class="muted">· ${n} said</span></span></p>`};
  const who=share>=.75?'Most':share>=.5?'Lots of':'A few';
- return{top,n,k:c[top],html:`<p class="lvvote v-${top}"><span aria-hidden="true">${top==='higher'?'⬆️':top==='lower'?'⬇️':'✅'}</span><span>${who} players who played ${them} say this level ${VOTE_TXT[top]} <span class="muted">· ${c[top]} of ${n}</span></span></p>`};
+ return{top,n,k:c[top],html:`<p class="lvvote v-${top}"><span class="lvi" aria-hidden="true">${LV_IC[top]}</span><span>${who} players who played ${them} say this level ${VOTE_TXT[top]} <span class="muted">· ${c[top]} of ${n}</span></span></p>`};
 }
-function levelAsk(mid,then){
- const m=S.matches.find(x=>x.id===mid);if(!m)return then&&then();
- const others=regsOf(m).filter(u=>u!==S.uid&&prof(u)&&lvlOf(m.sport,u)!=null);let i=0;
- const step=()=>{if(i>=others.length){closeSheet(true);return then&&then()}
-  const u=others[i],p=prof(u),lv=lvlOf(m.sport,u),t=tierOf(m.sport,lv);
-  openSheet(`<p class="eyebrow">Player ${i+1} of ${others.length} · ${SPORTS[m.sport].name}</p><div style="text-align:center"><div class="avbig" style="width:80px;height:80px;margin-top:8px">${avHTML(p,80)}</div>
-   <h2 style="margin-top:10px">Is ${esc(first(p))}'s level right?</h2><p style="margin:6px 0"><b class="num" style="font-size:22px">${fmtL(lv)}</b> <span class="chip t-${t}">${TIER_NAME[t]}</span></p>
-   <p class="small muted">From the game you just played. Only a summary is shown, never who said what.</p></div>
-   <div class="lvask"><button type="button" class="btn ghost" data-lv="higher">⬆️ Should be higher</button><button type="button" class="btn brand" data-lv="right">✅ About right</button><button type="button" class="btn ghost" data-lv="lower">⬇️ Should be lower</button></div>
-   <button type="button" class="btn link small wide" style="margin-top:8px" data-lv="skip">Skip</button>`,bg=>qsa('[data-lv]',bg).forEach(b=>b.onclick=async()=>{
-    const v=b.dataset.lv;qsa('[data-lv]',bg).forEach(x=>x.disabled=true);
-    if(v!=='skip'){const rec={id:'lv_'+rid(),voter:S.uid,target:u,sport:m.sport,match:m.id,vote:v,at:new Date().toISOString()};try{await Store.addVote(rec);S.votes.push(rec);tick()}catch(e){}}
-    i++;step()}));
- };
- if(!others.length)return then&&then();step();
+/* Clean line icons for the level question and the level summary (no emoji) */
+const LV_SVG=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const LV_IC={higher:LV_SVG('<path d="M12 19V5M6 11l6-6 6 6"/>'),right:LV_SVG('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),lower:LV_SVG('<path d="M12 5v14M6 13l6 6 6-6"/>'),split:LV_SVG('<path d="M8 7l-4 5 4 5M16 7l4 5-4 5"/>')};
+/* After a score is saved: one player at a time, first "is their level right?", then "send them some love?".
+   Anyone reported as late or a no-show is skipped; the rest still get both questions. */
+function postGame(mid){
+ const m=S.matches.find(x=>x.id===mid);if(!m)return;
+ const list=[...new Set(regsOf(m))].filter(u=>u!==S.uid&&prof(u));if(!list.length)return;
+ const F={m,list,i:0,phase:'level',rep:new Set()},sent=sentKudos();
+ const left=()=>list.filter(u=>!F.rep.has(u));
+ const next=()=>{F.i++;while(F.i<list.length&&F.rep.has(list[F.i]))F.i++;F.phase='level';show()};
+ const head=u=>{const L=left(),n=L.indexOf(u)+1;return`<p class="eyebrow">Player ${n} of ${L.length} · ${SPORTS[m.sport].name}</p>`};
+ const repLink=`<button type="button" class="btn link small wide pgrep" data-pg="report">Someone was late or didn’t show up? Report it</button>`;
+ const wire=bg=>{const r=bg.querySelector('[data-pg="report"]');if(r)r.onclick=()=>report()};
+ function show(){
+  if(F.i>=list.length){closeSheet();return}
+  const u=list[F.i],p=prof(u),lv=lvlOf(m.sport,u);
+  if(F.phase==='level'&&lv==null)F.phase='love';
+  if(F.phase==='level'){const t=tierOf(m.sport,lv);
+   openSheet(`${head(u)}<div style="text-align:center"><div class="avbig" style="width:80px;height:80px;margin-top:8px">${avHTML(p,80)}</div>
+    <h2 style="margin-top:10px">Is ${esc(first(p))}'s level right?</h2><p style="margin:6px 0"><b class="num" style="font-size:22px">${fmtL(lv)}</b> <span class="chip t-${t}">${TIER_NAME[t]}</span></p>
+    <p class="small muted">From the game you just played. Only a summary is shown, never who said what.</p></div>
+    <div class="lvask">${[['higher','ghost','Should be higher'],['right','brand','About right'],['lower','ghost','Should be lower']].map(([k,c,l])=>`<button type="button" class="btn ${c} lvb lv-${k}" data-lv="${k}"><span class="lvi" aria-hidden="true">${LV_IC[k]}</span><span>${l}</span></button>`).join('')}</div>
+    <button type="button" class="btn link small wide" style="margin-top:8px" data-lv="skip">Skip</button>${repLink}`,bg=>{wire(bg);qsa('[data-lv]',bg).forEach(b=>b.onclick=async()=>{
+     const v=b.dataset.lv;qsa('[data-lv]',bg).forEach(x=>x.disabled=true);
+     if(v!=='skip'){const rec={id:'lv_'+rid(),voter:S.uid,target:u,sport:m.sport,match:m.id,vote:v,at:new Date().toISOString()};try{await Store.addVote(rec);S.votes.push(rec);tick()}catch(e){}}
+     F.phase='love';show()})});
+   return}
+  const last=!left().some((x,k,a)=>a.indexOf(u)<k),name=esc(first(p));
+  openSheet(`${head(u)}<div class="pglove"><div class="avbig" style="width:52px;height:52px">${avHTML(p,52)}</div><div><h2>${F.i===list.findIndex(x=>!F.rep.has(x))?'Score saved! ':''}Send ${name} some love?</h2><p class="muted small">${SPORTS[m.sport].name} · ${esc(whenOf(m))}</p></div></div>
+   <span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>
+   <div class="kgrid">${REACT.map(([k,e,l])=>`<button type="button" class="kbtn${sent[mid+'|'+u+'|'+k]?' sent':''}" data-k="${k}"><span class="ke">${e}</span><span>${l}</span></button>`).join('')}</div>
+   <p class="tiny muted" style="margin-top:10px">Only ${name} gets it, in their inbox, with your name. Pick as many as you like.</p>
+   ${repLink}
+   <button type="button" class="btn ${last?'ghost':'brand'} wide" style="margin-top:12px" data-pg="next">${last?'Done':`Next: ${esc(first(prof(left()[left().indexOf(u)+1])))}`}</button>`,bg=>{wire(bg);
+   bg.querySelector('[data-pg="next"]').onclick=()=>next();
+   qsa('[data-k]',bg).forEach(b=>b.onclick=async()=>{const k=b.dataset.k,e=REACT.find(x=>x[0]===k)[1];
+    if(sent[mid+'|'+u+'|'+k])return toast('Already sent.');
+    await notify([{to:u,kind:'kudos',data:{match:mid,k}}]);sent[mid+'|'+u+'|'+k]=1;ls.set('rc_kudos_'+S.uid,sent);
+    burst(b,e);b.classList.add('sent');doneTick(`Sent to ${first(p)} ${e}`)})});
+ }
+ function report(){const u=list[F.i];
+  reportSheet('m|'+mid,{only:left(),pre:u,back:()=>show(),sent:who=>{F.rep.add(who);if(who===u)next();else show()}});
+ }
+ show();
 }
 
 /* ---------- Settings ---------- */
@@ -2818,17 +2848,18 @@ function playerSheet(id){
 function refreshSocial(id){if($('sheetBg')&&playerSheet.open===id&&document.querySelector('#sheetBg .relbtns')){playerSheet(id)}else if(!$('sheetBg'))render();else if(view.tab==='inbox'||view.tab==='players')render()}
 /* Send kudos to the other players in a game */
 /* Report a player who was late or didn't show up. It goes to the admins, who decide; nothing changes until one confirms it */
-function reportSheet(v){const [t,id]=v.split('|');let sport,when,others,src={};
+function reportSheet(v,o){o=o||{};const [t,id]=v.split('|');let sport,when,others,src={};
  if(t==='m'){const m=S.matches.find(x=>x.id===id);if(!m)return;sport=m.sport;when=whenOf(m);others=regsOf(m);src={match:m.id,date:m.date}}
  else{const b=S.bookings.find(x=>x.id===id);if(!b)return;sport=b.court;when=`${dateLabel(b.date)} · ${slotRange(b.start,b.len)}`;others=goingOf(b);src={booking:b.id,date:b.date}}
- others=[...new Set(others)].filter(u=>u!==S.uid&&prof(u));if(!others.length)return toast('There is no one else in this game to report.');
- const st={who:others.length===1?others[0]:null,k:null};
+ others=[...new Set(others)].filter(u=>u!==S.uid&&prof(u)&&(!o.only||o.only.includes(u)));if(!others.length)return toast('There is no one else in this game to report.');
+ const st={who:others.length===1?others[0]:o.pre&&others.includes(o.pre)?o.pre:null,k:null};
  openSheet(`<h2>Report a player</h2><p class="muted small">${SPORTS[sport].name} · ${esc(when)}. The club admins see this and decide. Only admins see who reported it.</p>
   <label>Who?</label><div class="chips" id="rpWho">${others.map(u=>`<button type="button" class="fchip${st.who===u?' on':''}" aria-pressed="${st.who===u}" data-rw="${u}">${esc(first(prof(u)))}</button>`).join('')}</div>
   <label>What happened?</label><div class="chips" id="rpK"><button type="button" class="fchip" aria-pressed="false" data-rk="late">Showed up late</button><button type="button" class="fchip" aria-pressed="false" data-rk="noshow">Didn’t show up</button></div>
   <label for="rpNote">Anything to add? <span class="muted">(optional)</span></label><input id="rpNote" maxlength="140" placeholder="e.g. Arrived 25 minutes after the start">
   <p class="ferr" id="rpErr"></p><button class="btn brand wide" id="rpSend">Send to the admins</button>
   <button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`,bg=>{
+  if(o.back)qsa('[data-act="closeSheet"]',bg).forEach(b=>{b.removeAttribute('data-act');b.onclick=()=>o.back()});
   const pick=(sel,attr,key)=>qsa(sel,bg).forEach(b=>b.onclick=()=>{st[key]=b.dataset[attr];qsa(sel,bg).forEach(x=>{const on=x===b;x.classList.toggle('on',on);x.setAttribute('aria-pressed',String(on))});tick()});
   pick('[data-rw]','rw','who');pick('[data-rk]','rk','k');
   bg.querySelector('#rpSend').onclick=async()=>{if(!st.who)return $('rpErr').textContent='Pick the player.';if(!st.k)return $('rpErr').textContent='Pick what happened.';
@@ -2836,6 +2867,7 @@ function reportSheet(v){const [t,id]=v.split('|');let sport,when,others,src={};
    const data=Object.assign({rep:'rp_'+rid(),target:st.who,k:st.k,sport,note:$('rpNote').value.trim()},src);
    await notify(admins.map(to=>({to,kind:'report',data})));
    if(isAdmin()){try{await Store.send([{to:S.uid,kind:'report',data}])}catch(e){}await reload()}
+   if(o.sent){doneTick('Sent to the admins');toast(isAdmin()?'Sent. It’s in your inbox too, so you can confirm it yourself.':'Thanks. An admin will look at it.',3200);return o.sent(st.who)}
    closeSheet();doneTick('Sent to the admins');
    toast(isAdmin()?'Sent. It’s in your inbox too, so you can confirm it yourself.':'Thanks. An admin will look at it. Nothing changes unless they confirm it.',4200);render()}});
 }
