@@ -2432,10 +2432,15 @@ function vPlayers(){
 }
 function paintPlayers(){
  const f=view.pf,pv=view.pv||'all',q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;const fr=friendIds();
- const list=S.profiles.filter(p=>p.setup&&inVenue(p)&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
-  .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name));
- el.innerHTML=list.map(p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
-  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to game invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
+ const match=p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time));
+ const ord=(a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name);
+ const list=S.profiles.filter(p=>inVenue(p)&&match(p)).sort(ord);
+ /* Friends and Following belong to the account, so the ones who play elsewhere show under "At other clubs" */
+ const away=pv==='all'?[]:S.profiles.filter(p=>p.id!==S.uid&&!inVenue(p)&&match(p)).sort(ord);
+ const cardOf=p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
+  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to game invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`};
+ const awayHTML=away.length?`<div class="pgh rv"><b>At other clubs · ${away.length}</b><span class="small muted">${pv==='friends'?'Your friends':'People you follow'} who don’t play at ${esc(VEN().name)} yet</span></div>`+away.map(p=>cardOf(p).replace('<div class="tags">',`<div class="tags">${clubsOf(p.id).map(v=>`<span class="chip">${esc(venueOf(v).name)}</span>`).join('')}`)).join(''):'';
+ el.innerHTML=(list.length?list.map(cardOf).join(''):away.length?`<div class="card empty rv"><b>${pv==='friends'?'No friends here yet':'No one you follow plays here yet'}</b>They play at other clubs. See them below.</div>`:'')+awayHTML
   ||`<div class="card empty rv"><b>${pv==='friends'?'No friends yet':pv==='following'?'Not following anyone yet':'No players match'}</b>${pv==='all'?'Try fewer filters.':'Open a player’s profile to add them as a friend or follow them.'}</div>`;
  reveal(el);
 }
