@@ -163,46 +163,46 @@ const OPEN_H=6,CLOSE_H=24,NSLOT=(CLOSE_H-OPEN_H)*2,MAX_GAME=6/* longest player b
    book.kind 'slots' uses the in-app booking; 'link' sends players to the club's own booking site. */
 const HUDLE_URL=(window.RC_LIVE&&window.RC_LIVE.hudle)||'https://hudle.in/venues/racquet-culture-chicalim/567082';
 const VENUES=[
- {id:'rc',name:'Racquet Culture',short:'Racquet Culture',place:'Chicalim, Goa, India',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
+ {id:'rc',pin:{g:'0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7',lat:15.3922869,lng:73.8459347,n:'RACQUET CULTURE'},name:'Racquet Culture',short:'Racquet Culture',place:'Chicalim, Goa, India',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
   url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'},
- {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',place:'Siolim, Goa, India',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
+ {id:'sunday',pin:{g:'0x3bbfeb2d7cb99359:0x26da1bb433ed73b8',lat:15.6220728,lng:73.7844174,n:'Sunday Racquet & Social Club'},name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',place:'Siolim, Goa, India',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'},
- {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',place:'Assagao, Goa, India',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
+ {id:'floresta',pin:{g:'0x3bbfeb122364565b:0x9839eddb3c8e4b57',lat:15.5912088,lng:73.7730173,n:'Clube de Floresta'},name:'Clube De Floresta',short:'Clube De Floresta',place:'Assagao, Goa, India',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
   courtNos:{padel:[1],pickleball:[1]},also:'1 badminton court and 1 table tennis table',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
   url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'},
- {id:'aer',name:'AER',short:'AER',place:'Dona Paula, Goa, India',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
+ {id:'aer',embed:'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1269.9236849310637!2d73.81313685513642!3d15.458309561027987!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bbfc1004336e4f9%3A0xfc92639f35aa43e8!2sAER!5e1!3m2!1sen!2suk!4v1795486402363!5m2!1sen!2suk',name:'AER',short:'AER',place:'Dona Paula, Goa, India',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'venues/aer.png',splash:'venues/aer-big.png',mark:'wide',color:'#111111',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
   insta:'https://www.instagram.com/theaerclub/',
   url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'},
- {id:'coplay',brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',place:'Panjim, Goa, India',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
+ {id:'coplay',pin:{g:'0x3bbfc1abb8f08fa7:0x66b44debec025676',lat:15.4911823,lng:73.815232,n:'CoPlay | Panjim Gymkhana'},brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',place:'Panjim, Goa, India',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'},
- {id:'assagao',brand:'CoPlay',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',place:'Assagao, Goa, India',area:'Assagao House, Bardez, Assagao, Goa, India',lat:15.5994157,lng:73.7953435,courts:'1 padel court · 2 pickleball courts',
+ {id:'assagao',pin:{g:'0x3bbfebdf0a28cbf9:0xe47c5471620eab3b',lat:15.5994157,lng:73.7953435,n:'Assagao House'},brand:'CoPlay',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',place:'Assagao, Goa, India',area:'Assagao House, Bardez, Assagao, Goa, India',lat:15.5994157,lng:73.7953435,courts:'1 padel court · 2 pickleball courts',
   courtNos:{padel:[1],pickleball:[1,2]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-at-assagao-house/268830'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/53dKkFMViwWTXHrY9'},
- {id:'roundtwo',name:'Round Two',short:'Round Two',place:'Vagator, Goa, India',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
+ {id:'roundtwo',pin:{g:'0x3bbfe988a35bc055:0x6c74438fdffc4eac',lat:15.5964697,lng:73.7417307,n:'Round two'},name:'Round Two',short:'Round Two',place:'Vagator, Goa, India',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/roundtwo.png',splash:'venues/roundtwo-big.png',mark:'wide',color:'#000000',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/round-two-vagator/897288'},
   insta:'https://www.instagram.com/roundtwo_goa/',
   url:'https://maps.app.goo.gl/toHVrauMFbvUxaU59'},
- {id:'coco',brand:'Coco Padel',name:'Coco Padel Assagao',short:'Coco Padel Assagao',place:'Assagao, Goa, India',area:'Bouta Waddo, Assagao, Goa, India',map:'Coco Padel, Bouta Waddo, Assagao, Goa',courts:'1 padel court',
+ {id:'coco',pin:{g:'0x3bbfeb5990434feb:0xd5c755a402317054',lat:15.5936254,lng:73.7759457,n:'Coco Padel - Assagao'},brand:'Coco Padel',name:'Coco Padel Assagao',short:'Coco Padel Assagao',place:'Assagao, Goa, India',area:'Bouta Waddo, Assagao, Goa, India',map:'Coco Padel, Bouta Waddo, Assagao, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-assagao/585376'},
   url:'https://maps.app.goo.gl/TbGqGZ2eZE9B4nRV8'},
- {id:'cocoanjuna',brand:'Coco Padel',name:'Coco Padel Dot in the Park, Anjuna',short:'Coco Padel Dot in the Park, Anjuna',place:'Anjuna, Goa, India',area:'House No. 1688, Anjuna Panchayat Road, Anjuna, Goa, India',map:'Coco Padel Dot in the Park, Anjuna, Goa',courts:'1 padel court',
+ {id:'cocoanjuna',pin:{g:'0x3bbfebb837a80fb9:0xfe7da017f2ee2557',lat:15.5904234,lng:73.7482902,n:'Coco Padel'},brand:'Coco Padel',name:'Coco Padel Dot in the Park, Anjuna',short:'Coco Padel Dot in the Park, Anjuna',place:'Anjuna, Goa, India',area:'House No. 1688, Anjuna Panchayat Road, Anjuna, Goa, India',map:'Coco Padel Dot in the Park, Anjuna, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-circle-anjuna/615130'},
   url:'https://maps.app.goo.gl/KtDvVb7fBq9CnV5U7'},
- {id:'padelinho',name:'Padelinho',short:'Padelinho',place:'Anjuna, Goa, India',area:'Near Castelinho’s Guesthouse, Gumal Vaddo, Anjuna, Goa 403509, India',lat:15.5890452,lng:73.7456702,courts:'1 padel court',
+ {id:'padelinho',pin:{g:'0x3bbfe992afde15ab:0x3ba839805bcc5310',lat:15.5890452,lng:73.7456702,n:'Padelinho'},name:'Padelinho',short:'Padelinho',place:'Anjuna, Goa, India',area:'Near Castelinho’s Guesthouse, Gumal Vaddo, Anjuna, Goa 403509, India',lat:15.5890452,lng:73.7456702,courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/padelinho.jpg',splash:'venues/padelinho-big.jpg',mark:'wide',color:'#1049f0',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/padelinho-anjuna/348451'},
   insta:'https://www.instagram.com/padelinhogoa/',
@@ -228,9 +228,12 @@ const rupees=n=>'₹'+Number(n).toLocaleString('en-IN');
 const hudleBtn=(cls='btn ball')=>`<a class="${cls} hudlebtn" href="${HUDLE_URL}" target="_blank" rel="noopener"><img src="hudle.png" alt="" width="22" height="22">Book on Hudle</a>`;
 const bookLinkBtn=(v=VEN(),cls='btn ball wide')=>`<a class="${cls} linkbook" href="${esc(v.book.url)}" target="_blank" rel="noopener"><span class="lbico">${v.book.icon?`<img src="${esc(v.book.icon)}" alt="">`:`<i class="lbtxt">${esc(v.book.name)}</i>`}</span>Book on ${esc(v.book.name)}</a>`;
 const vMark=(v,cls='')=>`<span class="vmark ${v.mark} v-${v.id} ${cls}"><img src="${esc(v.logo)}" alt=""></span>`;
-function mapCard(v){const q=v.map?encodeURIComponent(v.map):v.lat+','+v.lng;
+/* Google's own place embed (as from Maps > Share > Embed a map): it always drops the red pin on the club itself */
+const mapSrc=v=>v.embed||(v.pin?`https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1270!2d${v.pin.lng}!3d${v.pin.lat}!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s${encodeURIComponent(v.pin.g)}!2s${encodeURIComponent(v.pin.n)}!5e1!3m2!1sen!2sin!4v1795486402363!5m2!1sen!2sin`
+ :`https://maps.google.com/maps?q=${v.map?encodeURIComponent(v.map):v.lat+','+v.lng}&t=k&z=17&output=embed`);
+function mapCard(v){
  return `<div class="card mapcard rv"><div class="maptop"><span class="pinico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6" fill="#fff"/></svg></span><span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span></div>
-  <div class="mapbox"><iframe title="Map of ${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${q}&t=k&z=17&output=embed"></iframe>
+  <div class="mapbox"><iframe title="Map of ${esc(v.name)}" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen src="${esc(mapSrc(v))}"></iframe>
   <a class="mapopen" href="${esc(v.url)}" target="_blank" rel="noopener" aria-label="Open ${esc(v.name)} in Google Maps"></a></div>
   <a class="btn brand wide" href="${esc(v.url)}" target="_blank" rel="noopener" style="margin-top:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg><span>Open in Google Maps</span></a>
   ${v.insta?`<a class="btn ghost wide instabtn" href="${esc(v.insta)}" target="_blank" rel="noopener" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".6" fill="currentColor"/></svg><span>${esc(v.short)} on Instagram</span></a>`:''}</div>`}
