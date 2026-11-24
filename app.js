@@ -344,6 +344,9 @@ const Live={
   if(error){const m=error.message||'';if(/confirm/i.test(m))throw errc('confirm');if(/invalid|credentials/i.test(m))throw errc('nomatch');throw error}return data.user.id},
  async email(){const {data}=await sb.auth.getUser();return data.user&&data.user.email||''},
  async resetPassword(email){const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:here()});if(error){if(/rate|security purposes/i.test(error.message))throw errc('rate');throw error}},
+ async verifyReset(email,token){const {data,error}=await sb.auth.verifyOtp({email,token,type:'recovery'});
+  if(error){const m=error.message||'';if(/rate|too many|security purposes/i.test(m))throw errc('rate');if(/expired|invalid|token/i.test(m))throw errc('badcode');throw error}
+  recovery=true;return data.user.id},
  async newPassword(pw){const {error}=await sb.auth.updateUser({password:pw});if(error)throw error},
  async signOut(){await sb.auth.signOut()},
  async load(){
@@ -1486,6 +1489,22 @@ function pickUsername(p){
    try{if(await Store.taken(u)){$('nErr').textContent='This username is already taken. Try another one.';return}
     p.username=u;await Store.saveProfile(p);closeSheet(true);await enter(true)}catch(e){$('nErr').textContent=e.code==='23505'?'This username is already taken. Try another one.':'Could not save. Check your connection.'}}});
 }
+/* Forgot password: the email carries a 6-digit code. Typing it here signs the player in, then they choose a new password */
+function showCode(em){
+ openSheet(`<h2>Check your email</h2><p class="muted small">If there is a OneCourt account for <b>${esc(em)}</b>, we just sent it a 6-digit code. It works for 1 hour. Check your spam folder too.</p>
+  <label for="cCode">6-digit code</label><input id="cCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="123456" style="letter-spacing:.3em;font-size:1.3em;text-align:center">
+  <p class="ferr" id="cErr"></p><button class="btn brand wide" id="cGo">Continue</button>
+  <p class="small muted" style="text-align:center;margin-top:14px">No email? <button type="button" class="btn link small" id="cAgain">Send a new code</button></p>`,bg=>{
+  const inp=bg.querySelector('#cCode'),go=bg.querySelector('#cGo'),err=t=>{$('cErr').textContent=t};
+  inp.oninput=()=>{inp.value=inp.value.replace(/\D/g,'').slice(0,6);err('');if(inp.value.length===6)go.click()};
+  go.onclick=async()=>{const c=inp.value;if(c.length!==6){err('Type the 6 digits from the email.');return}
+   go.disabled=true;go.textContent='Checking…';
+   try{S.uid=await Store.verifyReset(em,c);closeSheet(true);showReset()}
+   catch(e){go.disabled=false;go.textContent='Continue';err(e.code==='badcode'?'That code is wrong or has expired. Check the latest email, or send a new code.':e.code==='rate'?'Too many tries. Wait a few minutes and try again.':'Could not check the code. Check your connection and try again.')}};
+  bg.querySelector('#cAgain').onclick=async()=>{try{await Store.resetPassword(em);inp.value='';err('');$('cErr').textContent='A new code is on its way. Use the newest email.'}
+   catch(e){err(e.code==='rate'?'A code was sent recently. Wait a minute and try again.':'Could not send a new code. Try again later.')}};
+  if(!matchMedia('(hover:hover)').matches)setTimeout(()=>inp.focus(),300)});
+}
 /* Arrived from a password reset email, or changing the password from Profile */
 function showReset(){
  openSheet(`<h2 data-noback>Set a new password</h2><p class="muted small">At least 6 characters.</p>
@@ -1494,7 +1513,7 @@ function showReset(){
   bg.querySelector('#rT').onclick=()=>{const i=$('rPass'),sh=i.type==='password';i.type=sh?'text':'password';$('rT').textContent=sh?'Hide':'Show'};
   bg.querySelector('#rSave').onclick=async()=>{const pw=$('rPass').value;if(pw.length<6){$('rErr').textContent='Use at least 6 characters.';return}
    try{await Store.newPassword(pw);recovery=false;closeSheet();doneTick('Password updated');if($('app').hidden&&S.uid&&$('wiz').hidden)enter(false)}
-   catch(e){$('rErr').textContent='Could not update the password. Open the reset link again, or try once more.'}}});
+   catch(e){$('rErr').textContent='Could not update the password. Ask for a new code, or try once more.'}}});
 }
 function showApp(){$('welcome').hidden=true;$('auth').hidden=true;$('wiz').hidden=true;applyVenue();$('app').hidden=false;render();}
 
@@ -3062,7 +3081,7 @@ const ACT={
  async forgot(){
   if(Store.mode!=='live')return aerr('In preview mode, accounts live on this device only, so there is no reset email. Create a new account instead.',true);
   const em=$('aEmail').value.trim();if(!EMAIL_RE.test(em)){aerr('Type your email above, then tap Get help again.',true);$('aEmail').focus();return}
-  try{await Store.resetPassword(em);aerr('If there is an account for '+em+', a reset link is on its way. Check your inbox and spam folder.',true)}
+  try{await Store.resetPassword(em);aerr('',true);showCode(em)}
   catch(e){aerr(e.code==='rate'?'A reset email was sent recently. Wait a few minutes and try again.':'Could not send the reset email. Try again later.')}},
  changePw(){showReset()},
  wBack(){if(W.i===0){if(W.mode!=='setup'){W=null;showApp()}return}wGo(-1)},
