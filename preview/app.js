@@ -179,7 +179,7 @@ const VENUES=[
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
   insta:'https://www.instagram.com/theaerclub/',
   url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'},
- {id:'coplay',brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',place:'Panaji, Goa, India',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
+ {id:'coplay',brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',place:'Panjim, Goa, India',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
   insta:'https://www.instagram.com/coplayofficial',
