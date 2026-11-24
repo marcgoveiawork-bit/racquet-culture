@@ -189,7 +189,7 @@ const VENUES=[
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-at-assagao-house/268830'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/53dKkFMViwWTXHrY9'},
- {id:'roundtwo',name:'Round Two Vagator',short:'Round Two Vagator',place:'Vagator, Goa, India',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
+ {id:'roundtwo',name:'Round Two',short:'Round Two',place:'Vagator, Goa, India',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/roundtwo.png',splash:'venues/roundtwo-big.png',mark:'wide',color:'#000000',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/round-two-vagator/897288'},
   insta:'https://www.instagram.com/roundtwo_goa/',
@@ -681,7 +681,7 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(cpAll),b=pick(cpAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  cpAll.slice(4,12).forEach((p,i)=>reqs.push({id:'dk_f'+i,from:cPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...cms);ms.sort(byWhen);all.push(...cpP);
- /* Round Two Vagator: built the same way, booked on Hudle. 1 padel court, ranked.
+ /* Round Two (Vagator): built the same way, booked on Hudle. 1 padel court, ranked.
     Some players from the other clubs play here too. */
  const rtP=[],mkRt=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
   const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
