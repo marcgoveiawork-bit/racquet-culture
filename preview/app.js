@@ -1688,7 +1688,7 @@ function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm(
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
-const adminChip=id=>isDev(id)?' <span class="chip dev">Developer</span>':isOwner(id)?' <span class="chip owner">Owner</span>':isAdmin(id)?' <span class="chip admin">Admin</span>':isCoach(id)?' <span class="chip coach">Coach</span>':'';
+const adminChip=(id,v=VID)=>isDev(id)?' <span class="chip dev">Developer</span>':isOwner(id,v)?' <span class="chip owner">Owner</span>':isAdmin(id,v)?' <span class="chip admin">Admin</span>':isCoach(id,v)?' <span class="chip coach">Coach</span>':'';
 const unread=()=>S.msgs.filter(m=>!m.read).length;
 function paintBadge(){const b=$('ibadge');if(b){const n=unread();b.textContent=n?String(n>99?'99+':n):''}}
 function timeAgo(iso){const s=(Date.now()-new Date(iso))/1e3;if(s<60)return'Just now';if(s<3600)return Math.floor(s/60)+' min ago';if(s<86400)return Math.floor(s/3600)+' h ago';return dateLabel(isoIST(new Date(iso)))}
@@ -2298,7 +2298,9 @@ function msgView(g){
   case 'bk_confirmed':{if(!b)return gone;if(b.kind==='block')return{i:MI.shield,t:'Your coaching block is confirmed',p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}. Players see it as closed for coaching.`};const w=names(b);
    return{i:MI.shield,t:`Your ${SPORTS[b.court].name.toLowerCase()} game is confirmed`,p:`${COURTS[b.court]} on ${esc(dateLabel(b.date))}, ${slotRange(b.start,b.len)}${w?`, with ${w}`:''}. Pay ${rupees(rangePrice(b.court,b.date,b.start,b.len))} at the court when you arrive.`,a:`<button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">See who’s going</button>`}}
   case 'bk_declined':{const s=d.snap||{};return{i:MI.flag,warn:1,t:'Your booking couldn’t be confirmed',p:`${s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}. `:''}An admin couldn’t confirm that time. Please pick another slot.`,a:'<button class="btn ghost sm" data-act="go" data-v="book">Book another time</button>'}}
-  case 'community':return{i:MI.mega,t:`${esc(fn)} · Club news`,p:`${esc(d.text||'').replace(/\n/g,'<br>')}`,a:d.link?`<a class="btn ghost sm" href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">${esc(d.lt||'Open link')} ↗</a>`:''};
+  case 'community':{const au=AUD_ALL.every(k=>!d.aud||d.aud.includes(k))?'':andList(AUD.filter(x=>d.aud.includes(x[0])).map(x=>x[1].toLowerCase()));
+   return{i:MI.mega,t:`${esc(fn)}${adminChip(g.from,vidOf(g))} · Club news`,p:`${esc(d.text||'').replace(/\n/g,'<br>')}${au?`<span class="tiny muted" style="display:block;margin-top:6px">Sent to ${esc(au)}</span>`:''}`,
+    a:(d.link?`<a class="btn ghost sm" href="${esc(d.link)}" target="_blank" rel="noopener noreferrer">${esc(d.lt||'Open link')} ↗</a>`:'')+(from?`<button class="btn link small" data-act="player" data-v="${esc(g.from)}">View profile</button>`:'')}}
   case 'admin_msg':{const tp=(ADM_TOPICS.find(x=>x[0]===d.topic)||ADM_TOPICS[3])[1],mine=g.from===S.uid,pl=prof(d.player);
    return{i:MI.chat,t:mine?`You messaged the admins · ${tp}`:`${esc(fn)} messaged the admins · ${tp}`,p:`<span class="quote">“${esc(d.text||'')}”</span>`,
     a:isAdmin()&&!mine?`<button class="btn brand sm" data-act="admReply" data-v="${g.id}">Reply</button>${pl?`<button class="btn link small" data-act="player" data-v="${esc(d.player)}">Profile</button>`:''}`:''}}
@@ -2337,7 +2339,7 @@ function vInbox(){
  const all=S.msgs,todo=all.filter(needsAction),f=['todo','community','admin'].includes(view.ib)?view.ib:'all';
  const list=f==='todo'?todo:f==='all'?all:all.filter(g=>ibCat(g)===f),cnt=k=>all.filter(g=>ibCat(g)===k&&!g.read).length;
  after=()=>{const un=S.msgs.filter(g=>!g.read);if(!un.length)return;setTimeout(()=>{un.forEach(g=>{g.read=true;Store.updateMsg(g).catch(()=>{})});paintBadge()},1500)};
- const top=f==='community'?(isAdmin()?`<div class="card ibtool rv"><div><b>Post to the community</b><p class="small muted">Every player gets it in their inbox. Add a link if you like.</p></div><button class="btn brand sm" data-act="commOpen">Write a post</button></div>`:'')
+ const top=f==='community'?(isAdmin()?`<div class="card ibtool rv"><div><b>Post to the community</b><p class="small muted">Send it to everyone, or just the players, coaches, admins or owners. Add a link if you like.</p></div><button class="btn brand sm" data-act="commOpen">Write a post</button></div>`:'')
   :f==='admin'?(isAdmin()?'':`<div class="card ibtool rv"><div><b>Message the club admins</b><p class="small muted">A court problem, a player, a booking question. They reply here.</p></div><button class="btn brand sm" data-act="admMsgOpen">New message</button></div>`):'';
  const empty={todo:['All done','Nothing needs you right now.'],community:['No posts yet','News and updates from the club appear here.'],admin:['No messages yet',isAdmin()?'Messages from players, score disputes and reports appear here.':'Your messages with the club admins, and score reviews, appear here.'],all:['No messages yet','Scores to confirm, invites, bookings and club news arrive here.']}[f];
  return `<div class="hd"><div><p class="eyebrow">Messages</p><h1>Inbox</h1></div></div>
@@ -2350,18 +2352,32 @@ function vInbox(){
 const countBox=(id,max,ph,val='')=>`<div class="tbox"><textarea id="${id}" maxlength="${max}" rows="${max>200?5:3}" placeholder="${esc(ph)}">${esc(val)}</textarea><span class="tiny muted tcount" id="${id}N">${val.length}/${max}</span></div>`;
 const bindCount=(bg,id,max)=>{const t=bg.querySelector('#'+id),n=bg.querySelector('#'+id+'N');t.oninput=()=>{n.textContent=t.value.length+'/'+max;n.classList.toggle('near',t.value.length>max*.9)}};
 const safeLink=u=>{u=(u||'').trim();if(!u)return'';if(!/^https?:\/\//i.test(u))u='https://'+u;try{const x=new URL(u);return /^https?:$/.test(x.protocol)&&x.hostname.includes('.')?x.href:null}catch(e){return null}};
-/* Admins: a post every player gets */
-function commSheet(){if(!isAdmin())return;
- openSheet(`<h2>Post to the community</h2><p class="muted small">Every player at ${esc(VEN().name)} gets this in their inbox, from you.</p>
+/* Who a community post goes to. Developers count with the owners. "Everyone" means all of them */
+const AUD=[['player','Players'],['coach','Coaches'],['admin','Admins'],['owner','Owners']],AUD_ALL=AUD.map(x=>x[0]);
+const audOf=id=>{const r=roleAt(id);return r==='dev'?'owner':r};
+/* A link example for this club: its own Instagram if we know it, otherwise a neutral one */
+const linkEg=()=>{const u=(VEN().insta||'').replace(/^https?:\/\/(www\.)?/,'').replace(/\/$/,'');return u||'instagram.com/yourclub'};
+/* Admins: a post every player (or just some of the club's people) gets */
+function commSheet(){if(!isAdmin())return;const st={aud:[...AUD_ALL]};
+ const who=()=>st.aud.length===AUD_ALL.length?`Everyone at ${esc(VEN().name)} gets`:`The ${andList(AUD.filter(x=>st.aud.includes(x[0])).map(x=>x[1].toLowerCase()))} at ${esc(VEN().name)} get`;
+ openSheet(`<h2>Post to the community</h2><p class="muted small" id="cWho">${who()} this in their inbox, from you.</p>
+  <label>Send to</label><div class="chips" id="cAud"><button type="button" class="fchip" data-aud="all">Everyone</button>${AUD.map(([k,n])=>`<button type="button" class="fchip" data-aud="${k}">${n}</button>`).join('')}</div>
   <label for="cText">Message</label>${countBox('cText',C_MAX,'e.g. Courts close at 9 pm on Friday for the club social. Come along!')}
-  <label for="cLink">Link <span class="muted">(optional)</span></label><input id="cLink" type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="e.g. instagram.com/racquetculture">
+  <label for="cLink">Link <span class="muted">(optional)</span></label><input id="cLink" type="url" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="e.g. ${esc(linkEg())}">
   <label for="cLinkT">Link text <span class="muted">(optional)</span></label><input id="cLinkT" maxlength="40" placeholder="e.g. See the photos">
   <p class="ferr" id="cErr"></p><button class="btn brand wide" id="cSend">Send to everyone</button>`,bg=>{bindCount(bg,'cText',C_MAX);
+  const paint=()=>{const all=st.aud.length===AUD_ALL.length;qsa('[data-aud]',bg).forEach(b=>{const on=b.dataset.aud==='all'?all:!all&&st.aud.includes(b.dataset.aud);b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});
+   $('cWho').innerHTML=`${who()} this in their inbox, from you.`;bg.querySelector('#cSend').textContent=all?'Send to everyone':'Send to '+andList(AUD.filter(x=>st.aud.includes(x[0])).map(x=>x[1].toLowerCase()))};
+  /* Everyone picks every group. Picking a group while it's Everyone narrows it to just that group */
+  qsa('[data-aud]',bg).forEach(b=>b.onclick=()=>{const k=b.dataset.aud,all=st.aud.length===AUD_ALL.length;
+   if(k==='all')st.aud=[...AUD_ALL];else if(all)st.aud=[k];else if(st.aud.includes(k)){if(st.aud.length>1)st.aud=st.aud.filter(x=>x!==k)}else st.aud=AUD_ALL.filter(x=>x===k||st.aud.includes(x));
+   $('cErr').textContent='';paint()});paint();
   bg.querySelector('#cSend').onclick=async()=>{const text=$('cText').value.trim(),link=safeLink($('cLink').value);if(!text)return $('cErr').textContent='Write a message first.';if(link===null)return $('cErr').textContent='That link doesn’t look right. Check it and try again.';
-   const data={text,link:link||'',lt:$('cLinkT').value.trim()},to=S.profiles.filter(p=>p.setup&&inVenue(p)).map(p=>p.id);
+   const all=st.aud.length===AUD_ALL.length,data={text,link:link||'',lt:$('cLinkT').value.trim(),...(all?{}:{aud:[...st.aud]})};
+   const to=[...new Set([...S.profiles.filter(p=>p.setup&&inVenue(p)&&(all||st.aud.includes(audOf(p.id)))).map(p=>p.id),S.uid])];
    const btn=bg.querySelector('#cSend');btn.disabled=true;btn.textContent='Sending…';
    try{for(let i=0;i<to.length;i+=200)await Store.send(to.slice(i,i+200).map(t=>({to:t,kind:'community',data})))}catch(e){btn.disabled=false;btn.textContent='Try again';return $('cErr').textContent='Could not send. Check your connection.'}
-   await reload();closeSheet();doneTick('Posted');toast(`Sent to ${to.length} player${to.length===1?'':'s'}.`);view.ib='community';render()}});
+   await reload();closeSheet();doneTick('Posted');toast(`Sent to ${to.length} ${to.length===1?'person':'people'}.`);view.ib='community';render()}});
 }
 /* Players: a short message to the admins. Admins: a longer reply to a player */
 function admMsgSheet(reply){const adm=isAdmin()&&reply&&reply.player,max=adm?A_MAX:P_MAX;const st={topic:reply?reply.topic:null};
