@@ -2394,7 +2394,7 @@ function msgView(g){
     a:st==='in'?'<span class="chip st-confirmed">You’re in</span>':st==='out'?'<span class="chip st-disputed">You said no</span>':past?'<span class="chip">This game has passed</span>'
      :`<button class="btn brand sm" data-act="bkAccept" data-v="${esc(b.id)}">I’m in</button><button class="btn ghost sm" data-act="bkDecline" data-v="${esc(b.id)}">Can’t make it</button><button class="btn link small" data-act="bkOpen" data-v="${esc(b.id)}">Details</button>`}}
   case 'invite_reply':return{i:MI.cal,t:`${esc(fn)} ${d.ok?'is in':'can’t make it'}`,p:b?bkLine(b):'Your booking'};
-  case 'cancelled':{const s=d.snap||{};return{i:MI.cal,warn:1,t:`${esc(fn)} cancelled a game`,p:s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}`:'A game you were in was cancelled.'}}
+  case 'cancelled':{const s=d.snap||{};return{i:MI.cal,warn:1,t:`${esc(fn)} cancelled a game`,p:(s.court?`${COURTS[s.court]} · ${esc(dateLabel(s.date))} · ${slotRange(s.start,s.len)}`:'A game you were in was cancelled.')+(d.note?`<span class="quote">“${esc(d.note)}”</span>`:'')}}
   case 'bk_request':{if(!b)return{i:MI.cal,t:'Booking request',p:'This booking has since been cancelled or declined.'};const pend=bkStatus(b)==='pending';
    if(b.kind==='block')return{i:MI.cal,t:`${esc(fn)} (coach) wants to block ${COURTS[b.court]}`,p:`For coaching: ${esc(dateLabel(b.date))} · ${slotRange(b.start,b.len)}.${b.note?`<span class="quote">“${esc(b.note)}”</span>`:''}`,
     a:pend&&isAdmin()?`<button class="btn brand sm" data-act="bkConfirm" data-v="${esc(b.id)}">Confirm</button><button class="btn ghost sm" data-act="bkReject" data-v="${esc(b.id)}">Decline</button>`:'<span class="chip st-confirmed">Confirmed</span>'};
@@ -2959,10 +2959,15 @@ const ACT={
   if(await patchBooking(nb)){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:true}}]);closeSheet();doneTick('You’re in!');if(bkStatus(b)==='pending')toast('The club still needs to confirm this booking. You’ll get a message when it’s done.',4200);render()}},
  async bkDecline(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nb=Object.assign({},b,{going:(b.going||[]).filter(x=>x!==S.uid),declined:[...new Set([...(b.declined||[]),S.uid])]});
   if(await patchBooking(nb,'Got it. The host has been told.')){notify([{to:b.by,kind:'invite_reply',data:{booking:b.id,ok:false}}]);closeSheet();render()}},
- bkCancel(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;confirmSheet(b.kind==='block'?'Unblock these slots?':'Cancel this booking?',b.kind==='block'?'Players will be able to book this time again.':'Everyone in the game and the club admins will be told.',b.kind==='block'?'Unblock':'Cancel booking','bkCancelYes',v)},
- async bkCancelYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;try{await Store.delBooking(v)}catch(e){return toast(e.code==='denied'?'Only the host or an admin can cancel this.':'Could not cancel. Check your connection.')}
+ bkCancel(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;
+  /* Staff (admin, owner, developer) cancelling a game can add a message for the players */
+  if(b.kind!=='block'&&isGame(b)&&isAdmin())return openSheet(`<h2>Cancel this booking?</h2><p class="muted" style="margin:6px 0 14px">Everyone in the game and the club admins will be told.</p>
+   <label for="bkCnText">Message to the players <span class="muted">(optional)</span></label>${countBox('bkCnText',300,'e.g. Sorry, court 2 is closed for repairs. We’ll find you another slot.')}
+   <div class="cta" style="margin-top:16px"><button class="btn ghost" data-act="closeSheet" style="flex:1">Go back</button><button class="btn danger" data-act="bkCancelYes" data-v="${esc(v)}" style="flex:1">Cancel booking</button></div>`,bg=>bindCount(bg,'bkCnText',300));
+  confirmSheet(b.kind==='block'?'Unblock these slots?':'Cancel this booking?',b.kind==='block'?'Players will be able to book this time again.':'Everyone in the game and the club admins will be told.',b.kind==='block'?'Unblock':'Cancel booking','bkCancelYes',v)},
+ async bkCancelYes(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;const nt=$('bkCnText'),note=nt&&isAdmin()?nt.value.trim().slice(0,300):'';try{await Store.delBooking(v)}catch(e){return toast(e.code==='denied'?'Only the host or an admin can cancel this.':'Could not cancel. Check your connection.')}
   S.bookings=S.bookings.filter(x=>x.id!==v);closeSheet();toast(b.kind==='block'?'Slots unblocked':'Booking cancelled');
-  if(isGame(b))notify([...new Set([b.by,...(b.invited||[]),...vAdmins()])].map(to=>({to,kind:'cancelled',data:{snap:{court:b.court,date:b.date,start:b.start,len:b.len,confirmed:bkStatus(b)==='confirmed'}}})));render()},
+  if(isGame(b))notify([...new Set([b.by,...(b.invited||[]),...vAdmins()])].map(to=>({to,kind:'cancelled',data:{snap:{court:b.court,date:b.date,start:b.start,len:b.len,confirmed:bkStatus(b)==='confirmed'},...(note?{note}:{})}})));render()},
  bkScore(v){const b=S.bookings.find(x=>x.id===v);if(!b)return;closeSheet(true);A=newA();
   if(S.R[b.court][S.uid])A.sport=b.court;A.date=b.date;A.time=b.start;A.len=b.len;A.booking=b.id;
   const others=goingOf(b).filter((x,i,a)=>x!==S.uid&&a.indexOf(x)===i);A.a=[{uid:S.uid},others[0]?{uid:others[0]}:null];A.b=[others[1]?{uid:others[1]}:null,others[2]?{uid:others[2]}:null];
