@@ -81,6 +81,9 @@ insert into public.rc_admins (user_id) select id from public.rc_profiles where l
 - When Marc confirms a demo version, copy `preview/app.js` and `preview/index.html` to the root, set the root's `RC_VER` to the release number (e.g. `1.1`) and `RC_PREVIEW` to false (or remove that line), bump `v=`, and merge. Never change the root without Marc's OK.
 - Roles (V1.3): Developer (platinum, rc_developers) > Owner (gold, rc_owners + rc_admins) > Admin (silver, rc_admins) > Coach (bronze, rc_coaches) > Player. The Developer sets anyone up to Owner; Owners set up to Admin; Admins switch Player/Coach. Demo views go up to the person's own role.
 
+### Live shows only confirmed clubs (V1.5, 24 Nov 2026)
+- On the live app, real players only see clubs listed in `clubs` in `config.js` (now just `['rc']`), and no "Coming soon" clubs. Demo mode and the preview show every club (`ALL_VENUES`, `ALL_SOON`, `setVenues()` in `app.js`). When a club confirms, add its id to `clubs` in the root `config.js` (Marc's OK needed).
+
 ## V1.4: My Padel name, logo and opening screen
 - The live app is now called **My Padel**, with Marc's logo as the app and home-screen icon (`brand/`).
 - Opening the app shows the My Padel logo, the tagline "Every court. One app." and "Pick a court to start" (`showWelcome`, `WELCOME_COURTS` in `app.js`). Live lists only Racquet Culture; tapping it carries on to sign-in or the app as before. A password-reset link skips the opening screen.

@@ -162,7 +162,7 @@ const OPEN_H=6,CLOSE_H=24,NSLOT=(CLOSE_H-OPEN_H)*2,MAX_GAME=6/* longest player b
    To add a club: add an entry here, a logo in venues/, and a [data-venue="id"] colour block in index.html.
    book.kind 'slots' uses the in-app booking; 'link' sends players to the club's own booking site. */
 const HUDLE_URL=(window.RC_LIVE&&window.RC_LIVE.hudle)||'https://hudle.in/venues/racquet-culture-chicalim/567082';
-const VENUES=[
+const ALL_VENUES=[
  {id:'rc',pin:{g:'0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7',lat:15.3922869,lng:73.8459347,n:'RACQUET CULTURE'},name:'Racquet Culture',short:'Racquet Culture',place:'Chicalim, Goa, India',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
   insta:'https://www.instagram.com/racquetculture.goa/',
@@ -213,10 +213,16 @@ const VENUES=[
   insta:'https://www.instagram.com/padelinhogoa/',
   url:'https://maps.app.goo.gl/NzyqXrTAZhVFvc7i9'}
 ];
+/* Clubs real players can see on the live app: only those that have confirmed (config.js `clubs`). Demo mode and the preview show every club. */
+const LIVE_CLUBS=(window.RC_LIVE&&window.RC_LIVE.clubs)||['rc'];
+const VENUES=[];
+function setVenues(all){VENUES.splice(0,VENUES.length,...(all?ALL_VENUES:ALL_VENUES.filter(v=>LIVE_CLUBS.includes(v.id))));SOON.splice(0,SOON.length,...(all?ALL_SOON:[]))}
 /* Clubs joining soon: shown in the club lists as "Coming soon", but can't be entered yet. Add details only once the club shares them. */
-const SOON=[
+const ALL_SOON=[
  {id:'padelpeople',name:'Padel People',logo:'venues/padelpeople.png',mark:'wide',color:'#1d648e'},
 ];
+const SOON=[];
+setVenues(!!window.RC_PREVIEW);
 const soonFind=v=>esc((v.name+' coming soon').toLowerCase());
 const venueOf=id=>VENUES.find(v=>v.id===id)||VENUES[0];
 /* Old records have no venue (or the first id, 'chicalim'): they belong to Racquet Culture */
@@ -944,7 +950,7 @@ async function startDemo(role){
  const rank=me()?topRole(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
- Demo.d=buildDemo(you,rank);Store=Demo;S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ Demo.d=buildDemo(you,rank);Store=Demo;setVenues(true);S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  window.scrollTo(0,0);
  /* signed in once: now pick a court to begin */
  showPicker();
@@ -963,7 +969,7 @@ function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Ever
 async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);S.uid=demoId(role);closeSheet(true);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
 async function exitDemo(){
  if(PREVIEW){location.href='../';return}
- const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
+ const pv=demoPrev;if(!pv)return;demoPrev=null;Store=pv.store;Demo.d=null;setVenues(PREVIEW);if(!VENUES.some(v=>v.id===VID)){VID='rc';ls.set('rc_venue',VID);applyVenue()}A=null;Object.assign(view,{tab:'home',rs:null,rt:null});closeSheet(true);
  if(pv.uid){S.uid=pv.uid;try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}window.scrollTo(0,0);showApp();toast('Back to the real club')}
  else{S.uid=null;Object.assign(S,{profiles:[],matches:[],bookings:[],confs:[],admins:[],msgs:[],follows:[],reqs:[],votes:[],conduct:[],phones:{},coaches:{},devs:[],owners:[],demoAcc:[]});rate();showAuth()}
 }
@@ -996,7 +1002,7 @@ const prof=id=>S.profiles.find(p=>p.id===id)||null;
 /* Clubs: one account works at every club. Everyone starts as a player; roles are given per club.
    Someone can be owner, admin or coach at one club and a normal player at another, until someone with power there promotes them.
    Roles are stored as "userId@club" keys. The developer keeps every power at every club. */
-const firstClub=id=>{const p=prof(id||S.uid);return p&&p.home||'rc'};
+const firstClub=id=>{const p=prof(id||S.uid),h=p&&p.home;return h&&VENUES.some(v=>v.id===h)?h:'rc'};
 const venuesOf=p=>p?[...new Set([...(p.nohome&&!p.home?[]:[p.home||'rc']),...(p.venues||[])])].filter(v=>VENUES.some(x=>x.id===v)):[];
 const inVenue=(p,vid=VID)=>venuesOf(p).includes(vid);
 const isMember=(id,vid=VID)=>inVenue(prof(id||S.uid),vid);
