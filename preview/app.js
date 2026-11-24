@@ -163,42 +163,42 @@ const OPEN_H=6,CLOSE_H=24,NSLOT=(CLOSE_H-OPEN_H)*2,MAX_GAME=6/* longest player b
    book.kind 'slots' uses the in-app booking; 'link' sends players to the club's own booking site. */
 const HUDLE_URL=(window.RC_LIVE&&window.RC_LIVE.hudle)||'https://hudle.in/venues/racquet-culture-chicalim/567082';
 const VENUES=[
- {id:'rc',name:'Racquet Culture',short:'Racquet Culture',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
+ {id:'rc',name:'Racquet Culture',short:'Racquet Culture',place:'Chicalim, Goa, India',area:'Chicalim, Goa, India',lat:15.3922869,lng:73.8459347,courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'logo-sm.png?v=60',splash:'logo.png',mark:'wide',color:'#6045a7',book:{kind:'slots'},
   url:'https://www.google.com/maps/place/RACQUET+CULTURE/@15.3922921,73.8433598,1195m/data=!3m2!1e3!4b1!4m6!3m5!1s0x3bbfb9d42d24d04b:0x34283e54dbbf8ba7!8m2!3d15.3922869!4d73.8459347!16s%2Fg%2F11z5rb4hj2'},
- {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
+ {id:'sunday',name:'Sunday Racquet & Social Club',short:'Sunday Racquet & Social Club',place:'Siolim, Goa, India',area:'Sodiem, Siolim, Goa, India',map:'Sunday Racquet & Social Club, Siolim, Goa',courts:'3 padel courts · 1 pickleball court',
   courtNos:{padel:[1,2,3],pickleball:[1]},logo:'venues/sunday.png',splash:'venues/sunday-big.png',mark:'wide',color:'#2e2bc7',
   book:{kind:'link',name:'District',icon:'venues/district.png',url:'https://www.district.in/play/sunday-racquet-and-social-club-siolim-sunday-racquet-social-club-sodiem-siolim-slots-booking'},
   url:'https://maps.app.goo.gl/87vEdTuqTjpxxMCA7'},
- {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
+ {id:'floresta',name:'Clube De Floresta',short:'Clube De Floresta',place:'Assagao, Goa, India',area:'Mapusa–Anjuna Road, Goa, India',map:'Clube de Floresta, Mapusa Anjuna Road, Goa',courts:'1 padel court · 1 pickleball court · 1 badminton court · 1 table tennis table',
   courtNos:{padel:[1],pickleball:[1]},also:'1 badminton court and 1 table tennis table',logo:'venues/floresta.png',splash:'venues/floresta-big.png',mark:'wide',color:'#005e36',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/clube-de-floresta-forest-club/522426'},
   url:'https://maps.app.goo.gl/whN98FML3ZCfxGKq5'},
- {id:'aer',name:'AER Dona Paula',short:'AER Dona Paula',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
+ {id:'aer',name:'AER',short:'AER',place:'Dona Paula, Goa, India',area:'Dr E Borges Road, Dona Paula, Goa, India',map:'AER, Dr E Borges Rd, Dona Paula, Goa',courts:'1 padel court · 1 pickleball court',
   courtNos:{padel:[1],pickleball:[1]},logo:'venues/aer.png',splash:'venues/aer-big.png',mark:'wide',color:'#111111',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/aer-dona-paula/202490'},
   insta:'https://www.instagram.com/theaerclub/',
   url:'https://maps.app.goo.gl/3ion8ZqyoQwQKBwJ9'},
- {id:'coplay',brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
+ {id:'coplay',brand:'CoPlay',name:'CoPlay Panjim Gymkhana',short:'CoPlay Panjim Gymkhana',place:'Panjim, Goa, India',area:'Panjim Gymkhana, Campal, Panaji, Goa, India',map:'CoPlay Panjim Gymkhana, Campal, Panaji, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-panjim-gymkhana/808217'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/iK9pbexqrnp6snUV7'},
- {id:'assagao',brand:'CoPlay',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',area:'Assagao House, Bardez, Assagao, Goa, India',map:'CoPlay @ Assagao House, Assagao, Goa',courts:'1 padel court · 2 pickleball courts',
+ {id:'assagao',brand:'CoPlay',name:'CoPlay @ Assagao House',short:'CoPlay @ Assagao House',place:'Assagao, Goa, India',area:'Assagao House, Bardez, Assagao, Goa, India',map:'CoPlay @ Assagao House, Assagao, Goa',courts:'1 padel court · 2 pickleball courts',
   courtNos:{padel:[1],pickleball:[1,2]},logo:'venues/coplay.png',splash:'venues/coplay-big.png',mark:'wide',color:'#0237a7',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coplay-at-assagao-house/268830'},
   insta:'https://www.instagram.com/coplayofficial',
   url:'https://maps.app.goo.gl/53dKkFMViwWTXHrY9'},
- {id:'roundtwo',name:'Round Two Vagator',short:'Round Two Vagator',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
+ {id:'roundtwo',name:'Round Two Vagator',short:'Round Two Vagator',place:'Vagator, Goa, India',area:'Behind Swim Up, Coutinho Vaddo, Vagator, Goa, India',map:'Round Two, Coutinho Vaddo, Vagator, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/roundtwo.png',splash:'venues/roundtwo-big.png',mark:'wide',color:'#000000',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/round-two-vagator/897288'},
   insta:'https://www.instagram.com/roundtwo_goa/',
   url:'https://maps.app.goo.gl/toHVrauMFbvUxaU59'},
- {id:'coco',brand:'Coco Padel',name:'Coco Padel Assagao',short:'Coco Padel Assagao',area:'Bouta Waddo, Assagao, Goa, India',map:'Coco Padel, Bouta Waddo, Assagao, Goa',courts:'1 padel court',
+ {id:'coco',brand:'Coco Padel',name:'Coco Padel Assagao',short:'Coco Padel Assagao',place:'Assagao, Goa, India',area:'Bouta Waddo, Assagao, Goa, India',map:'Coco Padel, Bouta Waddo, Assagao, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-assagao/585376'},
   url:'https://maps.app.goo.gl/TbGqGZ2eZE9B4nRV8'},
- {id:'cocoanjuna',brand:'Coco Padel',name:'Coco Padel Dot in the Park, Anjuna',short:'Coco Padel Dot in the Park, Anjuna',area:'House No. 1688, Anjuna Panchayat Road, Anjuna, Goa, India',map:'Coco Padel Dot in the Park, Anjuna, Goa',courts:'1 padel court',
+ {id:'cocoanjuna',brand:'Coco Padel',name:'Coco Padel Dot in the Park, Anjuna',short:'Coco Padel Dot in the Park, Anjuna',place:'Anjuna, Goa, India',area:'House No. 1688, Anjuna Panchayat Road, Anjuna, Goa, India',map:'Coco Padel Dot in the Park, Anjuna, Goa',courts:'1 padel court',
   courtNos:{padel:[1]},logo:'venues/coco.png',splash:'venues/coco-big.png',mark:'wide',color:'#7fa52f',
   book:{kind:'link',name:'Hudle',url:'https://hudle.in/venues/coco-padel-circle-anjuna/615130'},
   url:'https://maps.app.goo.gl/KtDvVb7fBq9CnV5U7'}
@@ -601,7 +601,7 @@ function buildDemo(you,rank='dev'){
  for(let k=0;k<160;k++){const a=pick(floAll),b=pick(floAll);if(a!==b&&!follows.some(f=>f.follower===a.id&&f.followee===b.id))follows.push({follower:a.id,followee:b.id,at:ago(24*Math.floor(r()*40))})}
  floAll.slice(4,12).forEach((p,i)=>reqs.push({id:'df_f'+i,from:fPlayer.id,to:p.id,status:'accepted',at:ago(24*(6+i)),resp:ago(24*(5+i))}));
  ms.push(...fms);ms.sort(byWhen);all.push(...floP);
- /* AER Dona Paula: a fourth club built the same way, booked on Hudle. 1 padel and 1 pickleball court, both ranked.
+ /* AER (Dona Paula): a fourth club built the same way, booked on Hudle. 1 padel and 1 pickleball court, both ranked.
     Some players from the other clubs play here too. */
  const aerP=[],mkAer=(name,gender,sports,lv0)=>{let un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,14),k=2;while(used.has(un))un=name.toLowerCase().replace(/[^a-z]+/g,'.').slice(0,12)+(k++);used.add(un);names.add(name);
   const levels={},skill={},grow={};sports.forEach(sp=>{const v=lv0&&lv0[sp]!=null?lv0[sp]:sp==='padel'?clamp(3.1+gauss()*1.1,.8,6.6):clamp(3.3+gauss()*.7,1.2,5.4);levels[sp]=lv(sp,Math.round(v*10)/10);skill[sp]=v+gauss()*.2;grow[sp]=(.08+gauss()*.25)*(sp==='padel'?1:.6)});
@@ -1122,7 +1122,7 @@ const greet=()=>{const h=istParts().h;return h<5?'Late night':h<12?'Good morning
 const first=p=>(p&&p.name||'').trim().split(/\s+/)[0]||p&&p.username||'';
 function splash(big,small,v){v=v||VEN();
  qsa('.splash').forEach(x=>x.remove());const el=document.createElement('div');el.className='splash';el.setAttribute('aria-hidden','true');
- el.innerHTML=`<div class="v-${esc(v.id)}"><img src="${esc(v.splash)}" alt=""><p class="s1">${esc(small)}</p><p class="s2">${esc(big)}</p></div>`;
+ el.innerHTML=`<div class="v-${esc(v.id)}"><img src="${esc(v.splash)}" alt=""><p class="s1">${esc(small)}</p><p class="s2">${esc(big)}</p>${v.place?`<p class="s3">${esc(v.place)}</p>`:''}</div>`;
  document.body.appendChild(el);setTimeout(()=>el.remove(),calm()?700:2000);
 }
 /* When a player joined: saved when the account is made; for older accounts, the earliest level or game we know of */
@@ -1594,7 +1594,7 @@ function openVenues(grp){tick();const list=grp?VENUES.filter(v=>groupOf(v)===grp
  openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
   <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
-   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
+   return`<button type="button" class="vsrow rv${on?' on':''}" style="--vc:${esc(v.color)};--d:${i*60}ms" data-act="venueGo" data-v="${v.id}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"${on?' aria-current="true"':''}>${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${on?'<em class="vstag here">You’re here</em>':mine?'':'<em class="vstag">New to you · yet to play</em>'}</span>${n?'<span class="vdot" aria-hidden="true"></span>':''}<span class="go" aria-hidden="true">›</span></button>`}).join('')}<p class="muted small vsnone" id="vsNone" hidden></p></div>
   <button class="btn ghost wide" style="margin-top:14px" data-act="closeSheet">Close</button>`,bg=>{
   requestAnimationFrame(()=>qsa('.rv',bg).forEach(e=>e.classList.add('in')));
   const q=bg.querySelector('#vsQ');
@@ -1894,7 +1894,7 @@ function bookCard(small){const v=VEN(),n=sp=>(v.courtNos[sp]||[]).length;
   ${!small&&v.also?`<p class="small muted" style="margin:${SP_KEYS.some(sp=>n(sp))?0:10}px 0 14px">${esc(v.also)} are on ${esc(v.book.name)} too. Rankings here are for padel and pickleball.</p>`:''}
   <div style="margin-top:${small?12:0}px">${bookLinkBtn(v)}</div></div>`}
 function otherClubs(){const o=VENUES.filter(v=>v.id!==VID);if(!o.length)return'';
- return `<div class="sec"><h2>More clubs on My Padel</h2><span class="small muted">${o.length}</span></div><div class="vlist">${o.map(v=>`<button class="card vrow hov rv" data-act="venue" data-v="${v.id}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.area)} · ${esc(v.courts)}</span></span><span class="small muted">${isMember(S.uid,v.id)?'Switch':'Sign in'} ›</span></button>`).join('')}</div>`}
+ return `<div class="sec"><h2>More clubs on My Padel</h2><span class="small muted">${o.length}</span></div><div class="vlist">${o.map(v=>`<button class="card vrow hov rv" data-act="venue" data-v="${v.id}">${vMark(v)}<span class="grow"><b>${esc(v.name)}</b><span class="small muted">${esc(v.place||v.area)} · ${esc(v.courts)}</span></span><span class="small muted">${isMember(S.uid,v.id)?'Switch':'Sign in'} ›</span></button>`).join('')}</div>`}
 function vLinkBook(){const ns=nudges();
  return `<div class="hd"><div><p class="eyebrow">Courts</p><h1>Book a court</h1></div></div>${bookCard()}
   ${ns.length?`<div class="sec"><h2>For you</h2></div><div class="list">${ns.map(([i,t,p])=>`<div class="card nudge rv"><span class="ng-i" aria-hidden="true">${i}</span><div><b>${esc(t)}</b><p class="small muted">${esc(p)}</p></div></div>`).join('')}</div>`:''}
@@ -2958,7 +2958,7 @@ function showWelcome(mode){const el=$('welcome');if(!el)return;applyMP();
  $('wPick').textContent=pick?'Pick a court to begin':'';$('wPick').hidden=!pick;
  $('wHi').innerHTML=p?`${p.setup&&venuesOf(p).length?'Welcome back':'You’re all set'}, <b>${esc(first(p))}</b>`:'';$('wHi').hidden=!p;
  $('wCourts').innerHTML=mode==='start'?`<p class="wnote">Sign in once, then play at every club without signing in again.</p><button type="button" class="btn ball wide wbig" id="wIn">Sign in</button><button type="button" class="btn wghost wide" id="wUp">Create an account</button>`
-  :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.area.replace(/, India$/,''))}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
+  :pick?`<label class="wfind"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="wFind" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></label>`+VENUES.map(v=>{const mine=isMember(S.uid,v.id);return`<button type="button" class="wcourt" data-court="${esc(v.id)}" data-find="${esc([v.name,v.place||'',v.area,v.courts,v.also||''].join(' ').toLowerCase())}"><span class="wmark w-${esc(v.id)}"><img src="${esc(v.logo)}" alt=""></span><span><b>${esc(v.name)}</b><small>${esc(v.place||v.area)}</small>${mine?'':'<em class="wnew">New to you · yet to play</em>'}</span><span class="go" aria-hidden="true">›</span></button>`}).join('')
    +(Store.mode==='demo'&&S.uid!=='d_new'?`<button type="button" class="wlink" id="wDemoNew">Demo: try the first-time sign-in as a new player</button>`:'')
   :`<div class="wwait" aria-label="Loading"><i></i><i></i><i></i></div>`;
  $('wFoot').textContent='My Padel · V'+APP_VER;
