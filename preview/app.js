@@ -1010,12 +1010,16 @@ const clubsOf=id=>VENUES.map(v=>v.id).filter(v=>isMember(id,v)||roleAt(id,v)!=='
 const ROLE_ICON={owner:'👑',admin:'🛡️',coach:'🎾',player:'🏓'};
 /* A player's best place in the rankings at a club (padel first), worked out from that club's matches only */
 let rankCache={};
-function rankAt(id,v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduct||[]).length+'|'+S.profiles.length;
+function rankedAt(v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduct||[]).length+'|'+S.profiles.length;
  if(!rankCache[key]){const sv={VID,matches:S.matches,conduct:S.conduct,R:S.R,D:S.D,ST:S.ST};
   if(v!==VID){VID=v;S.matches=(S.allMatches||[]).filter(m=>vidOf(m)===v);S.conduct=(S.allConduct||[]).filter(c=>vidOf(c)===v);rate()}
   const out={};S.profiles.forEach(p=>{for(const sp of ['padel','pickleball']){const r=S.R[sp]&&S.R[sp][p.id]&&rankOf(sp,p.id);if(r&&r.pos){out[p.id]={pos:r.pos,sp,tier:r.tier};break}}});
-  Object.assign(S,{matches:sv.matches,conduct:sv.conduct,R:sv.R,D:sv.D,ST:sv.ST});VID=sv.VID;rankCache={[key]:out}}
- return rankCache[key][id]||null}
+  Object.assign(S,{matches:sv.matches,conduct:sv.conduct,R:sv.R,D:sv.D,ST:sv.ST});VID=sv.VID;rankCache[key]=out}
+ return rankCache[key]}
+function rankAt(id,v){return rankedAt(v)[id]||null}
+/* Switch club order: clubs you're ranked at first, then the rest; each part by most ranked players (any sport, any level) */
+function venueOrder(list){const n=v=>Object.keys(rankedAt(v.id)).length,me_=v=>rankAt(S.uid,v.id)?1:0;
+ return list.map((v,i)=>({v,i,m:me_(v),n:n(v)})).sort((a,b)=>b.m-a.m||b.n-a.n||a.i-b.i).map(x=>x.v)}
 /* One small chip per club: the club's logo, the player's rank there, and their role there if they have one */
 function clubLines(id){if(isDev(id))return'';const cs=clubsOf(id);if(!cs.length)return'';
  return`<div class="clubchips">${cs.map(v=>{const r=roleAt(id,v),V=venueOf(v),k=rankAt(id,v),sp=k&&SPORTS[k.sp];
@@ -1640,7 +1644,7 @@ function paintVenues(){const el=$('vswitch');if(!el)return;
 function fitRun(){const run=document.querySelector('#vswitch .vrun');if(!run)return;const set=run.querySelector('.vset');run.classList.remove('still');run.classList.toggle('still',set.scrollWidth<=run.clientWidth+1)}
 addEventListener('resize',()=>{clearTimeout(fitRun.t);fitRun.t=setTimeout(fitRun,120)});
 /* Every club in one pop-up: search, then tap to switch */
-function openVenues(grp){tick();const list=grp?VENUES.filter(v=>groupOf(v)===grp):VENUES;
+function openVenues(grp){tick();const list=venueOrder(grp?VENUES.filter(v=>groupOf(v)===grp):VENUES);
  openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
   <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
