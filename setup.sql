@@ -619,3 +619,40 @@ drop policy if exists "rc ads files delete" on storage.objects;
 create policy "rc ads files insert" on storage.objects for insert to authenticated with check (bucket_id = 'rc-ads' and public.rc_is_dev());
 create policy "rc ads files update" on storage.objects for update to authenticated using (bucket_id = 'rc-ads' and public.rc_is_dev());
 create policy "rc ads files delete" on storage.objects for delete to authenticated using (bucket_id = 'rc-ads' and public.rc_is_dev());
+
+-- ============ Security fixes (24 Nov 2026) ============
+
+-- Club notices: only staff at that club can send club-style notices, and only the developer can send demo access notices
+drop policy if exists "rc msg insert" on public.rc_messages;
+create policy "rc msg insert" on public.rc_messages for insert to authenticated with check (
+  auth.uid() = from_user
+  and (kind not in ('community','admin_reply','conduct','role','pro','game_logged','game_edit','game_cancel','resolved','bk_confirmed','bk_declined','report_done')
+       or public.rc_is_admin_at(data->>'venue'))
+  and (kind <> 'demo_access' or public.rc_is_dev())
+  and length(coalesce(data->>'text','')) <= case when public.rc_is_admin_at(data->>'venue') then 600 else 160 end
+);
+
+-- Bookings: an invited player can only change their own in or out answer; nobody but staff can change a booking's type or owner
+create or replace function public.rc_booking_guard() returns trigger language plpgsql security definer set search_path = public as $$
+declare me text := auth.uid()::text;
+begin
+  if public.rc_is_admin_at(coalesce(old.data->>'venue','rc')) then return new; end if;
+  if new.created_by is distinct from old.created_by or new.kind is distinct from old.kind then
+    raise exception 'Only club staff can change who owns a booking or its type' using errcode = '42501';
+  end if;
+  if old.created_by = auth.uid() then return new; end if;
+  -- invited player: everything stays the same except their own entry in going / declined
+  if new.court is distinct from old.court or new.day is distinct from old.day or new.start_slot is distinct from old.start_slot or new.len is distinct from old.len
+     or (coalesce(new.data,'{}') - 'going' - 'declined' - 'status' - 'confirmedBy') is distinct from (coalesce(old.data,'{}') - 'going' - 'declined' - 'status' - 'confirmedBy')
+     or (select coalesce(jsonb_agg(x order by x),'[]') from jsonb_array_elements_text(case when jsonb_typeof(new.data->'going')='array' then new.data->'going' else '[]' end) x where x <> me)
+        is distinct from (select coalesce(jsonb_agg(x order by x),'[]') from jsonb_array_elements_text(case when jsonb_typeof(old.data->'going')='array' then old.data->'going' else '[]' end) x where x <> me)
+     or (select coalesce(jsonb_agg(x order by x),'[]') from jsonb_array_elements_text(case when jsonb_typeof(new.data->'declined')='array' then new.data->'declined' else '[]' end) x where x <> me)
+        is distinct from (select coalesce(jsonb_agg(x order by x),'[]') from jsonb_array_elements_text(case when jsonb_typeof(old.data->'declined')='array' then old.data->'declined' else '[]' end) x where x <> me)
+  then
+    raise exception 'Invited players can only say if they are in or out' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke execute on function public.rc_booking_guard() from public, anon, authenticated;
+drop trigger if exists rc_booking_guard on public.rc_bookings;
+create trigger rc_booking_guard before update on public.rc_bookings for each row execute function public.rc_booking_guard();
