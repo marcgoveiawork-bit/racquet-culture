@@ -1010,12 +1010,16 @@ const clubsOf=id=>VENUES.map(v=>v.id).filter(v=>isMember(id,v)||roleAt(id,v)!=='
 const ROLE_ICON={owner:'👑',admin:'🛡️',coach:'🎾',player:'🏓'};
 /* A player's best place in the rankings at a club (padel first), worked out from that club's matches only */
 let rankCache={};
-function rankAt(id,v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduct||[]).length+'|'+S.profiles.length;
+function rankedAt(v){const key=v+'|'+(S.allMatches||[]).length+'|'+(S.allConduct||[]).length+'|'+S.profiles.length;
  if(!rankCache[key]){const sv={VID,matches:S.matches,conduct:S.conduct,R:S.R,D:S.D,ST:S.ST};
   if(v!==VID){VID=v;S.matches=(S.allMatches||[]).filter(m=>vidOf(m)===v);S.conduct=(S.allConduct||[]).filter(c=>vidOf(c)===v);rate()}
   const out={};S.profiles.forEach(p=>{for(const sp of ['padel','pickleball']){const r=S.R[sp]&&S.R[sp][p.id]&&rankOf(sp,p.id);if(r&&r.pos){out[p.id]={pos:r.pos,sp,tier:r.tier};break}}});
-  Object.assign(S,{matches:sv.matches,conduct:sv.conduct,R:sv.R,D:sv.D,ST:sv.ST});VID=sv.VID;rankCache={[key]:out}}
- return rankCache[key][id]||null}
+  Object.assign(S,{matches:sv.matches,conduct:sv.conduct,R:sv.R,D:sv.D,ST:sv.ST});VID=sv.VID;rankCache[key]=out}
+ return rankCache[key]}
+function rankAt(id,v){return rankedAt(v)[id]||null}
+/* Switch club order: clubs you're ranked at first, then the rest; each part by most ranked players (any sport, any level) */
+function venueOrder(list){const n=v=>Object.keys(rankedAt(v.id)).length,me_=v=>rankAt(S.uid,v.id)?1:0;
+ return list.map((v,i)=>({v,i,m:me_(v),n:n(v)})).sort((a,b)=>b.m-a.m||b.n-a.n||a.i-b.i).map(x=>x.v)}
 /* One small chip per club: the club's logo, the player's rank there, and their role there if they have one */
 function clubLines(id){if(isDev(id))return'';const cs=clubsOf(id);if(!cs.length)return'';
  return`<div class="clubchips">${cs.map(v=>{const r=roleAt(id,v),V=venueOf(v),k=rankAt(id,v),sp=k&&SPORTS[k.sp];
@@ -1640,7 +1644,7 @@ function paintVenues(){const el=$('vswitch');if(!el)return;
 function fitRun(){const run=document.querySelector('#vswitch .vrun');if(!run)return;const set=run.querySelector('.vset');run.classList.remove('still');run.classList.toggle('still',set.scrollWidth<=run.clientWidth+1)}
 addEventListener('resize',()=>{clearTimeout(fitRun.t);fitRun.t=setTimeout(fitRun,120)});
 /* Every club in one pop-up: search, then tap to switch */
-function openVenues(grp){tick();const list=grp?VENUES.filter(v=>groupOf(v)===grp):VENUES;
+function openVenues(grp){tick();const list=venueOrder(grp?VENUES.filter(v=>groupOf(v)===grp):VENUES);
  openSheet(`<h2>${grp?esc(grp):'Switch club'}</h2><p class="muted small">${grp?`${list.length} venues. Pick one.`:'Every court. One app.'}</p>
   <div class="search vssearch"${grp?' hidden':''}>${ICON.search}<input id="vsQ" type="search" placeholder="Find a venue or area" aria-label="Find a venue" autocomplete="off" enterkeyhint="search"></div>
   <div class="vslist" id="vsL">${list.map((v,i)=>{const on=v.id===VID,mine=isMember(S.uid,v.id),n=on?0:unreadAt(v.id);
@@ -2428,10 +2432,15 @@ function vPlayers(){
 }
 function paintPlayers(){
  const f=view.pf,pv=view.pv||'all',q=f.q.trim().toLowerCase(),el=$('pList');if(!el)return;const fr=friendIds();
- const list=S.profiles.filter(p=>p.setup&&inVenue(p)&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time)))
-  .sort((a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name));
- el.innerHTML=list.map(p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
-  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to game invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`}).join('')
+ const match=p=>p.setup&&(pv==='all'||(pv==='friends'?fr.includes(p.id):following(p.id)))&&(!q||(p.name+' '+p.username).toLowerCase().includes(q))&&(!f.inv||p.invites)&&(!f.sport||(p.sports||[]).includes(f.sport))&&(!f.time||(p.times||[]).includes(f.time));
+ const ord=(a,b)=>(a.id===S.uid)-(b.id===S.uid)||(fr.includes(b.id)-fr.includes(a.id))||a.name.localeCompare(b.name);
+ const list=S.profiles.filter(p=>inVenue(p)&&match(p)).sort(ord);
+ /* Friends and Following belong to the account, so the ones who play elsewhere show under "At other clubs" */
+ const away=pv==='all'?[]:S.profiles.filter(p=>p.id!==S.uid&&!inVenue(p)&&match(p)).sort(ord);
+ const cardOf=p=>{const r=p.id===S.uid?null:relWith(p.id).st;return`<div class="card pcard hov rv" role="button" tabindex="0" data-act="player" data-v="${p.id}">${avHTML(p)}<div class="pi"><b>${esc(p.name)}${p.id===S.uid?' <span class="muted small">(you)</span>':''}${adminChip(p.id)}</b><span class="small muted">@${esc(p.username)}${r==='friends'?' · <span class="frtag">Friend</span>':''}${following(p.id)?' · Following':''}${r==='incoming'?' · <span class="invt">Wants to be friends</span>':''}</span>
+  <div class="tags">${(p.sports||[]).map(sp=>{const lv=lvlOf(sp,p.id);return lv!=null?`<span class="chip t-${tierOf(sp,lv)}">${SPORTS[sp].name} ${fmtL(lv,1)}</span>`:''}).join('')}${p.invites?'<span class="chip ball">Open to game invites</span>':''}<span class="chip">${esc(lbl(SIDES,p.side))}</span></div></div></div>`};
+ const awayHTML=away.length?`<div class="pgh rv"><b>At other clubs · ${away.length}</b><span class="small muted">${pv==='friends'?'Your friends':'People you follow'} who don’t play at ${esc(VEN().name)} yet</span></div>`+away.map(p=>cardOf(p).replace('<div class="tags">',`<div class="tags">${clubsOf(p.id).map(v=>`<span class="chip">${esc(venueOf(v).name)}</span>`).join('')}`)).join(''):'';
+ el.innerHTML=(list.length?list.map(cardOf).join(''):away.length?`<div class="card empty rv"><b>${pv==='friends'?'No friends here yet':'No one you follow plays here yet'}</b>They play at other clubs. See them below.</div>`:'')+awayHTML
   ||`<div class="card empty rv"><b>${pv==='friends'?'No friends yet':pv==='following'?'Not following anyone yet':'No players match'}</b>${pv==='all'?'Try fewer filters.':'Open a player’s profile to add them as a friend or follow them.'}</div>`;
  reveal(el);
 }
