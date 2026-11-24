@@ -586,3 +586,36 @@ create policy "rc private read" on public.rc_private for select to authenticated
   or (vis = 'friends' and exists (select 1 from public.rc_friend_requests r where r.status = 'accepted'
         and ((r.from_user = auth.uid() and r.to_user = rc_private.user_id) or (r.to_user = auth.uid() and r.from_user = rc_private.user_id))))
 );
+-- Advertisements shown in the window at the top of every page.
+-- One row per venue id, plus 'default' for venues without their own. items is a list of
+-- {"src": url, "type": "image"|"video", "bg": css colour}. An empty list means no ads at that venue.
+-- Everyone can read them, only the Developer can change them.
+create table if not exists public.rc_ads (
+  venue       text primary key,
+  items       jsonb not null default '[]'::jsonb,
+  updated_at  timestamptz not null default now(),
+  updated_by  uuid default auth.uid() references auth.users(id) on delete set null
+);
+alter table public.rc_ads enable row level security;
+drop policy if exists "rc ads read"   on public.rc_ads;
+drop policy if exists "rc ads insert" on public.rc_ads;
+drop policy if exists "rc ads update" on public.rc_ads;
+drop policy if exists "rc ads delete" on public.rc_ads;
+create policy "rc ads read"   on public.rc_ads for select to anon, authenticated using (true);
+create policy "rc ads insert" on public.rc_ads for insert to authenticated with check (public.rc_is_dev());
+create policy "rc ads update" on public.rc_ads for update to authenticated using (public.rc_is_dev()) with check (public.rc_is_dev());
+create policy "rc ads delete" on public.rc_ads for delete to authenticated using (public.rc_is_dev());
+grant select on public.rc_ads to anon, authenticated;
+grant insert, update, delete on public.rc_ads to authenticated;
+do $$ begin alter publication supabase_realtime add table public.rc_ads; exception when duplicate_object then null; end $$;
+
+-- Ad images and videos uploaded from the app (public to view, up to 50 MB each, Developer only to add or remove).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('rc-ads', 'rc-ads', true, 52428800, array['image/*','video/*'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+drop policy if exists "rc ads files insert" on storage.objects;
+drop policy if exists "rc ads files update" on storage.objects;
+drop policy if exists "rc ads files delete" on storage.objects;
+create policy "rc ads files insert" on storage.objects for insert to authenticated with check (bucket_id = 'rc-ads' and public.rc_is_dev());
+create policy "rc ads files update" on storage.objects for update to authenticated using (bucket_id = 'rc-ads' and public.rc_is_dev());
+create policy "rc ads files delete" on storage.objects for delete to authenticated using (bucket_id = 'rc-ads' and public.rc_is_dev());
