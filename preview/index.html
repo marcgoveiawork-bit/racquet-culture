@@ -1022,6 +1022,13 @@ a.btn{text-decoration:none}
 .wwait{display:flex;justify-content:center;gap:8px;margin-top:44px}.wwait i{width:10px;height:10px;border-radius:50%;background:#dcf55a;animation:wDot 1s ease-in-out infinite}.wwait i:nth-child(2){animation-delay:.15s}.wwait i:nth-child(3){animation-delay:.3s}
 @keyframes wDot{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-6px)}}
 .yetcard .mi{background:rgba(220,245,90,.16);color:var(--ball)}[data-theme="light"] .yetcard .mi{color:#6b7d00}
+/* Padel People (coming soon): navy court blue, cream lines, ball yellow */
+.vmark.v-padelpeople,.wmark.w-padelpeople{background:#1d648e;box-shadow:0 6px 18px rgba(29,100,142,.3),inset 0 0 0 2px #f6f2d9;padding:3px 8px!important}
+.vmark.sm.v-padelpeople{box-shadow:inset 0 0 0 1.5px #f6f2d9;padding:2px 4px!important}
+:root:not([data-theme="light"]) .vsrow[data-v="padelpeople"]{--vc:#4f9ccb}
+.vstag.soon,.wnew.soon{background:rgba(222,228,78,.16);color:#dee44e}
+[data-theme="light"] .vstag.soon{background:rgba(29,100,142,.1);color:#1d648e}
+.vsrow.soon,.wcourt.soon{opacity:.92}
 </style>
 </head>
 <body>
@@ -1093,7 +1100,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.5demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=68"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=98"></script>
+<script src="app.js?v=99"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
