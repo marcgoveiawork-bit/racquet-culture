@@ -36,7 +36,7 @@ Players create an account with their email, a username and a password, and sign 
 Emails stay private: other players only see names and usernames.
 
 1. Open **Authentication → URL Configuration**. Set **Site URL** to the app's address,
-   `https://marcgoveiawork-bit.github.io/racquet-culture/`, and add the same address under **Redirect URLs**.
+   `https://playonecourt.com/`, and add `https://playonecourt.com/**` and `https://www.playonecourt.com/**` under **Redirect URLs**.
    Links in password reset and confirmation emails come back here.
 2. Open **Authentication → Sign In / Providers → Email** and turn **Confirm email** off for now, then save.
 
