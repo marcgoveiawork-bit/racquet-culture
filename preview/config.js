@@ -6,5 +6,7 @@ window.RC_LIVE = {
   url: 'https://snormmbkocezylbhzurh.supabase.co',
   key: 'sb_publishable_ihxSJ3hsAnZCY8bz8Z565A_xYx-1vbt',
   /* Where players book and pay for courts. Change this if the Hudle venue page moves. */
-  hudle: 'https://hudle.in/venues/racquet-culture-chicalim/567082'
+  hudle: 'https://hudle.in/venues/racquet-culture-chicalim/567082',
+  /* Clubs real players can see on the live app. Add a club's id (from VENUES in app.js) once it has confirmed, e.g. ['rc','sunday']. Demo mode shows every club. */
+  clubs: ['rc']
 };
