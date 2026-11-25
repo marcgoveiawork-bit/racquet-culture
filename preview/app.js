@@ -378,6 +378,7 @@ const Live={
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
+ async createProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').insert({id,username,name,data});if(error)throw error},
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async setPro(p,v,sp,on){const {data,error}=await sb.rpc('rc_set_pro',{target:p.id,v,sp,on_:on});if(error){if(error.code==='42501')throw errc('denied');throw error}return data||{}},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
@@ -1485,12 +1486,20 @@ async function syncPhone(){if(Store.mode==='demo'||myPhone())return;let ph=null;
  if(Store.mode==='live'){try{const {data}=await sb.auth.getUser();const u=data.user;ph=u&&u.user_metadata&&u.user_metadata.phone||null;if(!ph&&pend&&u&&pend.email===(u.email||'').toLowerCase())ph=pend.phone}catch(e){}}
  else if(pend)ph=pend.phone;
  if(!ph)return;const r={phone:ph,vis:'admins'};try{await Store.savePhone(r);S.phones[S.uid]=r;ls.set('rc_phone_new',null)}catch(e){}}
+/* Shown when the club data can't be loaded: the player's account is untouched, they just try again */
+function loadFailed(fresh){busy(false);$('welcome').hidden=true;$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
+ $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><h1>Couldn’t load the club</h1><p class="muted" style="margin-top:8px">Your account and levels are safe. Check your connection and try again.</p><button class="btn brand wide" style="margin-top:18px" id="lfRetry">Try again</button></div>`;
+ $('lfRetry').onclick=()=>location.reload()}
 async function enter(fresh){
- try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}
+ /* If the club data didn't load, stop here and offer a retry. Never carry on as if the player were new:
+    that would save a blank profile over their real one */
+ let ok=false;for(let k=0;k<3&&!ok;k++){try{await reload();ok=true}catch(e){if(k<2)await new Promise(r=>setTimeout(r,1200))}}
+ if(!ok)return loadFailed(fresh);
  let p=me();
- if(!p&&Store.mode==='live'){try{const {data}=await sb.auth.getUser();const md=data.user&&data.user.user_metadata||{};
+ if(!p&&Store.mode==='live'){try{const ex=await sb.from('rc_profiles').select('id').eq('id',S.uid);if(ex.error)return loadFailed(fresh);if(ex.data.length)return loadFailed(fresh);
+  const {data}=await sb.auth.getUser();const md=data.user&&data.user.user_metadata||{};
   if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};
-   try{await Store.saveProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505')return pickUsername(p);throw e}}}catch(e){p=null}}
+   try{await Store.createProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505'&&/username/i.test(e.message||''))return pickUsername(p);return loadFailed(fresh)}}}catch(e){return loadFailed(fresh)}}
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
  await syncPhone();
  /* the theme a player last chose follows them to every device; new players start in light */
@@ -3454,17 +3463,19 @@ function tLeagueView(T,d){
   <div class="sec"><h2>Matches</h2></div><div class="list">${ms.map(m=>tMatchRow(T,m)).join('')}</div>`;
 }
 /* The court, in the club's own colours, with each team on its side and a ball by the server */
+/* Each player's name is a button that opens their profile */
+const tNameBtns=(uids,short)=>(uids||[]).filter(Boolean).map(u=>`<button type="button" class="tpn" data-act="player" data-v="${esc(u)}">${esc(u===S.uid?'You':short?tShort(u):slotName({uid:u}))}</button>`).join('<span class="tamp">&amp;</span>')||'To be decided';
 function tCourt(T,m,r){const P=T.sport==='padel',nA=tTeamName(m.ta,true),nB=tTeamName(m.tb,true),sv=m.status==='live'?r.serve:null;
  const lines=P?`<rect x="6" y="6" width="188" height="88" rx="2"/><line x1="100" y1="2" x2="100" y2="98" class="net"/><line x1="34.5" y1="6" x2="34.5" y2="94"/><line x1="165.5" y1="6" x2="165.5" y2="94"/><line x1="34.5" y1="50" x2="165.5" y2="50"/>`
   :`<rect x="6" y="6" width="188" height="88" rx="2"/><line x1="100" y1="2" x2="100" y2="98" class="net"/><line x1="75" y1="6" x2="75" y2="94"/><line x1="125" y1="6" x2="125" y2="94"/><line x1="6" y1="50" x2="75" y2="50"/><line x1="125" y1="50" x2="194" y2="50"/><rect x="75" y="6" width="50" height="88" class="kitchen"/>`;
  return`<div class="tcourt${m.status==='live'?' live':''}"><svg viewBox="0 0 200 100" aria-hidden="true"><defs><linearGradient id="tcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--g1)"/><stop offset="1" style="stop-color:var(--g3)"/></linearGradient></defs>
   <rect x="0" y="0" width="200" height="100" rx="6" fill="url(#tcg)"/><g class="tcl">${lines}</g></svg>
-  <span class="tside a">${sv==='a'?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(nA)}</span><span class="tside b">${sv==='b'?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(nB)}</span></div>`}
+  <span class="tside a">${sv==='a'?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m.ta,true)}</span><span class="tside b">${sv==='b'?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m.tb,true)}</span></div>`}
 function vRef(m){
  const T=tour(m.tour),d=tDiv(T,m.div),r=tRes(T,m),staff=canRunTour(),live=m.status==='live',R=m.rounds;
  const title=m.kind==='ko'?koRoundName(m.round,R):`League · round ${m.round}`;
  const cols=r.sets.length+(r.done?0:1);
- const sc=s=>{const k=s==='a'?0:1;return`<div class="sbr${m.winner===s?' win':''}${r.serve===s&&live?' srv':''}"><span class="sbn">${r.serve===s&&live?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(tTeamName(m['t'+s]))}</span>${r.sets.map(x=>`<span class="sbs${x[k]>x[1-k]?' won':''}">${x[k]}</span>`).join('')}${r.done?'':`<span class="sbs cur">${r.g[k]}</span><span class="sbp">${r.P?r.p[k]:''}</span>`}</div>`};
+ const sc=s=>{const k=s==='a'?0:1;return`<div class="sbr${m.winner===s?' win':''}${r.serve===s&&live?' srv':''}"><span class="sbn">${r.serve===s&&live?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m['t'+s])}</span>${r.sets.map(x=>`<span class="sbs${x[k]>x[1-k]?' won':''}">${x[k]}</span>`).join('')}${r.done?'':`<span class="sbs cur">${r.g[k]}</span><span class="sbp">${r.P?r.p[k]:''}</span>`}</div>`};
  const mins=m.start?Math.max(0,Math.round(((m.end?new Date(m.end):new Date())-new Date(m.start))/6e4)):0;
  return`<div class="tback"><button class="btn link small" data-act="tourRefBack">‹ ${esc(T.name)}</button>${!staff&&live?`<span class="tright2"><button class="ibtn sm" data-act="tourRefresh" aria-label="Refresh score"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button><button class="chip tauto${tAutoOn()?' on':''}" data-act="tourAuto">Auto-refresh ${tAutoOn()?'on':'off'}</button></span>`:''}</div>
  <div class="card tref rv"><div class="trefhead"><div><p class="eyebrow">${esc(tDivLabel(d))} · ${esc(title)}</p><b>${live?`${T_ICON.live} Live`:m.status==='done'?'Finished':m.status==='ready'?'Ready to start':'Waiting for teams'}</b></div><span class="num muted small">${m.start?`${mins} min`:''}</span></div>
