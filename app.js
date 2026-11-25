@@ -1377,6 +1377,7 @@ function paintAuth(dir){
    <p class="aerr" id="aErr" role="alert"></p>
    <button class="btn brand wide" id="aBtn" type="submit">${up?'Create account':'Sign in'}</button>
    ${up?'':`<p class="small muted" style="text-align:center;margin-top:14px">Forgot your password? <button type="button" class="btn link small" data-act="forgot">Get help</button></p>`}
+   <p class="small muted" style="text-align:center;margin-top:6px">Anything else? <a class="btn link small" href="${SUPPORT_MAIL}">Email us</a></p>
   </form>
 </div>`;
  vInit();syncGliders();
@@ -1602,6 +1603,7 @@ function wSteps(){
  lv.forEach(sp=>{d.q[sp]=d.q[sp]||{band:'',ans:[]};st.push('band:'+sp,'result:'+sp)});
  st.push(W.mode==='setup'?'done':'save');return st;
 }
+const SUPPORT_EMAIL='onecourtsupport@gmail.com',SUPPORT_MAIL=`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('OneCourt help')}`;
 const ANIM_OF=new Map([[ICON.padel,'swing'],[ICON.pickleball,'roll'],[ICON.mail,'ring'],[ICON.nomail,'shake'],[ICON.sunrise,'rise'],[ICON.sun,'spin'],[ICON.noon,'pulse'],[ICON.sunset,'sink'],[ICON.moon,'rock'],[ICON.any,'spin']]);
 function opt(o){const role=o.multi?'aria-pressed':'aria-checked',a=o.icon?ANIM_OF.get(o.icon)||(/M6 19v-3/.test(o.icon)?'bars':'pop'):'';
  return `<button type="button" class="opt${o.big?' big':''}${o.locked?' locked':''}${W&&W.jp===o.act+'|'+o.v?' play':''}" ${o.multi?'':'role="radio"'} ${role}="${!!o.on}" data-act="${o.act}" data-v="${esc(o.v)}">${o.icon?`<span class="oi" data-a="${a}">${o.icon}</span>`:''}<span class="ot"><b>${esc(o.title)}</b>${o.sub?`<span>${esc(o.sub)}</span>`:''}</span><span class="ock">${ICON.check}</span></button>`}
@@ -2780,6 +2782,8 @@ function vSettings(){
   ${myPhone()?`<p class="small muted" style="margin:12px 0 8px">Who can see your number?</p>${seg('phv','Who can see your number',PH_VIS,myPhone().vis||'admins','phVis')}`:''}</div>
  <div class="card rv" style="margin-top:12px">${row(ICON.key,'shake','Email and password',`${esc(S.email||'Demo account')} · only you can see this`,Store.mode==='demo'?'':'<button class="btn ghost sm" data-act="changePw">Change</button>')}</div>
  ${Store.mode==='demo'?'':canDemo()?`<div class="card rv" style="margin-top:12px"><b>Demo mode</b><p class="small muted" style="margin:4px 0 12px">See new updates before they go live, with 100 made-up players and games. Nothing you do there touches the real club.</p>${PREVIEW?`<button class="btn ghost sm" data-act="demo">Start demo mode</button>`:`<a class="btn ghost sm" href="preview/">Open demo mode</a>`}</div>`:''}
+ <p class="eyebrow period">Help</p>
+ <div class="card rv">${row(ICON.mail,'ring','Contact us',`Questions, problems or ideas? Email ${SUPPORT_EMAIL} and we’ll get back to you.`,`<a class="btn brand sm" href="${SUPPORT_MAIL}">Email us</a>`,'r-help')}</div>
  ${Store.mode==='demo'?'':`<button class="btn danger wide" style="margin-top:18px" data-act="signOut">${ICON.logout}<span>Sign out</span></button>`}
  <p class="small muted vline">OneCourt · V${esc(APP_VER)}</p>`;
 }
