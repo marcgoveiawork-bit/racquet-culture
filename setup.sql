@@ -762,6 +762,9 @@ create policy "rc tour match read" on public.rc_tour_matches for select to authe
 drop policy if exists "rc tour match write" on public.rc_tour_matches;
 create policy "rc tour match write" on public.rc_tour_matches for all to authenticated using (public.rc_is_admin_at(venue)) with check (public.rc_is_admin_at(venue));
 
+-- Table access for signed-in users (row security above still decides which rows)
+grant select, insert, update, delete on public.rc_tournaments, public.rc_tour_entries, public.rc_tour_matches to authenticated;
+
 -- Players can only: ask to join an open tournament, answer an invite, confirm as a partner, add a partner to their own entry, or pull out.
 -- Only staff can accept a request, change who is in an entry, or put an entry in the draw.
 create or replace function public.rc_tour_entry_guard() returns trigger language plpgsql security definer set search_path = public as $$
