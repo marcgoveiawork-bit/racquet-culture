@@ -3248,7 +3248,22 @@ let rmT=0,rmPending=false;
    and rankings. Data: S.tours, S.tentries, S.tmatches (rc_tournaments, rc_tour_entries, rc_tour_matches). */
 const T_CAT=[['open','Open'],['men','Men'],['women','Women'],['mixed','Mixed']];
 const T_LVL=[['open','All levels'],['beginner','Beginner'],['intermediate','Intermediate'],['pro','Pro']];
-const T_FMT=[['knockout','Knockout'],['league','League']];
+const T_FMT=[['knockout','Knockout'],['league','League'],['americano','Americano'],['mexicano','Mexicano']];
+/* Americano and Mexicano: players enter on their own, partners change every round, and every point counts for the player.
+   A match is a set number of points (e.g. 24). Americano: the whole schedule is made at the draw, mixing partners and opponents
+   as much as possible. Mexicano: round 1 is random (or by level), then each round is paired from the standings (1st & 4th v 2nd & 3rd). */
+const isAm=T=>!!T&&(T.format==='americano'||T.format==='mexicano');
+const T_AMP=[['am16','16'],['am21','21'],['am24','24'],['am32','32']];
+const T_ROUNDS=Array.from({length:28},(_,i)=>i+3).map(n=>[n,n+' rounds']);
+/* Americano/Mexicano: courts in use, rounds needed for everyone to partner everyone once (capped), time estimate */
+const T_AMMAXP=48,T_AMMAXC=12,T_AMCAP=15;
+const tAmCourts=(n,c)=>Math.max(0,Math.min(+c||T_AMMAXC,Math.floor(n/4)));
+const tAmAuto=(n,c)=>{const k=tAmCourts(n,c);return k<1?0:clamp(Math.ceil(n*(n-1)/(4*k)),3,T_AMCAP)};
+const tAmR=(T,d,n)=>+d.amr||+T.amr||tAmAuto(n??tAmPlayers(T,d).length,d.courts)||7;
+const tAmMins=(pts,r)=>Math.round(r*(pts*.55+2)/5)*5;
+const tDur=m=>m<60?`${m} min`:`${Math.floor(m/60)} h${m%60?` ${m%60} min`:''}`;
+function tAmPlan(n,c,amr,pts,fmt,form){const k=tAmCourts(n,c);if(k<1)return'Needs at least 4 players.';const r=+amr||tAmAuto(n,c),sit=n-k*4;
+ return`${k} court${k>1?'s':''} in use, ${k} match${k>1?'es':''} a round${sit>0?`, ${sit} sit${sit>1?'':'s'} out each round in turn`:''}. ${r} rounds, about ${tDur(tAmMins(pts,r))}${+amr?'':(Math.ceil(n*(n-1)/(4*k))>T_AMCAP?` (capped at ${T_AMCAP})`:fmt==='americano'?', so everyone partners everyone about once':'')}.${form&&!+amr?` Worked out for ${n} players, then again from the real sign-ups when you make the draw.`:''}`}
 const T_MATCH={padel:[['bo3','Best of 3 sets'],['set1','1 set'],['pro9','Pro set to 9']],pickleball:[['g11','1 game to 11'],['bo3','Best of 3 to 11'],['g15','1 game to 15']]};
 const T_MAX=[[4,'4 teams'],[8,'8 teams'],[16,'16 teams'],[32,'32 teams'],[0,'No limit']];
 const tour=id=>(S.tours||[]).find(t=>t.id===id)||null;
@@ -3276,6 +3291,9 @@ const T_ICON={trophy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
    Padel: 0, 15, 30, 40, then advantage (or golden point), games, sets to 6 with a tiebreak to 7 at 6–6 (pro set: 9, tiebreak at 8–8).
    Pickleball: rally scoring, every rally wins a point, games to 11 (or 15) won by 2. */
 function tScore(sport,fmt,pts,golden){
+ if(/^am\d+$/.test(fmt||'')){const N=+fmt.slice(2);let a=0,b=0;for(const w of pts||[]){if(a+b>=N)break;w==='a'?a++:b++}
+  const done=a+b>=N,winner=done?(a>b?'a':b>a?'b':'draw'):null,n=a+b;
+  return{sets:done?[[a,b]]:[],g:[a,b],p:['',''],tb:false,sa:0,sb:0,winner,serve:Math.floor(n/4)%2?'b':'a',deuce:false,done,P:false,am:N,left:N-n}}
  const P=sport==='padel',need=fmt==='bo3'?2:1,sets=[];let ga=0,gb=0,pa=0,pb=0,tb=false,sa=0,sb=0,winner=null,games=0,serve='a',tbFirst='a',tbN=0;
  const to=P?(fmt==='pro9'?9:6):(fmt==='g15'?15:11),tbAt=fmt==='pro9'?8:6;
  const endSet=()=>{sets.push([ga,gb]);if(ga>gb)sa++;else sb++;ga=gb=0;if(sa>=need)winner='a';else if(sb>=need)winner='b'};
@@ -3300,18 +3318,25 @@ function tLine(T,m,mine){const r=tRes(T,m),flip=mine==='b',f=x=>flip?[x[1],x[0]]
  return parts.join(', ')}
 
 /* ---------- Who can enter a division ---------- */
-function tElig(T,d,uids){
+/* Players one level away from a division can ask to join; staff decide */
+const tTierAt=(T,u)=>{const l=lvlOf(T.sport,u);return l==null?null:tierOf(T.sport,l)};
+const tNear=(a,b)=>Math.abs(TIER_KEYS.indexOf(a)-TIER_KEYS.indexOf(b))===1;
+const tOff=(T,d,uids)=>d.lvl==='open'?[]:uids.filter(Boolean).map(u=>({u,t:tTierAt(T,u)})).filter(x=>x.t&&x.t!==d.lvl);
+const tOffChip=(T,d,e)=>tOff(T,d,tNamed(e)).map(x=>`<span class="chip warn toff">${tNamed(e).length>1?esc(first(prof(x.u)))+': ':''}${lbl(TIERS,x.t)} player</span>`).join('');
+function tOffAsk({title,text,sub,yes,go}){openSheet(`<h2>${title}</h2><p style="margin-top:10px">${text}</p>${sub?`<p class="small muted" style="margin-top:8px">${sub}</p>`:''}
+ <button class="btn brand wide" id="offYes" style="margin-top:16px">${yes}</button><button class="btn ghost wide" id="offNo" style="margin-top:8px">Cancel</button>`,bg=>{bg.querySelector('#offYes').onclick=go;bg.querySelector('#offNo').onclick=()=>closeSheet()})}
+function tElig(T,d,uids,soft){
  for(const u of uids){const p=prof(u);if(!p)return'Player not found.';const n=u===S.uid?'You':first(p);
   if(!inVenue(p,T.venue))return`${n} ${u===S.uid?'aren’t':'isn’t'} a member of this club.`;
   if(d.cat==='men'&&p.gender!=='male')return`This division is for men.`;
   if(d.cat==='women'&&p.gender!=='female')return`This division is for women.`;
   if(d.lvl!=='open'){const l=lvlOf(T.sport,u);if(l==null)return`${n} need${u===S.uid?'':'s'} a ${SPORTS[T.sport].name.toLowerCase()} level first.`;
-   if(tierOf(T.sport,l)!==d.lvl)return`${n} ${u===S.uid?'are':'is'} ${lbl(TIERS,tierOf(T.sport,l))}, and this division is ${lbl(T_LVL,d.lvl)}.`}
+   if(tierOf(T.sport,l)!==d.lvl&&!(soft&&tNear(tierOf(T.sport,l),d.lvl)))return`${n} ${u===S.uid?'are':'is'} ${lbl(TIERS,tierOf(T.sport,l))}, and this division is ${lbl(T_LVL,d.lvl)}.`}
   if(tEntries(T.id,d.id).some(e=>e.status!=='out'&&tNamed(e).includes(u)))return`${n} ${u===S.uid?'are':'is'} already in this division.`}
  if(d.cat==='mixed'&&uids.length===2){const g=uids.map(u=>(prof(u)||{}).gender);if(!(g.includes('male')&&g.includes('female')))return'Mixed teams are one man and one woman.'}
  return'';
 }
-const tFull=(T,d)=>d.max>0&&tEntries(T.id,d.id).filter(e=>e.status==='in'||e.status==='requested'||e.status==='invited').reduce((n,e)=>n+(e.b?1:.5),0)>=d.max;
+const tFull=(T,d)=>d.max>0&&tEntries(T.id,d.id).filter(e=>e.status==='in'||e.status==='requested'||e.status==='invited').reduce((n,e)=>n+(isAm(T)?(e.b?2:1):(e.b?1:.5)),0)>=d.max;
 
 /* ---------- Saving ---------- */
 async function tSaveTour(T,isNew){try{await Store.saveTour(T,isNew);upsert(S.tours,T);return true}catch(e){toast(e.code==='denied'?'Only owners and admins at this club can do that.':'Could not save. Check your connection and try again.');return false}}
@@ -3357,8 +3382,65 @@ function tTable(T,d){
  return Object.values(rows).sort((x,y)=>y.w-x.w||(y.sw-y.sl)-(x.sw-x.sl)||(y.gw-y.gl)-(x.gw-x.gl)||tTeamName(tNamed(x.e)).localeCompare(tTeamName(tNamed(y.e))));
 }
 function tChampion(T,d){if(d.stage!=='done')return null;
+ if(isAm(T)){const t=tAmTable(T,d);return t[0]?[t[0].u]:null}
  const ms=tMatches(T.id,d.id);if(T.format==='league'){const t=tTable(T,d);return t[0]?tNamed(t[0].e):null}
  const f=ms.find(m=>m.kind==='ko'&&m.round===m.rounds);return f&&f.winner?f['t'+f.winner]:null}
+
+/* ---------- Americano and Mexicano ---------- */
+const tAmPlayers=(T,d)=>tSolos(T.id,d.id).map(e=>e.a);
+const tMale=u=>(prof(u)||{}).gender==='male';
+const tKey=(x,y)=>x<y?x+'|'+y:y+'|'+x;
+/* Who plays this round: players who have sat out most get first go. Mixed needs as many men as women */
+function tAmPick(d,order,sitC){const by=l=>shuffle(l).sort((x,y)=>(sitC[y]||0)-(sitC[x]||0));let chosen;
+ if(d.cat==='mixed'){const M=by(order.filter(tMale)),F=by(order.filter(u=>!tMale(u))),k=Math.min(Math.floor(Math.min(M.length,F.length)/2)*2,2*(+d.courts||T_AMMAXC));chosen=new Set([...M.slice(0,k),...F.slice(0,k)])}
+ else{const L=by(order);chosen=new Set(L.slice(0,Math.min(Math.floor(L.length/4),+d.courts||T_AMMAXC)*4))}
+ return{play:order.filter(u=>chosen.has(u)),sit:order.filter(u=>!chosen.has(u))}}
+/* How many times each player has sat out so far */
+function tAmSits(players,ms){const c={},rs=[...new Set(ms.map(m=>m.round))];rs.forEach(r=>{const inR=new Set(ms.filter(m=>m.round===r).flatMap(m=>[...m.ta,...m.tb]));players.forEach(u=>{if(!inR.has(u))c[u]=(c[u]||0)+1})});return c}
+function tAmMatches(T,d,r,pairs,sit){const at=new Date().toISOString();return pairs.map(([ta,tb],i)=>({id:`tm_${T.id}_${d.id}_a${r}_${i}`,tour:T.id,venue:T.venue,div:d.id,kind:'am',round:r,i,court:i+1,ta,tb,pts:[],status:'ready',sit:i===0?sit:undefined,at}))}
+/* Americano: the whole schedule, mixing partners and opponents as much as possible */
+function tAmSchedule(T,d,players){const P={},O={},out=[];
+ for(let r=1,RR=tAmR(T,d,players.length);r<=RR;r++){const {play,sit}=tAmPick(d,players,tAmSits(players,out));if(play.length<4)break;let best=null,bc=1e9;
+  for(let t=0;t<250;t++){let cost=0;const pairs=[];
+   const opts=d.cat==='mixed'?(()=>{const M=shuffle(play.filter(tMale)),F=shuffle(play.filter(u=>!tMale(u))),g=[];for(let i=0;i+1<M.length;i+=2)g.push([[[M[i],F[i]],[M[i+1],F[i+1]]],[[M[i],F[i+1]],[M[i+1],F[i]]]]);return g})()
+    :(()=>{const L=shuffle(play),g=[];for(let i=0;i+3<L.length;i+=4){const [a,b,c,e]=L.slice(i,i+4);g.push([[[a,b],[c,e]],[[a,c],[b,e]],[[a,e],[b,c]]])}return g})();
+   for(const g of opts){let bo=null,bv=1e9;for(const [x,y] of g){const v=(P[tKey(...x)]||0)*10+(P[tKey(...y)]||0)*10+x.reduce((n,u)=>n+y.reduce((k,w)=>k+(O[tKey(u,w)]||0),0),0);if(v<bv){bv=v;bo=[x,y]}}cost+=bv;pairs.push(bo)}
+   if(cost<bc){bc=cost;best=pairs}if(!bc)break}
+  best.forEach(([x,y])=>{P[tKey(...x)]=(P[tKey(...x)]||0)+1;P[tKey(...y)]=(P[tKey(...y)]||0)+1;x.forEach(u=>y.forEach(w=>O[tKey(u,w)]=(O[tKey(u,w)]||0)+1))});
+  out.push(...tAmMatches(T,d,r,best,sit))}
+ return out}
+/* Mexicano: one round from a ranked list. In each group of four, 1st & 4th play 2nd & 3rd */
+function tMexRound(T,d,r,order,sitC){const {play,sit}=tAmPick(d,order,sitC),pairs=[];
+ if(d.cat==='mixed'){const M=play.filter(tMale),F=play.filter(u=>!tMale(u));for(let i=0;i+1<M.length;i+=2)pairs.push([[M[i],F[i+1]],[M[i+1],F[i]]])}
+ else for(let i=0;i+3<play.length;i+=4){const [a,b,c,e]=play.slice(i,i+4);pairs.push([[a,e],[b,c]])}
+ return pairs.length?tAmMatches(T,d,r,pairs,sit):[]}
+/* Points table: most points won, then wins, then points difference */
+function tAmTable(T,d,all,players){all=(all||S.tmatches||[]).filter(m=>m.tour===T.id&&m.div===d.id);players=players||tAmPlayers(T,d);
+ const rows={},row=u=>rows[u]||(rows[u]={u,p:0,w:0,pf:0,pa:0});players.forEach(row);all.forEach(m=>[...m.ta,...m.tb].forEach(row));
+ all.filter(m=>m.status==='done').forEach(m=>{const r=tScore(T.sport,T.mfmt,m.pts,T.golden),[a,b]=r.g;
+  m.ta.forEach(u=>{const x=row(u);x.p++;x.pf+=a;x.pa+=b;x.w+=r.winner==='a'?1:r.winner==='draw'?.5:0});
+  m.tb.forEach(u=>{const x=row(u);x.p++;x.pf+=b;x.pa+=a;x.w+=r.winner==='b'?1:r.winner==='draw'?.5:0})});
+ return Object.values(rows).sort((x,y)=>y.pf-x.pf||y.w-x.w||(y.pf-y.pa)-(x.pf-x.pa)||tShort(x.u).localeCompare(tShort(y.u)))}
+/* Mexicano: when a round is finished, pair the next one from the table */
+function tAmNext(T,d,all,players){if(T.format!=='mexicano')return[];all=(all||S.tmatches||[]).filter(m=>m.tour===T.id&&m.div===d.id);players=players||tAmPlayers(T,d);
+ const r=Math.max(0,...all.map(m=>m.round));if(!r||r>=tAmR(T,d,players.length)||all.some(m=>m.round===r&&m.status!=='done'))return[];
+ return tMexRound(T,d,r+1,tAmTable(T,d,all,players).map(x=>x.u).filter(u=>players.includes(u)),tAmSits(players,all))}
+function tAmView(T,d){const rows=tAmTable(T,d),ms=tMatches(T.id,d.id).sort((a,b)=>a.round-b.round||a.i-b.i),R=Math.max(0,...ms.map(m=>m.round));
+ let rounds='';for(let r=1;r<=R;r++){const rm=ms.filter(m=>m.round===r),sit=(rm[0]&&rm[0].sit)||[];
+  rounds+=`<div class="sec sm"><h3>Round ${r}</h3><span class="small muted">${rm.every(m=>m.status==='done')?'Finished':rm.some(m=>m.status==='live')?'Playing now':'Up next'}</span></div><div class="list">${rm.map(m=>tMatchRow(T,m)).join('')}</div>${sit.length?`<p class="tiny muted" style="margin-top:6px">Sitting out: ${sit.map(u=>esc(u===S.uid?'You':tShort(u))).join(', ')}</p>`:''}`}
+ const more=T.format==='mexicano'&&R<tAmR(T,d)&&d.stage!=='done'?`<p class="small muted" style="margin-top:12px">Round ${R+1} is paired from the table when round ${R} ends. ${tAmR(T,d)} rounds in all.</p>`:'';
+ return`<div class="sec"><h2>Leaderboard</h2><span class="small muted">Points won, then wins</span></div>
+  <div class="card ttable rv"><table><thead><tr><th>#</th><th class="l">Player</th><th>P</th><th>W</th><th>Pts</th><th>+/−</th></tr></thead><tbody>
+  ${rows.map((x,i)=>`<tr class="${x.u===S.uid?'me':''}"><td>${i+1}</td><td class="l"><button type="button" class="tpn" data-act="player" data-v="${esc(x.u)}">${esc(x.u===S.uid?'You':tShort(x.u))}</button></td><td>${x.p}</td><td>${x.w}</td><td><b>${x.pf}</b></td><td>${x.pf-x.pa>0?'+':''}${x.pf-x.pa}</td></tr>`).join('')}</tbody></table></div>
+  <div class="sec"><h2>Rounds</h2><span class="small muted">Partners change every round</span></div>${rounds}${more}`}
+/* Quick score: type the final points instead of tapping every point */
+function tAmScoreSheet(m){const T=tour(m.tour);if(!T)return;const N=+T.mfmt.slice(2),r=tRes(T,m);
+ openSheet(`<h2>Enter the final score</h2><p class="muted small">${N} points in all. Type one side and the other fills in.</p>
+  <div class="tgrid2" style="margin-top:14px"><div><label for="amA">${esc(tTeamName(m.ta,true))}</label><input id="amA" type="number" inputmode="numeric" min="0" max="${N}" value="${r.g[0]}"></div><div><label for="amB">${esc(tTeamName(m.tb,true))}</label><input id="amB" type="number" inputmode="numeric" min="0" max="${N}" value="${N-r.g[0]}"></div></div>
+  <p class="ferr" id="amErr"></p><button class="btn brand wide" id="amGo">Save result</button>`,bg=>{const A=bg.querySelector('#amA'),B=bg.querySelector('#amB');
+  A.oninput=()=>{const v=Math.max(0,Math.min(N,parseInt(A.value,10)||0));B.value=N-v};B.oninput=()=>{const v=Math.max(0,Math.min(N,parseInt(B.value,10)||0));A.value=N-v};
+  bg.querySelector('#amGo').onclick=async()=>{const a=parseInt(A.value,10),b=parseInt(B.value,10);if(!(a>=0&&b>=0&&a+b===N))return bg.querySelector('#amErr').textContent=`The two scores must add up to ${N}.`;
+   const nm=Object.assign({},m,{status:'live',start:m.start||new Date().toISOString(),ref:S.uid,pts:[...Array(a).fill('a'),...Array(b).fill('b')]});if(!await tSaveMatches([nm]))return;view.tref=m.id;await tFinish()}})}
 
 /* ---------- Views ---------- */
 let tAuto=null;
@@ -3398,7 +3480,7 @@ function vTourOne(T){
  const d=tDiv(T,view.tdiv),staff=canRunTour();
  const head=`<div class="tback"><button class="btn link small" data-act="tourBack">‹ All tournaments</button>${st==='live'?`<span class="tright2"><button class="ibtn sm" data-act="tourRefresh" aria-label="Refresh scores" title="Refresh scores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button><button class="chip tauto${tAutoOn()?' on':''}" data-act="tourAuto">Auto-refresh ${tAutoOn()?'on':'off'}</button></span>`:''}</div>
   <div class="card hero tourhero rv"><span class="tglow" aria-hidden="true"></span><p class="eyebrow">${esc(VEN().name)} · ${SPORTS[T.sport].name}</p><h1>${esc(T.name)}</h1>
-  <div class="tfacts"><span><i>When</i><b>${esc(dateLabel(T.date))}${T.time?', '+esc(T.time):''}</b></span><span><i>Entry fee</i><b>${tFee(T)}${+T.fee>0?' <small>per player</small>':''}</b></span><span><i>Format</i><b>${lbl(T_FMT,T.format)}</b></span><span><i>Matches</i><b>${lbl(T_MATCH[T.sport],T.mfmt)}${T.sport==='padel'&&T.golden?', golden point':''}</b></span><span><i>Entry</i><b>${T.vis==='invite'?'Invite only':T.approve?'Open, staff accept':'Open'}</b></span></div>
+  <div class="tfacts"><span><i>When</i><b>${esc(dateLabel(T.date))}${T.time?', '+esc(T.time):''}</b></span><span><i>Entry fee</i><b>${tFee(T)}${+T.fee>0?' <small>per player</small>':''}</b></span><span><i>Format</i><b>${lbl(T_FMT,T.format)}</b></span><span><i>Matches</i><b>${isAm(T)?`${T.mfmt.slice(2)} points a match${T.amr?`, ${+T.amr} rounds`:''}`:`${lbl(T_MATCH[T.sport],T.mfmt)}${T.sport==='padel'&&T.golden?', golden point':''}`}</b></span><span><i>Entry</i><b>${T.vis==='invite'?'Invite only':T.approve?'Open, staff accept':'Open'}</b></span></div>
   ${T.note?`<p class="small" style="margin-top:12px;white-space:pre-line">${esc(T.note)}</p>`:''}
   ${+T.fee>0?`<p class="tiny muted" style="margin-top:8px">Pay the entry fee at the club.</p>`:''}
   ${staff?`<div class="cta"><button class="btn ghost sm" data-act="tourEdit">Edit details</button>${st==='signup'?`<button class="btn ghost sm" data-act="tourInvite">Invite players</button>`:''}</div>`:''}</div>
@@ -3409,13 +3491,14 @@ function vTourOne(T){
 function tYouCard(T){
  const mine=tMyEntries(T);if(!mine.length){if(tStage(T)!=='signup')return'';
   const open=T.vis!=='invite'&&(T.divs||[]).some(d=>d.stage==='signup');
-  return open?`<div class="card tyoucard rv"><div><b>Want to play?</b><p class="small muted">Sign up with a partner, or on your own and staff pair you before the draw.</p></div><button class="btn brand" data-act="tourJoin">Sign up</button></div>`
+  return open?`<div class="card tyoucard rv"><div><b>Want to play?</b><p class="small muted">${isAm(T)?'Sign up on your own. Your partner changes every round.':'Sign up with a partner, or on your own and staff pair you before the draw.'}</p></div><button class="btn brand" data-act="tourJoin">Sign up</button></div>`
    :T.vis==='invite'?`<div class="card tyoucard rv"><div><b>Invite only</b><p class="small muted">Only invited players can enter. You can still follow every match here.</p></div></div>`:''}
  return mine.map(e=>{const d=tDiv(T,e.div),p=e.a===S.uid?e.b:e.a,iAmA=e.a===S.uid,acc=e.acc||{};let s,a='';
   if(e.status==='invited'&&!acc[S.uid]){s=`You’re invited to play ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}.`;a=`<button class="btn brand sm" data-act="tourAccept" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${e.id}">Decline</button>`}
   else if(e.b&&!iAmA&&acc[S.uid]!==true){s=`${esc(slotName({uid:e.a}))} asked you to be their partner in ${esc(tDivLabel(d))}.`;a=`<button class="btn brand sm" data-act="tourPartnerYes" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${e.id}">Decline</button>`}
   else if(e.b&&acc[p]!==true){s=`Waiting for ${esc(slotName({uid:p}))} to confirm as your partner in ${esc(tDivLabel(d))}.`}
   else if(e.status==='requested'){s=`You asked to join ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}. Waiting for the club to accept.`}
+  else if(e.status==='in'&&!e.b&&isAm(T)){s=`You’re in ${esc(tDivLabel(d))}. Your partner changes every round.`}
   else if(e.status==='in'&&!e.b){s=`You’re in ${esc(tDivLabel(d))} on your own. Staff pair you with a partner before the draw.`;if(d&&d.stage==='signup')a=`<button class="btn ghost sm" data-act="tourAddPartner" data-v="${e.id}">Add a partner</button>`}
   else{s=`You’re in ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}.`}
   if(d&&d.stage==='signup'&&!a.includes('Decline'))a+=`<button class="btn link small" data-act="tourWithdraw" data-v="${e.id}">Pull out</button>`;
@@ -3423,6 +3506,16 @@ function tYouCard(T){
 }
 function tDivPanel(T,d){
  const staff=canRunTour();
+ if(d.stage==='signup'&&isAm(T)){const es=tEntries(T.id,d.id),pl=tSolos(T.id,d.id),req=es.filter(e=>e.status==='requested'),inv=es.filter(e=>e.status==='invited'),n=pl.length;
+  const row=(e,extra='')=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${extra}</span></div>`;
+  const okN=d.cat==='mixed'?Math.min(pl.filter(e=>tMale(e.a)).length,pl.filter(e=>!tMale(e.a)).length)>=2:n>=4;
+  return`<div class="sec"><h2>${esc(tDivLabel(d))}</h2><span class="small muted">${n} player${n===1?'':'s'}${d.max?` of ${d.max}`:''}${d.courts?` · ${d.courts} court${d.courts>1?'s':''}`:''}</span></div>
+   ${staff?`<div class="card tstaff rv"><div class="lhead"><span class="eyebrow">Run this division</span><span class="chip admin">Staff</span></div>
+    <p class="small muted">${okN?`${n} players ready. ${d.cat==='mixed'?'Each team is a man and a woman.':n%4?`${n%4} sit${n%4===1?'s':''} out each round, taking turns.`:'Everyone plays every round.'}`:d.cat==='mixed'?'You need at least 2 men and 2 women to make the draw.':'You need at least 4 players to make the draw.'}</p>
+    <div class="cta"><button class="btn brand sm" data-act="tourDraw" data-v="${d.id}"${okN?'':' disabled'}>Make the draw</button></div></div>`:''}
+   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${tOffChip(T,d,e)}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
+   <div class="sec sm"><h3>Players in</h3></div><div class="list">${pl.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')||`<div class="card empty">No players yet.</div>`}</div>
+   ${staff&&inv.length?`<div class="sec sm"><h3>Invited, no answer yet</h3></div><div class="list">${inv.map(e=>row(e)).join('')}</div>`:''}`}
  if(d.stage==='signup'){
   const es=tEntries(T.id,d.id),teams=tTeams(T.id,d.id),solos=tSolos(T.id,d.id),wait=es.filter(e=>e.status!=='out'&&!tReady(e)&&e.status!=='requested'&&e.status!=='invited'),req=es.filter(e=>e.status==='requested'),inv=es.filter(e=>e.status==='invited');
   const row=(e,extra='')=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${extra}</span></div>`;
@@ -3430,16 +3523,16 @@ function tDivPanel(T,d){
    ${staff?`<div class="card tstaff rv"><div class="lhead"><span class="eyebrow">Run this division</span><span class="chip admin">Staff</span></div>
     <p class="small muted">${teams.length<2?'You need at least 2 teams to make the draw.':`${teams.length} teams ready${solos.length?`, plus ${solos.length} player${solos.length===1?'':'s'} on their own to pair first`:''}.`}</p>
     <div class="cta">${solos.length>1?`<button class="btn ghost sm" data-act="tourPair" data-v="${d.id}">Pair solo players</button>`:''}<button class="btn brand sm" data-act="tourDraw" data-v="${d.id}"${teams.length<2?' disabled':''}>Make the draw</button></div></div>`:''}
-   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${e.b&&!(e.acc||{})[e.b]?'<span class="tiny muted">Partner hasn’t confirmed yet</span>':''}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
+   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${tOffChip(T,d,e)}${e.b&&!(e.acc||{})[e.b]?'<span class="tiny muted">Partner hasn’t confirmed yet</span>':''}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
    <div class="sec sm"><h3>Teams in</h3></div><div class="list">${teams.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')||`<div class="card empty">No teams yet.</div>`}</div>
    ${solos.length?`<div class="sec sm"><h3>On their own, to be paired</h3></div><div class="list">${solos.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')}</div>`:''}
    ${wait.length?`<div class="sec sm"><h3>Waiting for a partner to confirm</h3></div><div class="list">${wait.map(e=>row(e)).join('')}</div>`:''}
    ${staff&&inv.length?`<div class="sec sm"><h3>Invited, no answer yet</h3></div><div class="list">${inv.map(e=>row(e)).join('')}</div>`:''}`;
  }
  const champ=tChampion(T,d),ms=tMatches(T.id,d.id),live=ms.filter(m=>m.status==='live');
- return`${champ?`<div class="card tchamp rv"><span class="tci big">${T_ICON.trophy}</span><div><p class="eyebrow">${esc(tDivLabel(d))} champions</p><h2>${esc(tTeamName(champ))}</h2></div></div>`:''}
+ return`${champ?`<div class="card tchamp rv"><span class="tci big">${T_ICON.trophy}</span><div><p class="eyebrow">${esc(tDivLabel(d))} ${champ&&champ.length===1?'champion':'champions'}</p><h2>${esc(tTeamName(champ))}</h2></div></div>`:''}
   ${live.length?`<div class="sec"><h2>${T_ICON.live} Playing now</h2></div><div class="list">${live.map(m=>tMatchRow(T,m)).join('')}</div>`:''}
-  ${T.format==='league'?tLeagueView(T,d):tBracket(T,d)}`;
+  ${isAm(T)?tAmView(T,d):T.format==='league'?tLeagueView(T,d):tBracket(T,d)}`;
 }
 function tTeamAv(uids){return`<span class="tav">${uids.map(u=>avHTML(prof(u))).join('')}</span>`}
 function tTeamLv(T,uids){const ls=uids.map(u=>lvlOf(T.sport,u)).filter(x=>x!=null);return ls.length?`<span class="tiny muted">Level ${ls.map(x=>fmtL(x)).join(' + ')}</span>`:''}
@@ -3473,7 +3566,7 @@ function tCourt(T,m,r){const P=T.sport==='padel',nA=tTeamName(m.ta,true),nB=tTea
   <span class="tside a">${sv==='a'?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m.ta,true)}</span><span class="tside b">${sv==='b'?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m.tb,true)}</span></div>`}
 function vRef(m){
  const T=tour(m.tour),d=tDiv(T,m.div),r=tRes(T,m),staff=canRunTour(),live=m.status==='live',R=m.rounds;
- const title=m.kind==='ko'?koRoundName(m.round,R):`League · round ${m.round}`;
+ const title=m.kind==='ko'?koRoundName(m.round,R):m.kind==='am'?`Round ${m.round} · Court ${m.court||m.i+1}`:`League · round ${m.round}`;
  const cols=r.sets.length+(r.done?0:1);
  const sc=s=>{const k=s==='a'?0:1;return`<div class="sbr${m.winner===s?' win':''}${r.serve===s&&live?' srv':''}"><span class="sbn">${r.serve===s&&live?`<i class="tsv">${T_ICON.ball}</i>`:''}${tNameBtns(m['t'+s])}</span>${r.sets.map(x=>`<span class="sbs${x[k]>x[1-k]?' won':''}">${x[k]}</span>`).join('')}${r.done?'':`<span class="sbs cur">${r.g[k]}</span><span class="sbp">${r.P?r.p[k]:''}</span>`}</div>`};
  const mins=m.start?Math.max(0,Math.round(((m.end?new Date(m.end):new Date())-new Date(m.start))/6e4)):0;
@@ -3481,18 +3574,20 @@ function vRef(m){
  <div class="card tref rv"><div class="trefhead"><div><p class="eyebrow">${esc(tDivLabel(d))} · ${esc(title)}</p><b>${live?`${T_ICON.live} Live`:m.status==='done'?'Finished':m.status==='ready'?'Ready to start':'Waiting for teams'}</b></div><span class="num muted small">${m.start?`${mins} min`:''}</span></div>
   ${tCourt(T,m,r)}
   <div class="sboard" style="--cols:${cols}">${sc('a')}${sc('b')}</div>
+  ${r.am&&live?`<p class="tiny tnote">${r.left} of ${r.am} points left. Every point counts for each player.</p>`:''}${staff&&r.am&&(m.status==='ready'||live)?`<button class="btn ghost wide" style="margin-top:10px" data-act="tourAmScore" data-v="${esc(m.id)}">Enter the final score</button>`:''}
   ${r.tb?`<p class="tiny tnote">Tiebreak: first to 7, won by 2.</p>`:r.deuce&&T.golden?`<p class="tiny tnote">Golden point: the next point wins the game.</p>`:''}
   ${staff&&m.status==='ready'?`<button class="btn ball wide" style="margin-top:14px" data-act="tourStart" data-v="${esc(m.id)}">Start match and referee</button><p class="tiny muted" style="margin-top:8px;text-align:center">${esc(tTeamName(m.ta,true))} serve first.</p>`:''}
   ${staff&&live?`<div class="trefbtns"><button class="tpt" data-act="tourPt" data-v="a"><span>Point</span><b>${esc(tTeamName(m.ta,true))}</b></button><button class="tpt" data-act="tourPt" data-v="b"><span>Point</span><b>${esc(tTeamName(m.tb,true))}</b></button></div>
    <button class="btn ghost wide" style="margin-top:10px" data-act="tourUndo"${(m.pts||[]).length?'':' disabled'}>Undo last point</button>`:''}
-  ${m.status==='done'?`<p class="small" style="margin-top:12px"><b>${esc(tTeamName(m['t'+m.winner]))}</b> won ${r.sets.map(s=>m.winner==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}. The result counts in levels and rankings.</p>`:''}
+  ${m.status==='done'&&m.winner==='draw'?`<p class="small" style="margin-top:12px">A draw, ${r.sets.map(x=>x.join('–')).join(', ')}. The result counts in levels and rankings.</p>`:''}${m.status==='done'&&m.winner!=='draw'?`<p class="small" style="margin-top:12px"><b>${esc(tTeamName(m['t'+m.winner]))}</b> won ${r.sets.map(s=>m.winner==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}. The result counts in levels and rankings.</p>`:''}
   ${!staff&&m.status!=='done'?`<p class="tiny muted" style="margin-top:12px">Scores update live as the referee taps each point.</p>`:''}</div>`;
 }
 
 /* ---------- Creating a tournament ---------- */
-function tDraft(){const sp=vSports()[0];return{name:'',sport:sp,date:addDays(today(),7),time:'10:00',fee:'',note:'',vis:'open',approve:true,format:'knockout',mfmt:T_MATCH[sp][0][0],golden:true,divs:[{id:'d1',lvl:'intermediate',cat:'mixed',max:8}]}}
+function tDraft(){const sp=vSports()[0];return{name:'',sport:sp,date:addDays(today(),7),time:'10:00',fee:'',note:'',vis:'open',approve:true,format:'knockout',mfmt:T_MATCH[sp][0][0],golden:true,divs:[{id:'d1',lvl:'intermediate',cat:'mixed',max:8,courts:2,amr:0}]}}
+const tAmAutoLbl=(x,D)=>{const r=tAmAuto(+x.max||0,x.courts);return r?`Auto: ${r}`:'Auto'};
 function vTourNew(){const D=view.tnew,ed=!!D.id,sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!D[k]}" data-act="tnSw" data-v="${k}" aria-label="${esc(t)}"></button></div>`;
- after=()=>{qsa('[data-tn]').forEach(el=>el.oninput=el.onchange=()=>{const k=el.dataset.tn;if(k.includes('.')){const [i,f]=k.split('.');D.divs[+i][f]=f==='max'?+el.value:el.value}else D[k]=el.value})};
+ after=()=>{qsa('[data-tn]').forEach(el=>el.oninput=el.onchange=()=>{const k=el.dataset.tn;if(k.includes('.')){const [i,f]=k.split('.');D.divs[+i][f]=['max','courts','amr'].includes(f)?+el.value:el.value;if(isAm(D)){const x=D.divs[+i],pl=$('tnPlan'+i),ao=document.querySelector(`#tnRd${i} option[value="0"]`);if(pl)pl.textContent=tAmPlan(+x.max||0,x.courts,x.amr,+D.mfmt.slice(2),D.format,1);if(ao)ao.textContent=tAmAutoLbl(x,D)}}else D[k]=el.value})};
  const opt=(arr,cur)=>arr.map(([v,n])=>`<option value="${v}"${String(v)===String(cur)?' selected':''}>${esc(n)}</option>`).join('');
  return`<div class="tback"><button class="btn link small" data-act="tnCancel">‹ ${ed?'Back to the tournament':'Tournaments'}</button></div>
  <div class="card hero tourhero rv"><span class="tglow" aria-hidden="true"></span><p class="eyebrow">${esc(VEN().name)}</p><h1>${ed?'Edit tournament':'Create a tournament'}</h1><p class="muted" style="margin-top:6px">${ed?'Changes show to everyone straight away.':'Every member of the club gets a message when an open tournament is created.'}</p></div>
@@ -3509,13 +3604,17 @@ function vTourNew(){const D=view.tnew,ed=!!D.id,sw=(k,t,s)=>`<div class="setline
   ${D.vis==='open'?sw('approve','Staff accept each sign-up','Owners and admins check every entry before it’s in.'):''}
  </div>
  ${ed?'':`<div class="card tform rv"><h3>Format</h3>
-  ${seg('tnfmt','Format',T_FMT,D.format,'tnFmt')}
-  <p class="small muted" style="margin:8px 0 10px">${D.format==='knockout'?'Lose and you’re out. Byes are added if the number of teams isn’t a power of 2.':'Every team plays every other team once. Most wins tops the table.'}</p>
-  <label>Each match</label>${seg('tnm','Match format',T_MATCH[D.sport],D.mfmt,'tnMfmt')}
-  ${D.sport==='padel'?sw('golden','Golden point','At 40–40 the next point wins the game, instead of playing advantage.'):`<p class="tiny muted" style="margin-top:8px">Rally scoring: every rally wins a point, won by 2.</p>`}
+  <div class="tfmtg" role="radiogroup" aria-label="Format">${T_FMT.map(([v,n])=>`<button type="button" class="opt" role="radio" aria-checked="${v===D.format}" data-act="tnFmt" data-v="${v}"><span class="ot"><b>${n}</b><span>${{knockout:'Lose and you’re out',league:'Every team plays every team',americano:'Partners rotate every round',mexicano:'Paired by the standings'}[v]}</span></span></button>`).join('')}</div>
+  <p class="small muted" style="margin:10px 0 10px">${{knockout:'Teams of two. Lose and you’re out. Byes are added if the number of teams isn’t a power of 2.',league:'Teams of two. Every team plays every other team once. Most wins tops the table.',americano:'Players sign up on their own. Each round you play with a new partner against new opponents, and every point you win counts for you. Most points wins.',mexicano:'Players sign up on their own. Round 1 is random or by level, then each round pairs players from the table: 1st and 4th play 2nd and 3rd, and so on. Most points wins.'}[D.format]}</p>
+  ${isAm(D)?`<label>Points per match</label>${seg('tnm','Points per match',T_AMP,D.mfmt,'tnMfmt')}<p class="tiny muted" style="margin-top:8px">Every rally is a point. The match ends when the points are all played, e.g. 15–9.</p>`
+  :`<label>Each match</label>${seg('tnm','Match format',T_MATCH[D.sport],D.mfmt,'tnMfmt')}
+  ${D.sport==='padel'?sw('golden','Golden point','At 40–40 the next point wins the game, instead of playing advantage.'):`<p class="tiny muted" style="margin-top:8px">Rally scoring: every rally wins a point, won by 2.</p>`}`}
  </div>
  <div class="card tform rv"><h3>Divisions</h3><p class="small muted" style="margin-bottom:6px">Run several at the same time, each with its own draw.</p>
-  ${D.divs.map((x,i)=>`<div class="tdivrow"><div class="tgrid3"><div><label>Level</label><select data-tn="${i}.lvl">${opt(T_LVL,x.lvl)}</select></div><div><label>Players</label><select data-tn="${i}.cat">${opt(T_CAT,x.cat)}</select></div><div><label>Size</label><select data-tn="${i}.max">${opt(T_MAX,x.max)}</select></div></div>${D.divs.length>1?`<button class="btn link small" data-act="tnDivDel" data-v="${i}">Remove</button>`:''}</div>`).join('')}
+  ${D.divs.map((x,i)=>`<div class="tdivrow"><div class="tgrid3"><div><label>Level</label><select data-tn="${i}.lvl">${opt(T_LVL,x.lvl)}</select></div><div><label>Players</label><select data-tn="${i}.cat">${opt(T_CAT,x.cat)}</select></div>${isAm(D)?`<div><label for="tnMx${i}">Max players</label><input id="tnMx${i}" type="number" inputmode="numeric" min="4" max="${T_AMMAXP}" data-tn="${i}.max" value="${+x.max||''}"></div></div>
+   <div class="tgrid2"><div><label for="tnCt${i}">Courts available</label><input id="tnCt${i}" type="number" inputmode="numeric" min="1" max="${T_AMMAXC}" data-tn="${i}.courts" value="${+x.courts||''}"></div><div><label for="tnRd${i}">Rounds</label><select id="tnRd${i}" data-tn="${i}.amr"><option value="0">${tAmAutoLbl(x,D)}</option>${opt(T_ROUNDS,+x.amr||'')}</select></div></div>
+   <p class="tiny muted tamplan" id="tnPlan${i}">${tAmPlan(+x.max||0,x.courts,x.amr,+D.mfmt.slice(2),D.format,1)}</p>`
+  :`<div><label>Size</label><select data-tn="${i}.max">${opt(T_MAX,x.max)}</select></div></div>`}${D.divs.length>1?`<button class="btn link small" data-act="tnDivDel" data-v="${i}">Remove</button>`:''}</div>`).join('')}
   <button class="btn ghost sm" data-act="tnDivAdd" style="margin-top:8px">+ Add a division</button></div>`}
  <p class="ferr" id="tnErr"></p>
  <button class="btn brand wide" data-act="tnSave">${ed?'Save changes':D.vis==='open'?'Create and tell the club':'Create tournament'}</button>
@@ -3526,10 +3625,11 @@ async function tCreate(){
  D.name=(D.name||'').trim();if(D.name.length<3)return err('Give the tournament a name.');
  if(!D.date)return err('Choose a date.');
  const keys=D.divs.map(x=>x.lvl+'|'+x.cat);if(new Set(keys).size!==keys.length)return err('Two divisions are the same. Change the level or players of one.');
+ if(!D.id&&isAm(D)){if(D.divs.some(x=>!(+x.max>=4&&+x.max<=T_AMMAXP)))return err(`Max players must be between 4 and ${T_AMMAXP}.`);if(D.divs.some(x=>!(+x.courts>=1&&+x.courts<=T_AMMAXC)))return err(`Courts available must be between 1 and ${T_AMMAXC}.`)}
  if(D.id){const T=tour(D.id);if(!T)return;const nt=Object.assign({},T,{name:D.name,date:D.date,time:D.time,fee:+D.fee||0,note:(D.note||'').trim(),vis:D.vis,approve:D.vis==='open'&&!!D.approve});
   if(await tSaveTour(nt)){view.tnew=null;doneTick('Tournament updated');render()}return}
- const T={id:'t_'+rid(),venue:VID,name:D.name,sport:D.sport,date:D.date,time:D.time,fee:+D.fee||0,note:(D.note||'').trim(),vis:D.vis,approve:D.vis==='open'&&!!D.approve,format:D.format,mfmt:D.mfmt,golden:D.sport==='padel'&&!!D.golden,stage:'signup',
-  divs:D.divs.map((x,i)=>({id:'d'+(i+1),lvl:x.lvl,cat:x.cat,max:+x.max||0,stage:'signup'})),by:S.uid,at:new Date().toISOString()};
+ const T={id:'t_'+rid(),venue:VID,name:D.name,sport:D.sport,date:D.date,time:D.time,fee:+D.fee||0,note:(D.note||'').trim(),vis:D.vis,approve:D.vis==='open'&&!!D.approve,format:D.format,mfmt:D.mfmt,golden:D.sport==='padel'&&!!D.golden&&!isAm(D),stage:'signup',
+  divs:D.divs.map((x,i)=>Object.assign({id:'d'+(i+1),lvl:x.lvl,cat:x.cat,max:+x.max||0,stage:'signup'},isAm(D)?{courts:+x.courts,amr:+x.amr||0}:{})),by:S.uid,at:new Date().toISOString()};
  const b=document.querySelector('[data-act="tnSave"]');if(b){b.disabled=true;b.textContent='Creating…'}
  if(!await tSaveTour(T,true)){if(b){b.disabled=false;b.textContent='Create'}return}
  if(T.vis==='open'){const to=S.profiles.filter(p=>p.setup&&inVenue(p)&&p.id!==S.uid).map(p=>({to:p.id,kind:'tour_new',data:{tour:T.id,venue:VID}}));
@@ -3554,12 +3654,13 @@ function tPickSheet({title,sub,sport,exclude=[],multi,filter,onPick,all}){
 /* Sign up: pick a division, then a partner or none */
 function tJoinSheet(T,inviteEntry){
  const ds=(T.divs||[]).filter(d=>d.stage==='signup'&&(!inviteEntry||d.id===inviteEntry.div));
- const opts=ds.map(d=>{const why=inviteEntry?'':tElig(T,d,[S.uid])||(tFull(T,d)?'This division is full.':'');return{d,why}});
+ const opts=ds.map(d=>{const why=inviteEntry?'':tElig(T,d,[S.uid],1)||(tFull(T,d)?'This division is full.':'');return{d,why}});
  openSheet(`<h2>${inviteEntry?'Accept your invite':'Sign up'}</h2><p class="muted small">${esc(T.name)} · ${SPORTS[T.sport].name}${+T.fee>0?` · ${tFee(T)} per player, paid at the club`:''}</p>
-  ${inviteEntry?'':`<label style="margin-top:14px">Division</label><div class="tjoinl">${opts.map(({d,why},i)=>`<button type="button" class="opt${why?' locked':''}" role="radio" aria-checked="false" data-jd="${d.id}"${why?' disabled':''}><span class="ot"><b>${esc(tDivLabel(d))}</b><span>${why?esc(why):d.max?`${tTeams(T.id,d.id).length} of ${d.max} teams`:`${tTeams(T.id,d.id).length} teams so far`}</span></span></button>`).join('')}</div>`}
-  <label style="margin-top:14px">Partner</label>
+  ${inviteEntry?'':`<label style="margin-top:14px">Division</label><div class="tjoinl">${opts.map(({d,why},i)=>`<button type="button" class="opt${why?' locked':''}" role="radio" aria-checked="false" data-jd="${d.id}"${why?' disabled':''}><span class="ot"><b>${esc(tDivLabel(d))}</b><span>${why?esc(why):!inviteEntry&&tOff(T,d,[S.uid]).length?`You’re ${lbl(TIERS,tTierAt(T,S.uid))}. You can ask to join and the club decides.`:isAm(T)?(d.max?`${tSolos(T.id,d.id).length} of ${d.max} players`:`${tSolos(T.id,d.id).length} players so far`):d.max?`${tTeams(T.id,d.id).length} of ${d.max} teams`:`${tTeams(T.id,d.id).length} teams so far`}</span></span></button>`).join('')}</div>`}
+  ${isAm(T)?`<p class="small muted" style="margin-top:14px">${lbl(T_FMT,T.format)}: you sign up on your own and get a new partner every round.</p>`:''}
+  <div${isAm(T)?' hidden':''}><label style="margin-top:14px">Partner</label>
   <button type="button" class="btn ghost wide" id="jP">Choose a partner</button>
-  <button type="button" class="opt" role="radio" aria-checked="true" id="jSolo" style="margin-top:8px"><span class="ot"><b>I don’t have a partner yet</b><span>Staff pair you with someone before the draw</span></span></button>
+  <button type="button" class="opt" role="radio" aria-checked="true" id="jSolo" style="margin-top:8px"><span class="ot"><b>I don’t have a partner yet</b><span>Staff pair you with someone before the draw</span></span></button></div>
   <p class="ferr" id="jErr"></p><button class="btn brand wide" id="jGo" style="margin-top:6px">${inviteEntry?'Accept':T.approve?'Ask to join':'Sign up'}</button>`,bg=>{
   let div=inviteEntry?inviteEntry.div:(opts.find(o=>!o.why)||{}).d?.id||null,partner=null;
   const paint=()=>{qsa('[data-jd]',bg).forEach(b=>b.setAttribute('aria-checked',String(b.dataset.jd===div)));
@@ -3567,7 +3668,7 @@ function tJoinSheet(T,inviteEntry){
   qsa('[data-jd]',bg).forEach(b=>b.onclick=()=>{div=b.dataset.jd;partner=null;paint()});
   bg.querySelector('#jSolo').onclick=()=>{partner=null;paint()};
   bg.querySelector('#jP').onclick=()=>{const d=tDiv(T,div);if(!d)return;const keep={div};
-   tPickSheet({title:'Choose a partner',sub:`${esc(tDivLabel(d))}. They get a message to confirm.`,sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[S.uid,p.id].filter(u=>!inviteEntry||u!==S.uid)),onPick:id=>{partner=id;tJoinSheet2(T,inviteEntry,keep.div,partner)}})};
+   tPickSheet({title:'Choose a partner',sub:`${esc(tDivLabel(d))}. They get a message to confirm.`,sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[S.uid,p.id].filter(u=>!inviteEntry||u!==S.uid),1),onPick:id=>{partner=id;tJoinSheet2(T,inviteEntry,keep.div,partner)}})};
   paint();
   bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inviteEntry,div,partner);
   if(div==null&&!inviteEntry){bg.querySelector('#jGo').disabled=true;bg.querySelector('#jErr').textContent=opts.length?'You can’t enter any division here. See the reasons above.':'Sign-ups have closed.'}});
@@ -3576,19 +3677,26 @@ function tJoinSheet(T,inviteEntry){
 function tJoinSheet2(T,inv,div,partner){tJoinSheet(T,inv);setTimeout(()=>{const bg=$('sheetBg');if(!bg)return;const b=bg.querySelector(`[data-jd="${div}"]`);if(b)b.click();
  const pb=bg.querySelector('#jP'),sb=bg.querySelector('#jSolo');pb.textContent=`Partner: ${slotName({uid:partner})} · change`;sb.setAttribute('aria-checked','false');
  bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inv,div,partner);sb.onclick=()=>tJoinSheet(T,inv)},30)}
-async function tJoinGo(T,inv,div,partner){
+async function tJoinGo(T,inv,div,partner,sure){
  const d=tDiv(T,div),err=t=>{const e=$('jErr');if(e)e.textContent=t};if(!d)return err('Choose a division.');
  if(inv){const e=Object.assign({},inv,{status:'in',acc:Object.assign({},inv.acc,{[S.uid]:true})});if(partner&&!e.b){e.b=partner;e.acc[partner]=false}
   if(!await tSaveEntry(e))return;closeSheet();doneTick('You’re in');
   if(partner&&inv.b!==partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);render();return}
- const why=tElig(T,d,partner?[S.uid,partner]:[S.uid]);if(why)return err(why);if(tFull(T,d))return err('This division is full.');
- const e={id:'te_'+rid(),tour:T.id,venue:T.venue,div,a:S.uid,b:partner||null,acc:partner?{[S.uid]:true,[partner]:false}:{[S.uid]:true},status:T.approve?'requested':'in',by:S.uid,at:new Date().toISOString()};
- if(!await tSaveEntry(e,true))return;closeSheet();doneTick(T.approve?'Request sent':'You’re in');
+ const us=partner?[S.uid,partner]:[S.uid],why=tElig(T,d,us,1);if(why)return err(why);if(tFull(T,d))return err('This division is full.');
+ const off=tOff(T,d,us),ask=T.approve||off.length>0;
+ if(off.length&&!sure){const me=off.find(x=>x.u===S.uid),o=me||off[0];return tOffAsk({title:'Are you sure?',text:`${me?`You’re ${lbl(TIERS,me.t)}`:`${esc(first(prof(o.u)))} is ${lbl(TIERS,o.t)}`}, and this division is for ${lbl(T_LVL,d.lvl)} players. Are you sure you want to request to join this tournament?`,sub:'The club’s owners and admins see your level and decide whether to accept you.',yes:'Yes, ask to join',go:()=>tJoinGo(T,inv,div,partner,true)})}
+ const e={id:'te_'+rid(),tour:T.id,venue:T.venue,div,a:S.uid,b:partner||null,acc:partner?{[S.uid]:true,[partner]:false}:{[S.uid]:true},status:ask?'requested':'in',by:S.uid,at:new Date().toISOString()};
+ if(!await tSaveEntry(e,true))return;closeSheet();doneTick(ask?'Request sent':'You’re in');
  if(partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);
- toast(T.approve?`The club will check your entry${partner?` once ${first(prof(partner))} confirms`:''}.`:partner?`${first(prof(partner))} gets a message to confirm.`:'Staff pair you with a partner before the draw.',3800);render();
+ toast(ask?`The club will check your entry${partner?` once ${first(prof(partner))} confirms`:''}.`:partner?`${first(prof(partner))} gets a message to confirm.`:'Staff pair you with a partner before the draw.',3800);render();
 }
 /* Make the draw: random, or set by hand to match a draw done at the club */
 function tDrawSheet(T,d){
+ if(isAm(T)){const n=tSolos(T.id,d.id).length,am=T.format==='americano';
+  return openSheet(`<h2>Make the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${n} players · ${lbl(T_FMT,T.format)} · ${tAmR(T,d,n)} rounds</p><p class="small" style="margin-top:10px">${tAmPlan(n,d.courts,d.amr||T.amr,+T.mfmt.slice(2),T.format)}</p>
+    <button type="button" class="opt big" style="margin-top:14px" data-act="tourDrawGo" data-v="${d.id}|random"><span class="ot"><b>${am?'Make the schedule':'Random first round'}</b><span>${am?`All ${tAmR(T,d,n)} rounds, mixing partners and opponents as much as possible.`:'Round 1 is random. After that, each round is paired from the table.'}</span></span></button>
+  ${am?'':`<button type="button" class="opt big" style="margin-top:8px" data-act="tourDrawGo" data-v="${d.id}|level"><span class="ot"><b>First round by level</b><span>The four strongest play together, then the next four, and so on.</span></span></button>`}
+  <p class="tiny muted" style="margin-top:10px">After the draw, sign-ups for this division close and every player is told.</p>`)}
  const teams=tTeams(T.id,d.id),solos=tSolos(T.id,d.id);
  openSheet(`<h2>Make the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${teams.length} teams · ${lbl(T_FMT,T.format)}</p>
   ${solos.length?`<p class="small" style="margin-top:10px">${solos.length} player${solos.length===1?' is':'s are'} still on their own and won’t be in the draw. Pair them first if they should play.</p>`:''}
@@ -3608,12 +3716,13 @@ function tHandSheet(T,d){
    for(let i=0;i<v.length;i+=2)if(!v[i]&&!v[i+1])return err(`Match ${i/2+1} has no teams. Every match needs at least one.`);
    await tDrawSave(T,d,v.map(id=>id?teams.find(e=>e.id===id):null))}});
 }
-async function tDrawSave(T,d,slots){
- const teams=tTeams(T.id,d.id);let ms;
- if(T.format==='league')ms=tBuildLeague(T,d,shuffle(teams));
+async function tDrawSave(T,d,slots,how){
+ const teams=isAm(T)?tSolos(T.id,d.id):tTeams(T.id,d.id);let ms;
+ if(isAm(T)){const pl=tAmPlayers(T,d);d=Object.assign({},d,{amr:tAmR(T,d,pl.length)});ms=T.format==='americano'?tAmSchedule(T,d,pl):tMexRound(T,d,1,how==='level'?pl.slice().sort((x,y)=>(lvlOf(T.sport,y)??0)-(lvlOf(T.sport,x)??0)):shuffle(pl),{});if(!ms.length)return toast('Not enough players to make the draw.')}
+ else if(T.format==='league')ms=tBuildLeague(T,d,shuffle(teams));
  else{if(!slots){const sh=shuffle(teams),P=koSize(sh.length),half=P/2;slots=new Array(P).fill(null);sh.forEach((e,i)=>{if(i<half)slots[2*i]=e;else slots[2*(i-half)+1]=e})}ms=tBuildKO(T,d,slots)}
  if(!await tSaveMatches(ms))return;
- const nt=Object.assign({},T,{divs:T.divs.map(x=>x.id===d.id?Object.assign({},x,{stage:'live',drawn:new Date().toISOString()}):x)});nt.stage=nt.divs.every(x=>x.stage!=='signup')?'live':'signup';
+ const nt=Object.assign({},T,{divs:T.divs.map(x=>x.id===d.id?Object.assign({},x,{stage:'live',drawn:new Date().toISOString()},isAm(T)?{amr:d.amr}:{}):x)});nt.stage=nt.divs.every(x=>x.stage!=='signup')?'live':'signup';
  if(!await tSaveTour(nt))return;closeSheet();doneTick('Draw made');
  notify(teams.flatMap(e=>tNamed(e)).map(to=>({to,kind:'tour_draw',data:{tour:T.id,div:d.id,venue:T.venue}})));render();
 }
@@ -3633,7 +3742,7 @@ async function tPoint(w){const m=(S.tmatches||[]).find(x=>x.id===view.tref),T=m&
  upsert(S.tmatches,nm);render();if(!await tSaveMatches([nm])){upsert(S.tmatches,m);render();return}
  if(r.done)tFinishAsk(T,nm);else if(r.sets.length>before.sets.length)toast(`${r.P?'Set':'Game'} to ${tTeamName(nm['t'+(r.sets[r.sets.length-1][0]>r.sets[r.sets.length-1][1]?'a':'b')],true)}`)}
 function tFinishAsk(T,m){const r=tRes(T,m),w=r.winner;
- openSheet(`<h2 data-noback>Match point won</h2><p class="muted">${esc(tTeamName(m['t'+w]))} win ${r.sets.map(s=>w==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}.</p>
+ openSheet(`<h2 data-noback>${r.am?'All points played':'Match point won'}</h2><p class="muted">${w==='draw'?`A draw, ${r.sets.map(s=>s.join('–')).join(', ')}.`:`${esc(tTeamName(m['t'+w]))} win ${r.sets.map(s=>w==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}.`}</p>
   <button class="btn brand wide" style="margin-top:16px" data-act="tourFinish">Finish match</button><button class="btn ghost wide" style="margin-top:10px" data-act="tourUndoFinish">Undo that point</button>`)}
 async function tFinish(){const m=(S.tmatches||[]).find(x=>x.id===view.tref),T=m&&tour(m.tour);if(!m)return;const r=tRes(T,m);if(!r.done)return closeSheet();
  const at=new Date().toISOString(),lv=u=>({uid:u,level:+fmtL(lvlOf(T.sport,u)??avg(SPORTS[T.sport].bands.intermediate))});
@@ -3642,10 +3751,11 @@ async function tFinish(){const m=(S.tmatches||[]).find(x=>x.id===view.tref),T=m&
  const b=document.querySelector('[data-act="tourFinish"]');if(b){b.disabled=true;b.textContent='Saving…'}
  if(!await tSaveMatches(nx?[nm,nx]:[nm]))return;
  try{await Store.addMatch(rec);S.matches.push(rec);rate()}catch(e){toast('The result is saved, but it could not be added to the rankings. Check your connection.')}
- const d=tDiv(T,m.div),left=tMatches(T.id,d.id).filter(x=>x.status!=='done'&&x.status!=='bye');
+ const d=tDiv(T,m.div),more=isAm(T)?tAmNext(T,d):[];if(more.length&&await tSaveMatches(more))toast(`Round ${more[0].round} is paired from the table.`,3200);
+ const left=tMatches(T.id,d.id).filter(x=>x.status!=='done'&&x.status!=='bye');
  if(!left.length){const nt=Object.assign({},T,{divs:T.divs.map(x=>x.id===d.id?Object.assign({},x,{stage:'done'}):x)});nt.stage=nt.divs.every(x=>x.stage==='done')?'done':nt.stage;await tSaveTour(nt);
-  const ch=tChampion(nt,tDiv(nt,d.id));closeSheet();celebrate(ch?`${tTeamName(ch,true)} win ${tDivLabel(d)}!`:'Division finished');
-  notify(tTeams(T.id,d.id).flatMap(e=>tNamed(e)).map(to=>({to,kind:'tour_result',data:{tour:T.id,div:d.id,venue:T.venue}})))}
+  const ch=tChampion(nt,tDiv(nt,d.id));closeSheet();celebrate(ch?`${tTeamName(ch,true)} ${ch.length===1&&ch[0]!==S.uid?'wins':'win'} ${tDivLabel(d)}!`:'Division finished');
+  notify((isAm(T)?tSolos(T.id,d.id):tTeams(T.id,d.id)).flatMap(e=>tNamed(e)).map(to=>({to,kind:'tour_result',data:{tour:T.id,div:d.id,venue:T.venue}})))}
  else{closeSheet();doneTick('Match saved')}
  view.tref=null;render();
 }
@@ -3662,10 +3772,10 @@ Object.assign(ACT,{
  tourNew(){if(!canMakeTour())return toast('Only the club’s owners can create tournaments.');view.tnew=tDraft();window.scrollTo(0,0);render()},
  tourEdit(){const T=tour(view.tid);if(!T)return;view.tnew=Object.assign({},T,{divs:T.divs.map(x=>Object.assign({},x))});window.scrollTo(0,0);render()},
  tnCancel(){view.tnew=null;window.scrollTo(0,0);render()},
- tnSport(v){const D=view.tnew;D.sport=v;D.mfmt=T_MATCH[v][0][0];render()},
- tnVis(v){view.tnew.vis=v;render()},tnFmt(v){view.tnew.format=v;render()},tnMfmt(v){view.tnew.mfmt=v;render()},
+ tnSport(v){const D=view.tnew;D.sport=v;if(!isAm(D))D.mfmt=T_MATCH[v][0][0];render()},
+ tnVis(v){view.tnew.vis=v;render()},tnFmt(v){const D=view.tnew,was=isAm(D);D.format=v;if(isAm(D)!==was){D.mfmt=isAm(D)?'am24':T_MATCH[D.sport][0][0];D.divs.forEach(x=>{if(isAm(D)){if(!(+x.max>=4))x.max=8;x.courts=x.courts||2;x.amr=x.amr||0}else if(!T_MAX.some(([v])=>v===+x.max))x.max=8})}render()},tnMfmt(v){view.tnew.mfmt=v;render()},
  tnSw(v,el){view.tnew[v]=!view.tnew[v];el.setAttribute('aria-checked',String(!!view.tnew[v]));tick()},
- tnDivAdd(){const D=view.tnew;if(D.divs.length>=6)return toast('Up to 6 divisions.');D.divs.push({id:'d'+(D.divs.length+1),lvl:'open',cat:'open',max:8});render()},
+ tnDivAdd(){const D=view.tnew;if(D.divs.length>=6)return toast('Up to 6 divisions.');D.divs.push({id:'d'+(D.divs.length+1),lvl:'open',cat:'open',max:8,courts:2,amr:0});render()},
  tnDivDel(v){view.tnew.divs.splice(+v,1);render()},
  tnSave(){tCreate()},
  async tourDel(){const T=tour(view.tnew&&view.tnew.id);if(!T)return;openSheet(`<h2>Delete this tournament?</h2><p class="muted">${esc(T.name)}, its entries and its draw are removed. Games already played stay in the rankings.</p><button class="btn danger wide" style="margin-top:16px" data-act="tourDelYes">Yes, delete it</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Keep it</button>`)},
@@ -3680,7 +3790,9 @@ Object.assign(ACT,{
  tourWithdraw(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;openSheet(`<h2>Pull out?</h2><p class="muted">You’ll leave ${esc(T.name)}${e.b?', and your partner too':''}. You can sign up again while sign-ups are open.</p><button class="btn danger wide" style="margin-top:16px" data-act="tourDecline" data-v="${e.id}">Yes, pull out</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Stay in</button>`)},
  tourAddPartner(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour),d=T&&tDiv(T,e.div);if(!d)return;
   tPickSheet({title:'Choose a partner',sub:'They get a message to confirm.',sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[p.id]),onPick:async id=>{const ne=Object.assign({},e,{b:id,acc:Object.assign({},e.acc,{[id]:false})});if(await tSaveEntry(ne)){closeSheet();notify([{to:id,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);toast(`${first(prof(id))} gets a message to confirm.`);render()}}})},
- async tourOk(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'in'}))){notify(tNamed(e).map(to=>({to,kind:'tour_ok',data:{tour:T.id,venue:T.venue}})));toast('Accepted. They’ve been told.');render()}},
+ async tourOk(v,sure){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;const d=tDiv(T,e.div),off=d?tOff(T,d,tNamed(e)):[];
+  if(off.length&&sure!==true){const o=off[0],nm=esc(first(prof(o.u)));return tOffAsk({title:'Different level',text:`${off.length>1?'Both players are':`${nm} is`} ${lbl(TIERS,o.t)}${off.length>1&&off[1].t!==o.t?` and ${lbl(TIERS,off[1].t)}`:''}, and this division is for ${lbl(T_LVL,d.lvl)} players. Are you sure you want to accept ${off.length>1?'them':nm}?`,sub:'Their results here still count towards their own rankings as usual.',yes:'Yes, accept',go:()=>{closeSheet();ACT.tourOk(v,true)}})}
+  if(await tSaveEntry(Object.assign({},e,{status:'in'}))){notify(tNamed(e).map(to=>({to,kind:'tour_ok',data:{tour:T.id,venue:T.venue}})));toast('Accepted. They’ve been told.');render()}},
  async tourNo(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'out',outBy:S.uid}))){notify(tNamed(e).map(to=>({to,kind:'tour_no',data:{tour:T.id,venue:T.venue}})));toast('Declined. They’ve been told.');render()}},
  tourInvite(){const T=tour(view.tid);if(!T)return;const ds=T.divs.filter(d=>d.stage==='signup');if(!ds.length)return toast('Sign-ups have closed.');
   const go=d=>tPickSheet({title:'Invite players',sub:`${esc(tDivLabel(d))}. They get a message and accept or decline.`,sport:T.sport,multi:true,all:'Invite everyone who can play',exclude:tEntries(T.id,d.id).filter(e=>e.status!=='out').flatMap(tNamed),filter:p=>!tElig(T,d,[p.id]),onPick:async ids=>{
@@ -3693,13 +3805,14 @@ Object.assign(ACT,{
   <button type="button" class="opt big" style="margin-top:8px" data-act="tourPairGo" data-v="${d.id}|hand"><span class="ot"><b>Pick pairs by hand</b><span>Choose a partner for each player.</span></span></button>`)},
  tourPairGo(v){const [id,how]=v.split('|'),T=tour(view.tid),d=T&&tDiv(T,id);if(d)tPairSolos(T,d,how)},
  tourDraw(v){const T=tour(view.tid),d=T&&tDiv(T,v);if(d)tDrawSheet(T,d)},
- tourDrawGo(v){const [id]=v.split('|'),T=tour(view.tid),d=T&&tDiv(T,id);if(d)tDrawSave(T,d,null)},
+ tourDrawGo(v){const [id,how]=v.split('|'),T=tour(view.tid),d=T&&tDiv(T,id);if(d)tDrawSave(T,d,null,how)},
  tourDrawHand(v){const T=tour(view.tid),d=T&&tDiv(T,v);if(d)tHandSheet(T,d)},
  async tourStart(v){const m=S.tmatches.find(x=>x.id===v);if(!m||!canRunTour())return;const nm=Object.assign({},m,{status:'live',start:new Date().toISOString(),ref:S.uid,pts:[]});if(await tSaveMatches([nm])){sfx('pop');render()}},
  tourPt(v){tPoint(v)},
  async tourUndo(){const m=S.tmatches.find(x=>x.id===view.tref);if(!m||!(m.pts||[]).length)return;const nm=Object.assign({},m,{pts:m.pts.slice(0,-1)});upsert(S.tmatches,nm);render();if(!await tSaveMatches([nm])){upsert(S.tmatches,m);render()}},
  async tourUndoFinish(){closeSheet(true);await ACT.tourUndo()},
- tourFinish(){tFinish()}
+ tourFinish(){tFinish()},
+ tourAmScore(v){const m=S.tmatches.find(x=>x.id===v);if(m&&canRunTour())tAmScoreSheet(m)}
 });
 
 /* ---------- Inbox messages about tournaments ---------- */
@@ -3778,6 +3891,13 @@ function demoTours(d){
   /* finished: last month's league, with a champion and results in the rankings */
   const L=mk(v,{name:'Monsoon Padel League',sport:'padel',date:addDays(T0,-38),time:'16:00',fee:1000,format:'league',mfmt:'set1',stage:'done',note:'',divs:[{id:'d1',lvl:'open',cat:'open',max:4,stage:'done',drawn:ago(24*39)}]});
   const le=teams(L,L.divs[0],4,used);if(le.length===4){const ms=tBuildLeague(L,L.divs[0],le);ms.forEach((m,k)=>play(L,m,ms,L.date,24*38-k));d.tmatches.push(...ms);d.tours.push(L)}
+  /* Americano tonight: 8 players, rounds 1 and 2 played, round 3 on court now */
+  const solo=(T,n)=>pool(v,T.sport,used).slice(0,n).map((p,k)=>{used.add(p.id);const e={id:'te_'+rid(),tour:T.id,venue:v,div:'d1',a:p.id,b:null,acc:{[p.id]:true},status:'in',by:p.id,at:ago(40-k)};d.tentries.push(e);return p.id});
+  const A=mk(v,{name:'Friday Night Americano',sport:'padel',date:T0,time:'19:00',fee:700,format:'americano',mfmt:'am24',amr:7,approve:false,note:'New partner every round. 24 points a match, every point counts. Music and drinks on the terrace.',divs:[{id:'d1',lvl:'open',cat:'open',max:8,stage:'signup'}]});
+  const ap=solo(A,8);if(ap.length===8){const ms=tAmSchedule(A,A.divs[0],ap);ms.filter(m=>m.round<=2).forEach((m,k)=>play(A,m,ms,T0,2-m.round*.5));ms.filter(m=>m.round===3).forEach(m=>live(A,m,.2));d.tmatches.push(...ms);A.divs[0].stage='live';A.divs[0].drawn=ago(3);A.stage='live';d.tours.push(A)}
+  /* Mexicano: taking sign-ups, 6 players in so far */
+  const X=mk(v,{name:'Sunday Mexicano',sport:'padel',date:addDays(T0,4),time:'09:30',fee:600,format:'mexicano',mfmt:'am21',amr:5,approve:false,note:'Round 1 by level, then the table decides who you play. 21 points a match.',divs:[{id:'d1',lvl:'open',cat:'open',max:12,stage:'signup'}]});
+  solo(X,6);d.tours.push(X);roleIds(v).forEach(u=>msg(u,X.by,'tour_new',{tour:X.id,venue:v},3));
  });
 }
 /* Demo: the live matches move on by a point or two every few seconds, and the next match starts when one ends */
@@ -3789,6 +3909,8 @@ function demoTourTick(){const d=Demo.d;if(!d||!d.tmatches)return;
   const lv=u=>({uid:u,level:+fmtL(lvlOf(T.sport,u)??3)}),by=(d.staff[T.venue]||{}).admin||d.you;
   const x={id:'m_t'+rid(),venue:T.venue,sport:T.sport,format:'doubles',date:today(),time:null,len:0,court:m.court||1,a:m.ta.map(lv),b:m.tb.map(lv),sets:r.sets,winner:r.winner,by,at:m.end,logged:true,review:{by,at:m.end,prev:null,kept:true},tour:T.id};d.matches.push(x);m.rm=x.id;
   const nx=tAdvance(T,m,d.tmatches);if(nx&&nx.status==='ready'){nx.status='live';nx.sim=true;nx.start=new Date().toISOString();nx.pts=[];nx.pa=.5}
+  if(isAm(T)){const dv0=T.divs.find(z=>z.id===m.div),pl=d.tentries.filter(e=>e.tour===T.id&&e.div===m.div&&e.status==='in'&&!e.b).map(e=>e.a);tAmNext(T,dv0,d.tmatches,pl).forEach(x=>d.tmatches.push(x));
+   if(!d.tmatches.some(z=>z.tour===T.id&&z.div===m.div&&z.round===m.round&&z.status!=='done'))d.tmatches.filter(z=>z.tour===T.id&&z.div===m.div&&z.round===m.round+1&&z.status==='ready').forEach(z=>{z.status='live';z.sim=true;z.start=new Date().toISOString();z.pts=[];z.pa=.5})}
   const dv=T.divs.find(z=>z.id===m.div),left=d.tmatches.filter(z=>z.tour===T.id&&z.div===m.div&&z.status!=='done'&&z.status!=='bye');
   if(dv&&!left.length){dv.stage='done';if(T.divs.every(z=>z.stage==='done'))T.stage='done'}});
 }
