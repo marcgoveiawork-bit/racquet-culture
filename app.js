@@ -369,6 +369,7 @@ const Live={
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
    conduct:cd.map(x=>Object.assign({},x.data||{},{id:x.id,user:x.user_id,kind:x.kind,sport:x.sport,report:x.report,by:x.created_by,at:x.created_at}))};
  },
+ async createProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').insert({id,username,name,data});if(error)throw error},
  async saveProfile(p){const {id,username,name,...data}=p;const {error}=await sb.from('rc_profiles').upsert({id,username,name,data,updated_at:new Date().toISOString()});if(error)throw error},
  async setPro(p,v,sp,on){const {data,error}=await sb.rpc('rc_set_pro',{target:p.id,v,sp,on_:on});if(error){if(error.code==='42501')throw errc('denied');throw error}return data||{}},
  async addMatch(m){const {error}=await sb.from('rc_matches').insert({id:m.id,data:m});if(error)throw error},
@@ -1472,12 +1473,20 @@ async function syncPhone(){if(Store.mode==='demo'||myPhone())return;let ph=null;
  if(Store.mode==='live'){try{const {data}=await sb.auth.getUser();const u=data.user;ph=u&&u.user_metadata&&u.user_metadata.phone||null;if(!ph&&pend&&u&&pend.email===(u.email||'').toLowerCase())ph=pend.phone}catch(e){}}
  else if(pend)ph=pend.phone;
  if(!ph)return;const r={phone:ph,vis:'admins'};try{await Store.savePhone(r);S.phones[S.uid]=r;ls.set('rc_phone_new',null)}catch(e){}}
+/* Shown when the club data can't be loaded: the player's account is untouched, they just try again */
+function loadFailed(fresh){busy(false);$('welcome').hidden=true;$('app').hidden=true;$('wiz').hidden=true;$('auth').hidden=false;closeSheet(true);
+ $('auth').innerHTML=`<div class="acard card" style="max-width:440px;margin:12vh auto 0;text-align:center;padding:28px 22px"><h1>Couldn’t load the club</h1><p class="muted" style="margin-top:8px">Your account and levels are safe. Check your connection and try again.</p><button class="btn brand wide" style="margin-top:18px" id="lfRetry">Try again</button></div>`;
+ $('lfRetry').onclick=()=>location.reload()}
 async function enter(fresh){
- try{await reload()}catch(e){toast('Could not load the club data. Check your connection.')}
+ /* If the club data didn't load, stop here and offer a retry. Never carry on as if the player were new:
+    that would save a blank profile over their real one */
+ let ok=false;for(let k=0;k<3&&!ok;k++){try{await reload();ok=true}catch(e){if(k<2)await new Promise(r=>setTimeout(r,1200))}}
+ if(!ok)return loadFailed(fresh);
  let p=me();
- if(!p&&Store.mode==='live'){try{const {data}=await sb.auth.getUser();const md=data.user&&data.user.user_metadata||{};
+ if(!p&&Store.mode==='live'){try{const ex=await sb.from('rc_profiles').select('id').eq('id',S.uid);if(ex.error)return loadFailed(fresh);if(ex.data.length)return loadFailed(fresh);
+  const {data}=await sb.auth.getUser();const md=data.user&&data.user.user_metadata||{};
   if(md.username){p={id:S.uid,username:md.username,name:md.name||md.username,setup:false,created:new Date().toISOString()};
-   try{await Store.saveProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505')return pickUsername(p);throw e}}}catch(e){p=null}}
+   try{await Store.createProfile(p);S.profiles.push(p)}catch(e){if(e.code==='23505'&&/username/i.test(e.message||''))return pickUsername(p);return loadFailed(fresh)}}}catch(e){return loadFailed(fresh)}}
  if(!p){await Store.signOut();S.uid=null;return showAuth()}
  await syncPhone();
  /* the theme a player last chose follows them to every device; new players start in light */
