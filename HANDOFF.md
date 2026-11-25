@@ -143,5 +143,5 @@ Surya's idea, asked for by Marc. Built on the preview only; live is still V1.8 u
 ### Levels are never lost (25 Nov 2026)
 - What happened: on the preview, the tournament tables briefly couldn't be read. The load failed, `enter()` thought Marc's account had no profile and saved a fresh blank one over it (setup false, no levels). Only Marc's profile was hit (no games were lost; he had none logged).
 - Database guard (live now, in `setup.sql`, trigger `rc_profile_keep`): a set-up profile can't be turned back into a blank one, and its levels can't be wiped, whatever the app sends.
-- Preview `enter()`: retries the load 3 times, then shows "Couldn't load the club. Your account and levels are safe" with Try again (`loadFailed`). A new profile is only made after checking the database has none for that account, and with an insert (`createProfile`), never an upsert. Live `app.js` gets the same change with the next release.
+- Preview `enter()`: retries the load 3 times, then shows "Couldn't load the club. Your account and levels are safe" with Try again (`loadFailed`). A new profile is only made after checking the database has none for that account, and with an insert (`createProfile`), never an upsert. Live got the same change as V1.8.1 (25 Nov 2026, Marc said go).
 - Tournament match view: each player's name opens their profile (`tNameBtns`).
