@@ -146,7 +146,7 @@ Surya's idea, asked for by Marc. Released to live as **V1.9** on 25 Nov 2026 (Ma
 - Preview `enter()`: retries the load 3 times, then shows "Couldn't load the club. Your account and levels are safe" with Try again (`loadFailed`). A new profile is only made after checking the database has none for that account, and with an insert (`createProfile`), never an upsert. Live got the same change as V1.8.1 (25 Nov 2026, Marc said go).
 - Tournament match view: each player's name opens their profile (`tNameBtns`).
 
-## V1.10demo: Americano and Mexicano tournaments (preview only, 25 Nov 2026)
+## V1.10: Americano and Mexicano tournaments (released live 25 Nov 2026)
 - Two new tournament formats beside knockout/groups: `isAm(T)` is true for `format` 'americano' or 'mexicano'.
 - Players sign up solo. `T.mfmt` is `am16`/`am21`/`am24`/`am32` (points per match, `T_AMP`), `T.amr` is the number of rounds (3 to 12, default 7).
 - Americano: the whole schedule is made at the draw (`tAmSchedule`), partners and opponents rotate, sit-outs are shared out fairly (`tAmPick`, `tAmSits`). Mixed keeps a man and a woman on each side.
