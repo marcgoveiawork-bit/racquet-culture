@@ -274,7 +274,11 @@ const LIVE=window.RC_LIVE||{};
 const APP_VER=window.RC_VER||'1',PREVIEW=!!window.RC_PREVIEW;
 let sb=null;
 function memStore(mode,get,put){return{mode,
- async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),owners:(d.owners||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{})}},
+ async load(){const d=get();return{profiles:d.profiles.slice(),matches:d.matches.slice(),bookings:d.bookings.slice(),confs:d.confs.slice(),admins:d.admins.slice(),msgs:d.msgs.filter(m=>m.to===S.uid),follows:(d.follows||[]).slice(),reqs:(d.reqs||[]).filter(r=>r.from===S.uid||r.to===S.uid),votes:(d.votes||[]).slice(),conduct:(d.conduct||[]).slice(),phones:Object.assign({},d.phones||{}),coaches:Object.assign({},d.coaches||{}),devs:(d.devs||[]).slice(),owners:(d.owners||[]).slice(),demoAcc:(d.demoAcc||[]).slice(),cfg:Object.assign({},d.cfg||{}),tours:(d.tours||[]).slice(),tentries:(d.tentries||[]).slice(),tmatches:(d.tmatches||[]).slice()}},
+ async saveTour(T){const d=get();d.tours=d.tours||[];upsert(d.tours,T);put(d)},
+ async delTour(id){const d=get();d.tours=(d.tours||[]).filter(x=>x.id!==id);d.tentries=(d.tentries||[]).filter(x=>x.tour!==id);d.tmatches=(d.tmatches||[]).filter(x=>x.tour!==id);put(d)},
+ async saveEntry(e){const d=get();d.tentries=d.tentries||[];upsert(d.tentries,e);put(d)},
+ async saveTMatches(list){const d=get();d.tmatches=d.tmatches||[];list.forEach(m=>upsert(d.tmatches,m));put(d)},
  async saveProfile(p){const d=get();upsert(d.profiles,p);put(d)},
  async setPro(p){const d=get();upsert(d.profiles,p);put(d);return p.pro||{}},
  async addMatch(m){const d=get();d.matches.push(m);put(d)},
@@ -298,7 +302,7 @@ function memStore(mode,get,put){return{mode,
  async setDemoAcc(id,on){const d=get();d.demoAcc=(d.demoAcc||[]).filter(x=>x!==id);if(on)d.demoAcc.push(id);put(d)},
  async addConduct(c){const d=get();d.conduct=d.conduct||[];if(d.conduct.some(x=>x.report&&x.report===c.report))throw errc('done');d.conduct.push(c);put(d)}
 }}
-const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs','owners','demoAcc'];
+const LKEYS=['profiles','matches','bookings','confs','msgs','follows','reqs','votes','cfg','conduct','phones','coaches','devs','owners','demoAcc','tours','tentries','tmatches'];
 const Local=Object.assign(memStore('local',()=>{const d={admins:[]};LKEYS.forEach(k=>d[k]=ls.get('rc2_'+k,k==='cfg'||k==='phones'||k==='coaches'?{}:[]));return d},d=>LKEYS.forEach(k=>ls.set('rc2_'+k,d[k]))),{
  async init(){},
  async session(){return ls.get('rc2_session',null)},
@@ -325,12 +329,14 @@ const cRow=r=>Object.assign({},r.data||{},{id:r.id,match:r.match_id,user:r.user_
 const gRow=r=>({id:r.id,to:r.to_user,from:r.from_user,kind:r.kind,data:r.data||{},read:r.read,at:r.created_at});
 const bData=b=>{const {id,court,date,start,len,kind,by,...data}=b;return data};
 const missing=e=>!!e&&(e.code==='PGRST205'||e.code==='42P01');
+/* Tournament saves: a refused write (row security, or the entry guard) comes back as denied */
+const tChk=r=>{if(r.error){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501'||r.error.code==='P0001')throw errc('denied');throw r.error}if(!r.data||!r.data.length)throw errc('denied');return r};
 const Live={
  mode:'live',
  async init(){
   sb=window.supabase.createClient(LIVE.url,LIVE.key);
   sb.auth.onAuthStateChange(ev=>{if(ev==='PASSWORD_RECOVERY'){recovery=true;if(booted)setTimeout(showReset,300)}});
-  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers','rc_owners','rc_demo_access'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
+  const ch=sb.channel('rc-live');['rc_profiles','rc_matches','rc_bookings','rc_confirmations','rc_messages','rc_follows','rc_friend_requests','rc_settings','rc_conduct','rc_private','rc_coaches','rc_admins','rc_developers','rc_owners','rc_demo_access','rc_tournaments','rc_tour_entries','rc_tour_matches'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},onRemote));ch.subscribe();
  },
  async session(){const {data}=await sb.auth.getSession();return data.session?data.session.user.id:null},
  async taken(u){const {data,error}=await sb.rpc('rc_username_taken',{u});if(error)throw error;return !!data},
@@ -357,13 +363,14 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
-  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da,ow]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
+  const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da,ow,tt,te,tm]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id,venue',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,venue,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id,venue',null,'user_id'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,venue,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id,venue',null,'user_id')),quiet(all('rc_tournaments','id,venue,data')),quiet(all('rc_tour_entries','id,tour_id,venue,data')),quiet(all('rc_tour_matches','id,tour_id,venue,data'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id+'@'+(x.venue||'rc')),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
+   tours:tt.map(r=>Object.assign({},r.data,{id:r.id,venue:r.venue})),tentries:te.map(r=>Object.assign({},r.data,{id:r.id,tour:r.tour_id,venue:r.venue})),tmatches:tm.map(r=>Object.assign({},r.data,{id:r.id,tour:r.tour_id,venue:r.venue})),
    devs:dv.map(x=>x.user_id),owners:ow.map(x=>x.user_id+'@'+(x.venue||'rc')),demoAcc:da.map(x=>x.user_id),
    coaches:Object.fromEntries(co.map(x=>[x.user_id+'@'+(x.venue||'rc'),{sports:x.sports||[],auto:!!x.auto}])),
    phones:Object.fromEntries(ph.map(x=>[x.user_id,{phone:x.phone,vis:x.vis||'admins'}])),
@@ -396,6 +403,10 @@ const Live={
  async setDemoAcc(id,on){const r=on?await sb.from('rc_demo_access').insert({user_id:id}):await sb.from('rc_demo_access').delete().eq('user_id',id);if(r.error&&r.error.code!=='23505'){if(missing(r.error))throw errc('nosql');if(r.error.code==='42501')throw errc('denied');throw r.error}},
  async savePhone(r){const {error}=await sb.from('rc_private').upsert({user_id:S.uid,phone:r.phone,vis:r.vis,updated_at:new Date().toISOString()});if(error){if(missing(error))throw errc('nosql');throw error}},
  async addConduct(c){const {id,user,kind,sport,report,by,at,...data}=c;const {error}=await sb.from('rc_conduct').insert({id,user_id:user,kind,sport,report,data});if(error){if(missing(error))throw errc('nosql');if(error.code==='23505')throw errc('done');if(error.code==='42501')throw errc('denied');throw error}},
+ async saveTour(T,isNew){const row={id:T.id,venue:T.venue,data:T};const q=isNew?sb.from('rc_tournaments').insert(row):sb.from('rc_tournaments').update({data:T,updated_at:new Date().toISOString()}).eq('id',T.id);tChk(await q.select('id'))},
+ async delTour(id){tChk(await sb.from('rc_tournaments').delete().eq('id',id).select('id'))},
+ async saveEntry(e,isNew){const q=isNew?sb.from('rc_tour_entries').insert({id:e.id,tour_id:e.tour,venue:e.venue,data:e}):sb.from('rc_tour_entries').update({data:e,updated_at:new Date().toISOString()}).eq('id',e.id);tChk(await q.select('id'))},
+ async saveTMatches(list){if(!list.length)return;const at=new Date().toISOString();tChk(await sb.from('rc_tour_matches').upsert(list.map(m=>({id:m.id,tour_id:m.tour,venue:m.venue,data:m,updated_at:at}))).select('id'))},
  async addVote(v){const {error}=await sb.from('rc_level_votes').insert({id:v.id,target:v.target,sport:v.sport,match_id:v.match,vote:v.vote});if(error){if(missing(error))throw errc('nosql');throw error}}
 };
 let Store=LIVE.url&&LIVE.key&&window.supabase?Live:Local;
@@ -955,7 +966,7 @@ async function startDemo(role){
  const rank=me()?topRole(S.uid):'player';if(DEMO_RANK[role]>DEMO_RANK[rank])role=rank;
  const real=me(),you=real?JSON.parse(JSON.stringify(real)):{id:'d_you',username:'marc.dev',name:'Marc',setup:true,created:new Date(Date.now()-260*864e5).toISOString(),avatar:null,sports:['padel','pickleball'],hand:'right',invites:true,times:['evening'],side:'either',levels:{padel:{start:3.2,band:'intermediate'},pickleball:{start:3.1,band:'intermediate'}}};
  demoPrev={store:Store,uid:S.uid,you:JSON.stringify(you),rank};closeSheet(true);S.needSql=false;
- Demo.d=buildDemo(you,rank);Store=Demo;setVenues(true);S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
+ Demo.d=buildDemo(you,rank);Store=Demo;setVenues(true);demoTours(Demo.d);S.uid=demoId(role);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null});
  window.scrollTo(0,0);
  /* signed in once: now pick a court to begin */
  showPicker();
@@ -971,7 +982,7 @@ async function demoAuthDone(name,user,email){const d=Demo.d,base=(email||'').spl
  S.uid='d_new';S.email=email||'';busy(false);await reload();applyMP();startWiz('setup')}
 function demoResetAsk(){openSheet(`<h2>Reset the demo?</h2><p class="muted">Every score, booking, message and change you made in the demo goes back to how it started, for every demo account. Your real account is not touched.</p>
  <button class="btn danger wide" style="margin-top:16px" data-act="demoResetYes">Yes, reset the demo</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Cancel</button>`)}
-async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);S.uid=demoId(role);closeSheet(true);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
+async function demoReset(){if(!demoPrev||!Demo.d)return;const role=demoRole();Demo.d=buildDemo(JSON.parse(demoPrev.you),demoPrev.rank);demoTours(Demo.d);S.uid=demoId(role);closeSheet(true);await reload();await ensureVenue();A=null;Object.assign(view,{tab:'home',rs:null,rt:null,ib:'all',mg:'all'});window.scrollTo(0,0);render();celebrate('Demo reset')}
 /* Demo access taken away while someone is in demo mode: check with the real database, then take them straight out */
 async function demoAccessCheck(){const pv=demoPrev;if(!pv||!pv.uid||!sb)return;
  const [a,d]=await Promise.all([sb.from('rc_demo_access').select('user_id').eq('user_id',pv.uid),sb.from('rc_developers').select('user_id').eq('user_id',pv.uid)]);
@@ -1096,7 +1107,7 @@ const tagV=m=>GLOBAL_KINDS.includes(m.kind)||(m.data&&m.data.venue)?m:Object.ass
 const msgVenue=g=>GLOBAL_KINDS.includes(g.kind)?null:vidOf(g);
 async function reload(){const d=await Store.load(),inV=x=>vidOf(x)===VID,allM=d.matches||[],mids=new Set(allM.filter(inV).map(m=>m.id));
  S.allMsgs=(d.msgs||[]).sort((a,b)=>(b.at||'').localeCompare(a.at||''));S.allMatches=allM;S.allConduct=d.conduct||[];rankCache={};
- Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:allM.filter(inV),bookings:(d.bookings||[]).filter(inV),confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:(d.votes||[]).filter(v=>!v.match||mids.has(v.match)),conduct:(d.conduct||[]).filter(inV),phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],owners:d.owners||[],demoAcc:d.demoAcc||[],msgs:S.allMsgs.filter(g=>{const v=msgVenue(g);return!v||v===VID})});rate()}
+ Object.assign(S,{cfg:d.cfg||{},profiles:d.profiles||[],matches:allM.filter(inV),bookings:(d.bookings||[]).filter(inV),confs:d.confs||[],admins:d.admins||[],follows:d.follows||[],reqs:d.reqs||[],votes:(d.votes||[]).filter(v=>!v.match||mids.has(v.match)),conduct:(d.conduct||[]).filter(inV),phones:d.phones||{},coaches:d.coaches||{},devs:d.devs||[],owners:d.owners||[],demoAcc:d.demoAcc||[],msgs:S.allMsgs.filter(g=>{const v=msgVenue(g);return!v||v===VID}),tours:(d.tours||[]).filter(inV),tentries:(d.tentries||[]).filter(inV),tmatches:(d.tmatches||[]).filter(inV).map(m=>tPend.get(m.id)||m)});rate()}
 /* Unread messages waiting at another club, for the dot on the club switcher */
 const unreadAt=vid=>(S.allMsgs||[]).filter(g=>!g.read&&msgVenue(g)===vid).length;
 
@@ -1670,7 +1681,7 @@ async function wFinish(){
 }
 
 /* ================= App views ================= */
-const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox()};
+const VIEWS={settings:()=>vSettings(),home:()=>vHome(),book:()=>vBook(),add:()=>vAdd(),rank:()=>vRank(),players:()=>vPlayers(),me:()=>vMe(),inbox:()=>vInbox(),tour:()=>vTour()};
 /* Clubs that run more than one venue show once in the strip; tapping them asks which venue */
 const groupOf=v=>v.brand||v.id;
 function paintVenues(){const el=$('vswitch');if(!el)return;
@@ -1829,7 +1840,8 @@ function render(){
 let after=()=>{};
 function paintDock(t){qsa('#dock>button').forEach(b=>{if(b.dataset.v===t){if(b.getAttribute('aria-current')!=='page'){b.classList.remove('play');void b.offsetWidth;b.classList.add('play');setTimeout(()=>b.classList.remove('play'),1000)}b.setAttribute('aria-current','page')}else b.removeAttribute('aria-current')});syncGliders()}
 function openHudle(){const w=window.open(HUDLE_URL,'_blank');if(w){try{w.opener=null}catch(e){}}else location.href=HUDLE_URL}
-function go(t){if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
+function go(t){if(t==='tour'&&view.tab==='tour'&&(view.tid||view.tref||view.tnew)){view.tid=view.tref=view.tnew=null;window.scrollTo(0,0);return render()}
+ if(t===view.tab&&t!=='add'){window.scrollTo({top:0,behavior:calm()?'auto':'smooth'});return}
  if(t==='rank'&&S.uid){after=()=>{};return loadRank(false)}
  if(t==='add'&&view.tab!=='add')A=null;view.tab=t;after=()=>{};window.scrollTo(0,0);render()}
 const mySports=()=>{const p=me();return(p.sports&&p.sports.length?p.sports:SP_KEYS)};
@@ -2390,6 +2402,7 @@ async function submitMatch(){
 /* ---------- Inbox ---------- */
 const myConf=mid=>{const m=S.matches.find(x=>x.id===mid),rv=m&&m.review&&m.review.at||'';return S.confs.filter(c=>c.match===mid&&c.user===S.uid&&(!rv||c.at>rv)).pop()};
 function needsAction(g){const d=g.data||{};
+ if(g.kind==='tour_invite'||g.kind==='tour_partner')return tNeeds(g);
  if(g.kind==='confirm'){const m=S.matches.find(x=>x.id===d.match);return !!m&&!myConf(m.id)&&!m.review&&!lockedGame(m)}
  if(g.kind==='dispute')return isAdmin()&&(S.ST[d.match]||{}).st==='disputed';
  if(g.kind==='friend_req'){const r=S.reqs.find(x=>x.id===d.req);return !!r&&r.status==='pending'}
@@ -2412,6 +2425,7 @@ function msgView(g){
  const score=m?(()=>{const r=myResult(m);return r?`<span class="scoreline">${r.html}<span class="teamsline">${matchLine(m)}</span></span>`:`<span class="scoreline">${matchLine(m)} · ${setsStr(m.sets)}</span>`})():'';
  const gone={i:MI.flag,t:'No longer available',p:'This game has since been removed.'};
  switch(g.kind){
+  case 'tour_new':case 'tour_invite':case 'tour_partner':case 'tour_pyes':case 'tour_pno':case 'tour_ok':case 'tour_no':case 'tour_draw':case 'tour_result':return tMsg(g,fn);
   case 'confirm':{if(!m)return gone;const c=myConf(m.id);
    return{i:MI.check,t:'Is this score right?',p:`${esc(fn)} added the score of your ${SPORTS[m.sport].name.toLowerCase()} game, played ${esc(playedWhen(m))}.${score}`,
     a:m.review?'<span class="chip st-reviewed">An admin has set this score</span>':c&&c.verdict==='ok'||(!c&&lockedGame(m))?'<span class="chip st-confirmed">'+(c?'You confirmed it':'Final: this game is over a week old')+'</span>':c?`<span class="chip ${c.verdict==='ok'?'st-confirmed':'st-disputed'}">${c.verdict==='ok'?'You confirmed it':'You asked for a change'}</span>`
@@ -3213,6 +3227,558 @@ document.addEventListener('keydown',e=>{
 
 /* Changes from other players arrive live; never redraw while someone is typing or has a sheet open */
 let rmT=0,rmPending=false;
+/* ================= Club tournaments (V1.9demo) =================
+   Owners create a tournament at their club, in one sport, with one or more divisions running side by side
+   (a level band and men, women, mixed or open). Open tournaments: every member of the club is told and can ask to join,
+   and staff accept each entry unless the owner turned that off. Invite only: staff invite players, who accept or decline.
+   Players join with a partner (who confirms) or on their own, to be paired before the draw.
+   The draw is random or set by hand, as a knockout or a league. Owners and admins referee point by point,
+   and everyone at the club watches live. Each finished match is saved as a normal logged game, so it counts in levels
+   and rankings. Data: S.tours, S.tentries, S.tmatches (rc_tournaments, rc_tour_entries, rc_tour_matches). */
+const T_CAT=[['open','Open'],['men','Men'],['women','Women'],['mixed','Mixed']];
+const T_LVL=[['open','All levels'],['beginner','Beginner'],['intermediate','Intermediate'],['pro','Pro']];
+const T_FMT=[['knockout','Knockout'],['league','League']];
+const T_MATCH={padel:[['bo3','Best of 3 sets'],['set1','1 set'],['pro9','Pro set to 9']],pickleball:[['g11','1 game to 11'],['bo3','Best of 3 to 11'],['g15','1 game to 15']]};
+const T_MAX=[[4,'4 teams'],[8,'8 teams'],[16,'16 teams'],[32,'32 teams'],[0,'No limit']];
+const tour=id=>(S.tours||[]).find(t=>t.id===id)||null;
+const tDiv=(T,id)=>T&&(T.divs||[]).find(d=>d.id===id)||null;
+const tDivName=d=>d?(d.lvl==='open'?'':lbl(T_LVL,d.lvl)+' ')+(d.cat==='open'?(d.lvl==='open'?'Open':''):lbl(T_CAT,d.cat)):'';
+const tDivLabel=d=>{const s=tDivName(d).trim();return s||'Open'};
+const tEntries=(tid,div)=>(S.tentries||[]).filter(e=>e.tour===tid&&(!div||e.div===div));
+const tMatches=(tid,div)=>(S.tmatches||[]).filter(m=>m.tour===tid&&(!div||m.div===div));
+const tNamed=e=>[e.a,e.b].filter(Boolean);
+const tReady=e=>e.status==='in'&&tNamed(e).every(u=>e.acc&&e.acc[u]===true);
+const tTeams=(tid,div)=>tEntries(tid,div).filter(e=>tReady(e)&&e.b);
+const tSolos=(tid,div)=>tEntries(tid,div).filter(e=>tReady(e)&&!e.b);
+const canMakeTour=()=>isOwner()||isDev();
+const canRunTour=()=>isAdmin();
+const tStage=T=>{const ds=T.divs||[];if(T.stage==='cancelled')return'cancelled';if(ds.length&&ds.every(d=>d.stage==='done'))return'done';if(ds.some(d=>d.stage==='live'||d.stage==='done'))return'live';return'signup'};
+/* Short names are first names, with an initial when someone else at the club has the same first name */
+const tShort=u=>{const p=prof(u),f=first(p);if(!p)return'Player';return S.profiles.some(q=>q.id!==u&&first(q)===f&&inVenue(q))?slotName({uid:u}):f};
+const tTeamName=(uids,short)=>(uids||[]).filter(Boolean).map(u=>u===S.uid?'You':short?tShort(u):slotName({uid:u})).join(' & ')||'To be decided';
+const tFee=T=>+T.fee>0?'₹'+(+T.fee).toLocaleString('en-IN'):'Free';
+const T_ICON={trophy:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a1 1 0 0 0-1 1c0 2.2 1.8 4 4 4M16 6h3a1 1 0 0 1 1 1c0 2.2-1.8 4-4 4"/><path d="M12 13v4M8.5 21h7M9.5 17h5v4h-5z"/></svg>',
+ live:'<span class="tlive" aria-hidden="true"></span>',
+ ball:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#dcf55a"/><path d="M5.5 6.5c3 3 3 8 0 11M18.5 6.5c-3 3-3 8 0 11" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>'};
+
+/* ---------- Scoring: the whole score comes from the list of who won each point, so Undo just drops the last point ----------
+   Padel: 0, 15, 30, 40, then advantage (or golden point), games, sets to 6 with a tiebreak to 7 at 6–6 (pro set: 9, tiebreak at 8–8).
+   Pickleball: rally scoring, every rally wins a point, games to 11 (or 15) won by 2. */
+function tScore(sport,fmt,pts,golden){
+ const P=sport==='padel',need=fmt==='bo3'?2:1,sets=[];let ga=0,gb=0,pa=0,pb=0,tb=false,sa=0,sb=0,winner=null,games=0,serve='a',tbFirst='a',tbN=0;
+ const to=P?(fmt==='pro9'?9:6):(fmt==='g15'?15:11),tbAt=fmt==='pro9'?8:6;
+ const endSet=()=>{sets.push([ga,gb]);if(ga>gb)sa++;else sb++;ga=gb=0;if(sa>=need)winner='a';else if(sb>=need)winner='b'};
+ for(const w of pts||[]){if(winner)break;
+  if(!P){w==='a'?ga++:gb++;serve=w;if(Math.max(ga,gb)>=to&&Math.abs(ga-gb)>=2)endSet();continue}
+  w==='a'?pa++:pb++;let gw=null;
+  if(tb){tbN++;if(Math.max(pa,pb)>=7&&Math.abs(pa-pb)>=2)gw=pa>pb?'a':'b'}
+  else if(golden?Math.max(pa,pb)>=4:(Math.max(pa,pb)>=4&&Math.abs(pa-pb)>=2))gw=pa>pb?'a':'b';
+  if(gw){gw==='a'?ga++:gb++;pa=pb=0;games++;const wasTb=tb;tb=false;tbN=0;
+   if(wasTb||(Math.max(ga,gb)>=to&&Math.abs(ga-gb)>=2))endSet();else if(ga===tbAt&&gb===tbAt){tb=true;tbFirst=games%2?'b':'a'}}
+ }
+ if(P){const o=tbFirst==='a'?'b':'a';serve=tb?(tbN===0?tbFirst:(((tbN-1)>>1)%2===0?o:tbFirst)):(games%2?'b':'a')}
+ const PT=['0','15','30','40'];let dp=[String(pa),String(pb)];
+ if(P&&!tb)dp=pa>=3&&pb>=3?(pa===pb?['40','40']:pa>pb?['AD','40']:['40','AD']):[PT[pa]||'40',PT[pb]||'40'];
+ const deuce=P&&!tb&&pa>=3&&pb>=3&&pa===pb;
+ return{sets,g:[ga,gb],p:dp,tb,sa,sb,winner,serve,deuce,done:!!winner,P};
+}
+const tRes=(T,m)=>tScore(T.sport,T.mfmt,m.pts,T.golden);
+/* A short score line: finished sets, then the set in play */
+function tLine(T,m,mine){const r=tRes(T,m),flip=mine==='b',f=x=>flip?[x[1],x[0]]:x;
+ const parts=r.sets.map(s=>f(s).join('–'));if(!r.done&&(m.pts||[]).length)parts.push(`<b>${f(r.g).join('–')}</b>`+(r.P?` <span class="muted">(${f(r.p).join('–')})</span>`:''));
+ return parts.join(', ')}
+
+/* ---------- Who can enter a division ---------- */
+function tElig(T,d,uids){
+ for(const u of uids){const p=prof(u);if(!p)return'Player not found.';const n=u===S.uid?'You':first(p);
+  if(!inVenue(p,T.venue))return`${n} ${u===S.uid?'aren’t':'isn’t'} a member of this club.`;
+  if(d.cat==='men'&&p.gender!=='male')return`This division is for men.`;
+  if(d.cat==='women'&&p.gender!=='female')return`This division is for women.`;
+  if(d.lvl!=='open'){const l=lvlOf(T.sport,u);if(l==null)return`${n} need${u===S.uid?'':'s'} a ${SPORTS[T.sport].name.toLowerCase()} level first.`;
+   if(tierOf(T.sport,l)!==d.lvl)return`${n} ${u===S.uid?'are':'is'} ${lbl(TIERS,tierOf(T.sport,l))}, and this division is ${lbl(T_LVL,d.lvl)}.`}
+  if(tEntries(T.id,d.id).some(e=>e.status!=='out'&&tNamed(e).includes(u)))return`${n} ${u===S.uid?'are':'is'} already in this division.`}
+ if(d.cat==='mixed'&&uids.length===2){const g=uids.map(u=>(prof(u)||{}).gender);if(!(g.includes('male')&&g.includes('female')))return'Mixed teams are one man and one woman.'}
+ return'';
+}
+const tFull=(T,d)=>d.max>0&&tEntries(T.id,d.id).filter(e=>e.status==='in'||e.status==='requested'||e.status==='invited').reduce((n,e)=>n+(e.b?1:.5),0)>=d.max;
+
+/* ---------- Saving ---------- */
+async function tSaveTour(T,isNew){try{await Store.saveTour(T,isNew);upsert(S.tours,T);return true}catch(e){toast(e.code==='denied'?'Only owners and admins at this club can do that.':'Could not save. Check your connection and try again.');return false}}
+async function tSaveEntry(e,isNew){try{await Store.saveEntry(e,isNew);upsert(S.tentries,e);return true}catch(x){toast(x.code==='denied'?'That change isn’t allowed.':'Could not save. Check your connection and try again.');return false}}
+/* Score saves go one at a time, in order, so quick taps never land out of order. Until a save is done,
+   a refresh keeps the newer score on screen instead of the older one from the database. */
+const tPend=new Map();let tQ=Promise.resolve();
+function tSaveMatches(list){const prev=list.map(m=>(S.tmatches||[]).find(x=>x.id===m.id)||null);list.forEach(m=>{tPend.set(m.id,m);upsert(S.tmatches,m)});
+ const run=tQ.then(async()=>{try{await Store.saveTMatches(list);return true}catch(e){toast(e.code==='denied'?'Only owners and admins at this club can referee.':'Could not save the score. Check your connection.');list.forEach((m,i)=>{if(prev[i])upsert(S.tmatches,prev[i]);else S.tmatches=S.tmatches.filter(x=>x.id!==m.id)});return false}
+  finally{list.forEach(m=>{if(tPend.get(m.id)===m)tPend.delete(m.id)})}});tQ=run.then(()=>{},()=>{});return run}
+
+/* ---------- Draws ---------- */
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
+const koSize=n=>{let p=2;while(p<n)p*=2;return p};
+const koRoundName=(r,R)=>r===R?'Final':r===R-1?'Semi-finals':r===R-2?'Quarter-finals':`Round ${r}`;
+/* slots: entries in bracket order, null for a bye (never two byes in one match) */
+function tBuildKO(T,d,slots){
+ const P=slots.length,R=Math.log2(P),out=[],at=new Date().toISOString();
+ for(let r=1;r<=R;r++)for(let i=0;i<P/2**r;i++)out.push({id:`tm_${T.id}_${d.id}_k${r}_${i}`,tour:T.id,venue:T.venue,div:d.id,kind:'ko',round:r,rounds:R,i,ea:null,eb:null,ta:[],tb:[],pts:[],status:'wait',at});
+ const M=(r,i)=>out.find(m=>m.round===r&&m.i===i);
+ for(let i=0;i<P/2;i++){const m=M(1,i),x=slots[2*i],y=slots[2*i+1];tSetSide(m,'a',x);tSetSide(m,'b',y);
+  if(x&&y)m.status='ready';else{m.status='bye';m.winner=x?'a':'b';tAdvance(T,m,out)}}
+ return out;
+}
+function tSetSide(m,side,e){m['e'+side]=e?e.id:null;m['t'+side]=e?tNamed(e):[]}
+/* Put a match's winner into the next round */
+function tAdvance(T,m,all){if(m.kind!=='ko'||m.round>=m.rounds)return null;
+ const nx=all.find(x=>x.div===m.div&&x.kind==='ko'&&x.round===m.round+1&&x.i===Math.floor(m.i/2));if(!nx)return null;
+ const side=m.i%2?'b':'a',e=(S.tentries||[]).find(x=>x.id===m['e'+m.winner])||{id:m['e'+m.winner],a:m['t'+m.winner][0],b:m['t'+m.winner][1]};
+ tSetSide(nx,side,e);if(nx.ea&&nx.eb&&nx.status==='wait')nx.status='ready';return nx}
+/* League: everyone plays everyone once (circle method) */
+function tBuildLeague(T,d,teams){
+ const xs=teams.slice();if(xs.length%2)xs.push(null);const n=xs.length,out=[],at=new Date().toISOString();let k=0;
+ for(let r=0;r<n-1;r++){for(let i=0;i<n/2;i++){const x=xs[i],y=xs[n-1-i];if(x&&y){const m={id:`tm_${T.id}_${d.id}_l${r+1}_${i}`,tour:T.id,venue:T.venue,div:d.id,kind:'league',round:r+1,i:k++,pts:[],status:'ready',at};tSetSide(m,'a',x);tSetSide(m,'b',y);out.push(m)}}
+  xs.splice(1,0,xs.pop())}
+ return out;
+}
+function tTable(T,d){
+ const rows={};tTeams(T.id,d.id).forEach(e=>rows[e.id]={e,p:0,w:0,l:0,sw:0,sl:0,gw:0,gl:0});
+ tMatches(T.id,d.id).filter(m=>m.status==='done').forEach(m=>{const r=tRes(T,m),A=rows[m.ea],B=rows[m.eb];if(!A||!B)return;
+  A.p++;B.p++;if(r.winner==='a'){A.w++;B.l++}else{B.w++;A.l++}
+  r.sets.forEach(s=>{A.gw+=s[0];A.gl+=s[1];B.gw+=s[1];B.gl+=s[0];if(s[0]>s[1]){A.sw++;B.sl++}else{B.sw++;A.sl++}})});
+ return Object.values(rows).sort((x,y)=>y.w-x.w||(y.sw-y.sl)-(x.sw-x.sl)||(y.gw-y.gl)-(x.gw-x.gl)||tTeamName(tNamed(x.e)).localeCompare(tTeamName(tNamed(y.e))));
+}
+function tChampion(T,d){if(d.stage!=='done')return null;
+ const ms=tMatches(T.id,d.id);if(T.format==='league'){const t=tTable(T,d);return t[0]?tNamed(t[0].e):null}
+ const f=ms.find(m=>m.kind==='ko'&&m.round===m.rounds);return f&&f.winner?f['t'+f.winner]:null}
+
+/* ---------- Views ---------- */
+let tAuto=null;
+function tAutoOn(){return ls.get('rc_tour_auto',true)}
+function tTick(){clearInterval(tAuto);tAuto=null;
+ if(view.tab!=='tour'||!tAutoOn()||Store.mode==='local')return;
+ const T=view.tid&&tour(view.tid);if(!T||tStage(T)!=='live')return;
+ tAuto=setInterval(()=>{if(view.tab!=='tour'||!view.tid){clearInterval(tAuto);tAuto=null;return}if($('sheetBg'))return;tRefresh(true)},Store.mode==='demo'?4000:10000)}
+async function tRefresh(quiet){const b=document.querySelector('[data-act="tourRefresh"]');if(b)b.classList.add('spin');
+ if(Store.mode==='demo'&&quiet)demoTourTick();
+ try{await reload()}catch(e){if(!quiet)toast('Could not refresh. Check your connection.')}
+ const a=document.activeElement;if(a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName))return;render()}
+function vTour(){
+ after=()=>tTick();
+ if(view.tnew)return vTourNew();
+ if(view.tref){const m=(S.tmatches||[]).find(x=>x.id===view.tref);if(m&&tour(m.tour))return vRef(m);view.tref=null}
+ if(view.tid){const T=tour(view.tid);if(T&&vidOf(T)===VID)return vTourOne(T);view.tid=null}
+ const ts=(S.tours||[]).filter(t=>vidOf(t)===VID&&t.stage!=='cancelled').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+ const by=k=>ts.filter(t=>tStage(t)===k),live=by('live'),sign=by('signup'),done=by('done');
+ const sec=(h,list,empty)=>list.length||empty?`<div class="sec"><h2>${h}</h2></div><div class="list">${list.map(tCard).join('')||`<div class="card empty rv">${empty}</div>`}</div>`:'';
+ return`<div class="card hero tourhero rv"><span class="tglow" aria-hidden="true"></span><p class="eyebrow">${esc(VEN().name)}</p><h1>Tournaments</h1>
+  <p class="muted" style="margin-top:6px">${ts.length?`Sign up, follow the draw and watch every point live.`:`No tournaments here yet.`}${canMakeTour()?' You can create one for your club.':''}</p>
+  ${canMakeTour()?`<div class="cta"><button class="btn ball" data-act="tourNew">Create a tournament</button></div>`:''}</div>
+  ${sec(`${T_ICON.live} Live now`,live)}${sec('Open for sign-ups',sign,ts.length?'':`<b>Nothing to sign up for yet</b>${canMakeTour()?'Create a tournament and every member of the club is told.':'When the club creates a tournament, it shows here and you get a message.'}`)}${sec('Finished',done)}`;
+}
+function tMyEntries(T){return tEntries(T.id).filter(e=>e.status!=='out'&&tNamed(e).includes(S.uid))}
+function tCard(T){
+ const st=tStage(T),n=tEntries(T.id).filter(tReady).length,mine=tMyEntries(T),inv=mine.some(e=>e.status==='invited'&&!(e.acc&&e.acc[S.uid]));
+ const chip=st==='live'?'<span class="chip tchip-live">Live</span>':st==='done'?'<span class="chip">Finished</span>':T.vis==='invite'?'<span class="chip">Invite only</span>':'<span class="chip st-confirmed">Sign-ups open</span>';
+ return`<button class="card tcard hov rv" data-act="tourOpen" data-v="${esc(T.id)}"><span class="tci">${T_ICON.trophy}</span><span class="tcb"><span class="tct"><b>${esc(T.name)}</b>${chip}</span>
+  <span class="small muted">${SPORTS[T.sport].name} · ${esc(dateLabel(T.date))}${T.time?' · '+esc(T.time):''} · ${tFee(T)} · ${lbl(T_FMT,T.format)}</span>
+  <span class="tdivs">${(T.divs||[]).map(d=>`<span class="chip">${esc(tDivLabel(d))}</span>`).join('')}</span>
+  <span class="tiny muted">${n} entr${n===1?'y':'ies'}${mine.length?` · <b class="tyou">${inv?'You’re invited':'You’re entered'}</b>`:''}</span></span></button>`;
+}
+function vTourOne(T){
+ const st=tStage(T),ds=T.divs||[];if(!view.tdiv||!tDiv(T,view.tdiv))view.tdiv=(ds.find(d=>tMyEntries(T).some(e=>e.div===d.id))||ds[0]||{}).id;
+ const d=tDiv(T,view.tdiv),staff=canRunTour();
+ const head=`<div class="tback"><button class="btn link small" data-act="tourBack">‹ All tournaments</button>${st==='live'?`<span class="tright2"><button class="ibtn sm" data-act="tourRefresh" aria-label="Refresh scores" title="Refresh scores"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button><button class="chip tauto${tAutoOn()?' on':''}" data-act="tourAuto">Auto-refresh ${tAutoOn()?'on':'off'}</button></span>`:''}</div>
+  <div class="card hero tourhero rv"><span class="tglow" aria-hidden="true"></span><p class="eyebrow">${esc(VEN().name)} · ${SPORTS[T.sport].name}</p><h1>${esc(T.name)}</h1>
+  <div class="tfacts"><span><i>When</i><b>${esc(dateLabel(T.date))}${T.time?', '+esc(T.time):''}</b></span><span><i>Entry fee</i><b>${tFee(T)}${+T.fee>0?' <small>per player</small>':''}</b></span><span><i>Format</i><b>${lbl(T_FMT,T.format)}</b></span><span><i>Matches</i><b>${lbl(T_MATCH[T.sport],T.mfmt)}${T.sport==='padel'&&T.golden?', golden point':''}</b></span><span><i>Entry</i><b>${T.vis==='invite'?'Invite only':T.approve?'Open, staff accept':'Open'}</b></span></div>
+  ${T.note?`<p class="small" style="margin-top:12px;white-space:pre-line">${esc(T.note)}</p>`:''}
+  ${+T.fee>0?`<p class="tiny muted" style="margin-top:8px">Pay the entry fee at the club.</p>`:''}
+  ${staff?`<div class="cta"><button class="btn ghost sm" data-act="tourEdit">Edit details</button>${st==='signup'?`<button class="btn ghost sm" data-act="tourInvite">Invite players</button>`:''}</div>`:''}</div>
+  ${tYouCard(T)}`;
+ const tabs=ds.length>1?`<div class="tdtabs">${seg('tdiv','Division',ds.map(x=>[x.id,tDivLabel(x)]),view.tdiv,'tourDiv')}</div>`:'';
+ return head+tabs+(d?tDivPanel(T,d):'');
+}
+function tYouCard(T){
+ const mine=tMyEntries(T);if(!mine.length){if(tStage(T)!=='signup')return'';
+  const open=T.vis!=='invite'&&(T.divs||[]).some(d=>d.stage==='signup');
+  return open?`<div class="card tyoucard rv"><div><b>Want to play?</b><p class="small muted">Sign up with a partner, or on your own and staff pair you before the draw.</p></div><button class="btn brand" data-act="tourJoin">Sign up</button></div>`
+   :T.vis==='invite'?`<div class="card tyoucard rv"><div><b>Invite only</b><p class="small muted">Only invited players can enter. You can still follow every match here.</p></div></div>`:''}
+ return mine.map(e=>{const d=tDiv(T,e.div),p=e.a===S.uid?e.b:e.a,iAmA=e.a===S.uid,acc=e.acc||{};let s,a='';
+  if(e.status==='invited'&&!acc[S.uid]){s=`You’re invited to play ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}.`;a=`<button class="btn brand sm" data-act="tourAccept" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${e.id}">Decline</button>`}
+  else if(e.b&&!iAmA&&acc[S.uid]!==true){s=`${esc(slotName({uid:e.a}))} asked you to be their partner in ${esc(tDivLabel(d))}.`;a=`<button class="btn brand sm" data-act="tourPartnerYes" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${e.id}">Decline</button>`}
+  else if(e.b&&acc[p]!==true){s=`Waiting for ${esc(slotName({uid:p}))} to confirm as your partner in ${esc(tDivLabel(d))}.`}
+  else if(e.status==='requested'){s=`You asked to join ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}. Waiting for the club to accept.`}
+  else if(e.status==='in'&&!e.b){s=`You’re in ${esc(tDivLabel(d))} on your own. Staff pair you with a partner before the draw.`;if(d&&d.stage==='signup')a=`<button class="btn ghost sm" data-act="tourAddPartner" data-v="${e.id}">Add a partner</button>`}
+  else{s=`You’re in ${esc(tDivLabel(d))}${p?` with ${esc(slotName({uid:p}))}`:''}.`}
+  if(d&&d.stage==='signup'&&!a.includes('Decline'))a+=`<button class="btn link small" data-act="tourWithdraw" data-v="${e.id}">Pull out</button>`;
+  return`<div class="card tyoucard rv"><div><b>Your entry</b><p class="small">${s}</p></div>${a?`<div class="cta">${a}</div>`:''}</div>`}).join('');
+}
+function tDivPanel(T,d){
+ const staff=canRunTour();
+ if(d.stage==='signup'){
+  const es=tEntries(T.id,d.id),teams=tTeams(T.id,d.id),solos=tSolos(T.id,d.id),wait=es.filter(e=>e.status!=='out'&&!tReady(e)&&e.status!=='requested'&&e.status!=='invited'),req=es.filter(e=>e.status==='requested'),inv=es.filter(e=>e.status==='invited');
+  const row=(e,extra='')=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${extra}</span></div>`;
+  return`<div class="sec"><h2>${esc(tDivLabel(d))}</h2><span class="small muted">${teams.length} team${teams.length===1?'':'s'}${d.max?` of ${d.max}`:''}</span></div>
+   ${staff?`<div class="card tstaff rv"><div class="lhead"><span class="eyebrow">Run this division</span><span class="chip admin">Staff</span></div>
+    <p class="small muted">${teams.length<2?'You need at least 2 teams to make the draw.':`${teams.length} teams ready${solos.length?`, plus ${solos.length} player${solos.length===1?'':'s'} on their own to pair first`:''}.`}</p>
+    <div class="cta">${solos.length>1?`<button class="btn ghost sm" data-act="tourPair" data-v="${d.id}">Pair solo players</button>`:''}<button class="btn brand sm" data-act="tourDraw" data-v="${d.id}"${teams.length<2?' disabled':''}>Make the draw</button></div></div>`:''}
+   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${e.b&&!(e.acc||{})[e.b]?'<span class="tiny muted">Partner hasn’t confirmed yet</span>':''}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
+   <div class="sec sm"><h3>Teams in</h3></div><div class="list">${teams.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')||`<div class="card empty">No teams yet.</div>`}</div>
+   ${solos.length?`<div class="sec sm"><h3>On their own, to be paired</h3></div><div class="list">${solos.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')}</div>`:''}
+   ${wait.length?`<div class="sec sm"><h3>Waiting for a partner to confirm</h3></div><div class="list">${wait.map(e=>row(e)).join('')}</div>`:''}
+   ${staff&&inv.length?`<div class="sec sm"><h3>Invited, no answer yet</h3></div><div class="list">${inv.map(e=>row(e)).join('')}</div>`:''}`;
+ }
+ const champ=tChampion(T,d),ms=tMatches(T.id,d.id),live=ms.filter(m=>m.status==='live');
+ return`${champ?`<div class="card tchamp rv"><span class="tci big">${T_ICON.trophy}</span><div><p class="eyebrow">${esc(tDivLabel(d))} champions</p><h2>${esc(tTeamName(champ))}</h2></div></div>`:''}
+  ${live.length?`<div class="sec"><h2>${T_ICON.live} Playing now</h2></div><div class="list">${live.map(m=>tMatchRow(T,m)).join('')}</div>`:''}
+  ${T.format==='league'?tLeagueView(T,d):tBracket(T,d)}`;
+}
+function tTeamAv(uids){return`<span class="tav">${uids.map(u=>avHTML(prof(u))).join('')}</span>`}
+function tTeamLv(T,uids){const ls=uids.map(u=>lvlOf(T.sport,u)).filter(x=>x!=null);return ls.length?`<span class="tiny muted">Level ${ls.map(x=>fmtL(x)).join(' + ')}</span>`:''}
+function tMatchRow(T,m){const r=tRes(T,m),you=m.ta.includes(S.uid)?'a':m.tb.includes(S.uid)?'b':null;
+ const st=m.status==='live'?`<span class="chip tchip-live">${T_ICON.live}Live</span>`:m.status==='done'?'':m.status==='ready'?'<span class="chip">Up next</span>':'';
+ const team=(s)=>`<span class="tmt${m.status==='done'&&m.winner===s?' win':''}${you===s?' me':''}">${r.serve===s&&m.status==='live'?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(tTeamName(m['t'+s],true))}</span>`;
+ return`<button class="card tmatch hov" data-act="tourMatch" data-v="${esc(m.id)}"><span class="tmteams">${team('a')}${team('b')}</span><span class="tmscore">${st}<span class="num">${tLine(T,m)||(m.status==='bye'?'Bye':'')}</span></span></button>`}
+function tBracket(T,d){
+ const ms=tMatches(T.id,d.id).filter(m=>m.kind==='ko');if(!ms.length)return'';const R=ms[0].rounds;
+ let h='';for(let r=1;r<=R;r++){const col=ms.filter(m=>m.round===r).sort((a,b)=>a.i-b.i);
+  h+=`<div class="bcol"><p class="eyebrow">${koRoundName(r,R)}</p><div class="bms">${col.map(m=>{const res=tRes(T,m);
+   const side=s=>`<span class="bt${m.winner===s?' win':''}${m['t'+s].includes(S.uid)?' me':''}"><span>${m['t'+s].length?esc(tTeamName(m['t'+s],true)):m.status==='bye'?'Bye':'<span class="muted">To be decided</span>'}</span><b class="num">${res.sets.map(x=>x[s==='a'?0:1]).join(' ')}${m.status==='live'?` <u>${res.g[s==='a'?0:1]}</u>`:''}</b></span>`;
+   return`<button class="bm s-${m.status}" data-act="tourMatch" data-v="${esc(m.id)}"${m.status==='bye'?' disabled':''}>${m.status==='live'?`<span class="blive">${T_ICON.live}Live</span>`:''}${side('a')}${side('b')}</button>`}).join('')}</div></div>`}
+ return`<div class="sec"><h2>Draw</h2><span class="small muted">Tap a match to watch${canRunTour()?' or referee':''}</span></div><div class="bracket rv" style="--rounds:${R}">${h}</div>`;
+}
+function tLeagueView(T,d){
+ const rows=tTable(T,d),ms=tMatches(T.id,d.id).sort((a,b)=>a.round-b.round||a.i-b.i);
+ return`<div class="sec"><h2>Table</h2><span class="small muted">Wins, then sets, then games</span></div>
+  <div class="card ttable rv"><table><thead><tr><th>#</th><th class="l">Team</th><th>P</th><th>W</th><th>L</th><th>Sets</th><th>Games</th></tr></thead><tbody>
+  ${rows.map((x,i)=>`<tr class="${tNamed(x.e).includes(S.uid)?'me':''}"><td>${i+1}</td><td class="l">${esc(tTeamName(tNamed(x.e),true))}</td><td>${x.p}</td><td><b>${x.w}</b></td><td>${x.l}</td><td>${x.sw}–${x.sl}</td><td>${x.gw}–${x.gl}</td></tr>`).join('')}</tbody></table></div>
+  <div class="sec"><h2>Matches</h2></div><div class="list">${ms.map(m=>tMatchRow(T,m)).join('')}</div>`;
+}
+/* The court, in the club's own colours, with each team on its side and a ball by the server */
+function tCourt(T,m,r){const P=T.sport==='padel',nA=tTeamName(m.ta,true),nB=tTeamName(m.tb,true),sv=m.status==='live'?r.serve:null;
+ const lines=P?`<rect x="6" y="6" width="188" height="88" rx="2"/><line x1="100" y1="2" x2="100" y2="98" class="net"/><line x1="34.5" y1="6" x2="34.5" y2="94"/><line x1="165.5" y1="6" x2="165.5" y2="94"/><line x1="34.5" y1="50" x2="165.5" y2="50"/>`
+  :`<rect x="6" y="6" width="188" height="88" rx="2"/><line x1="100" y1="2" x2="100" y2="98" class="net"/><line x1="75" y1="6" x2="75" y2="94"/><line x1="125" y1="6" x2="125" y2="94"/><line x1="6" y1="50" x2="75" y2="50"/><line x1="125" y1="50" x2="194" y2="50"/><rect x="75" y="6" width="50" height="88" class="kitchen"/>`;
+ return`<div class="tcourt${m.status==='live'?' live':''}"><svg viewBox="0 0 200 100" aria-hidden="true"><defs><linearGradient id="tcg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--g1)"/><stop offset="1" style="stop-color:var(--g3)"/></linearGradient></defs>
+  <rect x="0" y="0" width="200" height="100" rx="6" fill="url(#tcg)"/><g class="tcl">${lines}</g></svg>
+  <span class="tside a">${sv==='a'?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(nA)}</span><span class="tside b">${sv==='b'?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(nB)}</span></div>`}
+function vRef(m){
+ const T=tour(m.tour),d=tDiv(T,m.div),r=tRes(T,m),staff=canRunTour(),live=m.status==='live',R=m.rounds;
+ const title=m.kind==='ko'?koRoundName(m.round,R):`League · round ${m.round}`;
+ const cols=r.sets.length+(r.done?0:1);
+ const sc=s=>{const k=s==='a'?0:1;return`<div class="sbr${m.winner===s?' win':''}${r.serve===s&&live?' srv':''}"><span class="sbn">${r.serve===s&&live?`<i class="tsv">${T_ICON.ball}</i>`:''}${esc(tTeamName(m['t'+s]))}</span>${r.sets.map(x=>`<span class="sbs${x[k]>x[1-k]?' won':''}">${x[k]}</span>`).join('')}${r.done?'':`<span class="sbs cur">${r.g[k]}</span><span class="sbp">${r.P?r.p[k]:''}</span>`}</div>`};
+ const mins=m.start?Math.max(0,Math.round(((m.end?new Date(m.end):new Date())-new Date(m.start))/6e4)):0;
+ return`<div class="tback"><button class="btn link small" data-act="tourRefBack">‹ ${esc(T.name)}</button>${!staff&&live?`<span class="tright2"><button class="ibtn sm" data-act="tourRefresh" aria-label="Refresh score"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button><button class="chip tauto${tAutoOn()?' on':''}" data-act="tourAuto">Auto-refresh ${tAutoOn()?'on':'off'}</button></span>`:''}</div>
+ <div class="card tref rv"><div class="trefhead"><div><p class="eyebrow">${esc(tDivLabel(d))} · ${esc(title)}</p><b>${live?`${T_ICON.live} Live`:m.status==='done'?'Finished':m.status==='ready'?'Ready to start':'Waiting for teams'}</b></div><span class="num muted small">${m.start?`${mins} min`:''}</span></div>
+  ${tCourt(T,m,r)}
+  <div class="sboard" style="--cols:${cols}">${sc('a')}${sc('b')}</div>
+  ${r.tb?`<p class="tiny tnote">Tiebreak: first to 7, won by 2.</p>`:r.deuce&&T.golden?`<p class="tiny tnote">Golden point: the next point wins the game.</p>`:''}
+  ${staff&&m.status==='ready'?`<button class="btn ball wide" style="margin-top:14px" data-act="tourStart" data-v="${esc(m.id)}">Start match and referee</button><p class="tiny muted" style="margin-top:8px;text-align:center">${esc(tTeamName(m.ta,true))} serve first.</p>`:''}
+  ${staff&&live?`<div class="trefbtns"><button class="tpt" data-act="tourPt" data-v="a"><span>Point</span><b>${esc(tTeamName(m.ta,true))}</b></button><button class="tpt" data-act="tourPt" data-v="b"><span>Point</span><b>${esc(tTeamName(m.tb,true))}</b></button></div>
+   <button class="btn ghost wide" style="margin-top:10px" data-act="tourUndo"${(m.pts||[]).length?'':' disabled'}>Undo last point</button>`:''}
+  ${m.status==='done'?`<p class="small" style="margin-top:12px"><b>${esc(tTeamName(m['t'+m.winner]))}</b> won ${r.sets.map(s=>m.winner==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}. The result counts in levels and rankings.</p>`:''}
+  ${!staff&&m.status!=='done'?`<p class="tiny muted" style="margin-top:12px">Scores update live as the referee taps each point.</p>`:''}</div>`;
+}
+
+/* ---------- Creating a tournament ---------- */
+function tDraft(){const sp=vSports()[0];return{name:'',sport:sp,date:addDays(today(),7),time:'10:00',fee:'',note:'',vis:'open',approve:true,format:'knockout',mfmt:T_MATCH[sp][0][0],golden:true,divs:[{id:'d1',lvl:'intermediate',cat:'mixed',max:8}]}}
+function vTourNew(){const D=view.tnew,ed=!!D.id,sw=(k,t,s)=>`<div class="setline"><div><b>${t}</b><p class="small muted">${s}</p></div><button class="switch" role="switch" aria-checked="${!!D[k]}" data-act="tnSw" data-v="${k}" aria-label="${esc(t)}"></button></div>`;
+ after=()=>{qsa('[data-tn]').forEach(el=>el.oninput=el.onchange=()=>{const k=el.dataset.tn;if(k.includes('.')){const [i,f]=k.split('.');D.divs[+i][f]=f==='max'?+el.value:el.value}else D[k]=el.value})};
+ const opt=(arr,cur)=>arr.map(([v,n])=>`<option value="${v}"${String(v)===String(cur)?' selected':''}>${esc(n)}</option>`).join('');
+ return`<div class="tback"><button class="btn link small" data-act="tnCancel">‹ ${ed?'Back to the tournament':'Tournaments'}</button></div>
+ <div class="card hero tourhero rv"><span class="tglow" aria-hidden="true"></span><p class="eyebrow">${esc(VEN().name)}</p><h1>${ed?'Edit tournament':'Create a tournament'}</h1><p class="muted" style="margin-top:6px">${ed?'Changes show to everyone straight away.':'Every member of the club gets a message when an open tournament is created.'}</p></div>
+ <div class="card tform rv">
+  <label for="tnName">Name</label><input id="tnName" data-tn="name" maxlength="60" placeholder="e.g. Winter Padel Cup" value="${esc(D.name)}">
+  ${ed?'':`<label>Sport</label>${seg('tnsp','Sport',vSports().map(k=>[k,SPORTS[k].name]),D.sport,'tnSport')}`}
+  <div class="tgrid2"><div><label for="tnDate">Date</label><input id="tnDate" type="date" data-tn="date" value="${esc(D.date)}"></div><div><label for="tnTime">Start time</label><input id="tnTime" type="time" data-tn="time" value="${esc(D.time)}"></div></div>
+  <label for="tnFee">Entry fee per player (₹)</label><input id="tnFee" type="number" inputmode="numeric" min="0" step="50" data-tn="fee" placeholder="0 for free" value="${esc(D.fee)}">
+  <label for="tnNote">About this tournament</label><textarea id="tnNote" data-tn="note" maxlength="500" placeholder="Prizes, schedule, what to bring">${esc(D.note)}</textarea>
+ </div>
+ <div class="card tform rv"><h3>Who can play</h3>
+  ${seg('tnvis','Entry',[['open','Open to the club'],['invite','Invite only']],D.vis,'tnVis')}
+  <p class="small muted" style="margin:8px 0 4px">${D.vis==='open'?'Everyone at the club is told and can ask to join.':'Only players you invite are told. They accept or decline.'}</p>
+  ${D.vis==='open'?sw('approve','Staff accept each sign-up','Owners and admins check every entry before it’s in.'):''}
+ </div>
+ ${ed?'':`<div class="card tform rv"><h3>Format</h3>
+  ${seg('tnfmt','Format',T_FMT,D.format,'tnFmt')}
+  <p class="small muted" style="margin:8px 0 10px">${D.format==='knockout'?'Lose and you’re out. Byes are added if the number of teams isn’t a power of 2.':'Every team plays every other team once. Most wins tops the table.'}</p>
+  <label>Each match</label>${seg('tnm','Match format',T_MATCH[D.sport],D.mfmt,'tnMfmt')}
+  ${D.sport==='padel'?sw('golden','Golden point','At 40–40 the next point wins the game, instead of playing advantage.'):`<p class="tiny muted" style="margin-top:8px">Rally scoring: every rally wins a point, won by 2.</p>`}
+ </div>
+ <div class="card tform rv"><h3>Divisions</h3><p class="small muted" style="margin-bottom:6px">Run several at the same time, each with its own draw.</p>
+  ${D.divs.map((x,i)=>`<div class="tdivrow"><div class="tgrid3"><div><label>Level</label><select data-tn="${i}.lvl">${opt(T_LVL,x.lvl)}</select></div><div><label>Players</label><select data-tn="${i}.cat">${opt(T_CAT,x.cat)}</select></div><div><label>Size</label><select data-tn="${i}.max">${opt(T_MAX,x.max)}</select></div></div>${D.divs.length>1?`<button class="btn link small" data-act="tnDivDel" data-v="${i}">Remove</button>`:''}</div>`).join('')}
+  <button class="btn ghost sm" data-act="tnDivAdd" style="margin-top:8px">+ Add a division</button></div>`}
+ <p class="ferr" id="tnErr"></p>
+ <button class="btn brand wide" data-act="tnSave">${ed?'Save changes':D.vis==='open'?'Create and tell the club':'Create tournament'}</button>
+ ${ed&&canMakeTour()?`<button class="btn danger wide" style="margin-top:10px" data-act="tourDel">Delete tournament</button>`:''}<div style="height:24px"></div>`;
+}
+async function tCreate(){
+ const D=view.tnew,err=t=>{const e=$('tnErr');if(e)e.textContent=t;toast(t)};
+ D.name=(D.name||'').trim();if(D.name.length<3)return err('Give the tournament a name.');
+ if(!D.date)return err('Choose a date.');
+ const keys=D.divs.map(x=>x.lvl+'|'+x.cat);if(new Set(keys).size!==keys.length)return err('Two divisions are the same. Change the level or players of one.');
+ if(D.id){const T=tour(D.id);if(!T)return;const nt=Object.assign({},T,{name:D.name,date:D.date,time:D.time,fee:+D.fee||0,note:(D.note||'').trim(),vis:D.vis,approve:D.vis==='open'&&!!D.approve});
+  if(await tSaveTour(nt)){view.tnew=null;doneTick('Tournament updated');render()}return}
+ const T={id:'t_'+rid(),venue:VID,name:D.name,sport:D.sport,date:D.date,time:D.time,fee:+D.fee||0,note:(D.note||'').trim(),vis:D.vis,approve:D.vis==='open'&&!!D.approve,format:D.format,mfmt:D.mfmt,golden:D.sport==='padel'&&!!D.golden,stage:'signup',
+  divs:D.divs.map((x,i)=>({id:'d'+(i+1),lvl:x.lvl,cat:x.cat,max:+x.max||0,stage:'signup'})),by:S.uid,at:new Date().toISOString()};
+ const b=document.querySelector('[data-act="tnSave"]');if(b){b.disabled=true;b.textContent='Creating…'}
+ if(!await tSaveTour(T,true)){if(b){b.disabled=false;b.textContent='Create'}return}
+ if(T.vis==='open'){const to=S.profiles.filter(p=>p.setup&&inVenue(p)&&p.id!==S.uid).map(p=>({to:p.id,kind:'tour_new',data:{tour:T.id,venue:VID}}));
+  for(let i=0;i<to.length;i+=200)await notify(to.slice(i,i+200));toast(`Created. ${to.length} member${to.length===1?' has':'s have'} been told.`,3600)}
+ view.tnew=null;view.tid=T.id;view.tdiv=null;doneTick('Tournament created');render();
+}
+
+/* ---------- Pickers ---------- */
+function tPickSheet({title,sub,sport,exclude=[],multi,filter,onPick,all}){
+ const sel=new Set();
+ openSheet(`<h2>${esc(title)}</h2>${sub?`<p class="muted small">${sub}</p>`:''}
+  <div class="search" style="margin-top:14px">${ICON.search}<input id="tpQ" type="search" placeholder="Search members" aria-label="Search members"></div>
+  <div class="pickl" id="tpL"></div>${multi?`<button class="btn brand wide" id="tpGo" style="margin-top:12px" disabled>Invite</button>${all?`<button class="btn ghost wide" id="tpAll" style="margin-top:10px">${esc(all)}</button>`:''}`:''}`,bg=>{
+  const pool=()=>S.profiles.filter(p=>p.setup&&inVenue(p)&&!exclude.includes(p.id)&&(!filter||filter(p)));
+  const paint=()=>{const q=(bg.querySelector('#tpQ').value||'').trim().toLowerCase();
+   const list=pool().filter(p=>!q||(p.name+' '+p.username).toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
+   bg.querySelector('#tpL').innerHTML=list.map(p=>{const r=lvlOf(sport,p.id);return`<button type="button" data-tp="${p.id}" class="${sel.has(p.id)?'on':''}">${avHTML(p)}<span class="nm"><b>${esc(p.name)}</b><span>@${esc(p.username)}</span></span>${r!=null?`<span class="chip t-${tierOf(sport,r)} num">${fmtL(r)}</span>`:''}${multi?`<span class="tpck">${sel.has(p.id)?'✓':''}</span>`:''}</button>`}).join('')||'<p class="small muted" style="padding:8px 4px">No members found.</p>';
+   qsa('[data-tp]',bg).forEach(el=>el.onclick=()=>{const id=el.dataset.tp;tick();if(!multi)return onPick(id);sel.has(id)?sel.delete(id):sel.add(id);const g=bg.querySelector('#tpGo');g.disabled=!sel.size;g.textContent=sel.size?`Invite ${sel.size} player${sel.size===1?'':'s'}`:'Invite';paint()})};
+  bg.querySelector('#tpQ').oninput=paint;paint();
+  if(multi){bg.querySelector('#tpGo').onclick=()=>onPick([...sel]);const a=bg.querySelector('#tpAll');if(a)a.onclick=()=>onPick(pool().map(p=>p.id))}});
+}
+/* Sign up: pick a division, then a partner or none */
+function tJoinSheet(T,inviteEntry){
+ const ds=(T.divs||[]).filter(d=>d.stage==='signup'&&(!inviteEntry||d.id===inviteEntry.div));
+ const opts=ds.map(d=>{const why=inviteEntry?'':tElig(T,d,[S.uid])||(tFull(T,d)?'This division is full.':'');return{d,why}});
+ openSheet(`<h2>${inviteEntry?'Accept your invite':'Sign up'}</h2><p class="muted small">${esc(T.name)} · ${SPORTS[T.sport].name}${+T.fee>0?` · ${tFee(T)} per player, paid at the club`:''}</p>
+  ${inviteEntry?'':`<label style="margin-top:14px">Division</label><div class="tjoinl">${opts.map(({d,why},i)=>`<button type="button" class="opt${why?' locked':''}" role="radio" aria-checked="false" data-jd="${d.id}"${why?' disabled':''}><span class="ot"><b>${esc(tDivLabel(d))}</b><span>${why?esc(why):d.max?`${tTeams(T.id,d.id).length} of ${d.max} teams`:`${tTeams(T.id,d.id).length} teams so far`}</span></span></button>`).join('')}</div>`}
+  <label style="margin-top:14px">Partner</label>
+  <button type="button" class="btn ghost wide" id="jP">Choose a partner</button>
+  <button type="button" class="opt" role="radio" aria-checked="true" id="jSolo" style="margin-top:8px"><span class="ot"><b>I don’t have a partner yet</b><span>Staff pair you with someone before the draw</span></span></button>
+  <p class="ferr" id="jErr"></p><button class="btn brand wide" id="jGo" style="margin-top:6px">${inviteEntry?'Accept':T.approve?'Ask to join':'Sign up'}</button>`,bg=>{
+  let div=inviteEntry?inviteEntry.div:(opts.find(o=>!o.why)||{}).d?.id||null,partner=null;
+  const paint=()=>{qsa('[data-jd]',bg).forEach(b=>b.setAttribute('aria-checked',String(b.dataset.jd===div)));
+   bg.querySelector('#jP').textContent=partner?`Partner: ${slotName({uid:partner})} · change`:'Choose a partner';bg.querySelector('#jSolo').setAttribute('aria-checked',String(!partner))};
+  qsa('[data-jd]',bg).forEach(b=>b.onclick=()=>{div=b.dataset.jd;partner=null;paint()});
+  bg.querySelector('#jSolo').onclick=()=>{partner=null;paint()};
+  bg.querySelector('#jP').onclick=()=>{const d=tDiv(T,div);if(!d)return;const keep={div};
+   tPickSheet({title:'Choose a partner',sub:`${esc(tDivLabel(d))}. They get a message to confirm.`,sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[S.uid,p.id].filter(u=>!inviteEntry||u!==S.uid)),onPick:id=>{partner=id;tJoinSheet2(T,inviteEntry,keep.div,partner)}})};
+  paint();
+  bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inviteEntry,div,partner);
+  if(div==null&&!inviteEntry){bg.querySelector('#jGo').disabled=true;bg.querySelector('#jErr').textContent=opts.length?'You can’t enter any division here. See the reasons above.':'Sign-ups have closed.'}});
+}
+/* Re-open the sign-up sheet with the partner filled in */
+function tJoinSheet2(T,inv,div,partner){tJoinSheet(T,inv);setTimeout(()=>{const bg=$('sheetBg');if(!bg)return;const b=bg.querySelector(`[data-jd="${div}"]`);if(b)b.click();
+ const pb=bg.querySelector('#jP'),sb=bg.querySelector('#jSolo');pb.textContent=`Partner: ${slotName({uid:partner})} · change`;sb.setAttribute('aria-checked','false');
+ bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inv,div,partner);sb.onclick=()=>tJoinSheet(T,inv)},30)}
+async function tJoinGo(T,inv,div,partner){
+ const d=tDiv(T,div),err=t=>{const e=$('jErr');if(e)e.textContent=t};if(!d)return err('Choose a division.');
+ if(inv){const e=Object.assign({},inv,{status:'in',acc:Object.assign({},inv.acc,{[S.uid]:true})});if(partner&&!e.b){e.b=partner;e.acc[partner]=false}
+  if(!await tSaveEntry(e))return;closeSheet();doneTick('You’re in');
+  if(partner&&inv.b!==partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);render();return}
+ const why=tElig(T,d,partner?[S.uid,partner]:[S.uid]);if(why)return err(why);if(tFull(T,d))return err('This division is full.');
+ const e={id:'te_'+rid(),tour:T.id,venue:T.venue,div,a:S.uid,b:partner||null,acc:partner?{[S.uid]:true,[partner]:false}:{[S.uid]:true},status:T.approve?'requested':'in',by:S.uid,at:new Date().toISOString()};
+ if(!await tSaveEntry(e,true))return;closeSheet();doneTick(T.approve?'Request sent':'You’re in');
+ if(partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);
+ toast(T.approve?`The club will check your entry${partner?` once ${first(prof(partner))} confirms`:''}.`:partner?`${first(prof(partner))} gets a message to confirm.`:'Staff pair you with a partner before the draw.',3800);render();
+}
+/* Make the draw: random, or set by hand to match a draw done at the club */
+function tDrawSheet(T,d){
+ const teams=tTeams(T.id,d.id),solos=tSolos(T.id,d.id);
+ openSheet(`<h2>Make the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${teams.length} teams · ${lbl(T_FMT,T.format)}</p>
+  ${solos.length?`<p class="small" style="margin-top:10px">${solos.length} player${solos.length===1?' is':'s are'} still on their own and won’t be in the draw. Pair them first if they should play.</p>`:''}
+  <button type="button" class="opt big" style="margin-top:14px" data-act="tourDrawGo" data-v="${d.id}|random"><span class="ot"><b>Random draw</b><span>The app shuffles the teams${T.format==='knockout'?' and places any byes':''}.</span></span></button>
+  ${T.format==='knockout'?`<button type="button" class="opt big" style="margin-top:8px" data-act="tourDrawHand" data-v="${d.id}"><span class="ot"><b>Set the draw by hand</b><span>Pick who plays who, e.g. after drawing names at the club.</span></span></button>`:''}
+  <p class="tiny muted" style="margin-top:10px">After the draw, sign-ups for this division close and every player is told.</p>`);
+}
+function tHandSheet(T,d){
+ const teams=tTeams(T.id,d.id),P=koSize(teams.length),slots=new Array(P).fill('');
+ const opt=cur=>`<option value="">${'Bye'}</option>`+teams.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${esc(tTeamName(tNamed(e),true))}</option>`).join('');
+ openSheet(`<h2>Set the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${P/2} first-round matches. Leave a side as Bye when there are fewer teams.</p>
+  <div class="thand">${Array.from({length:P/2},(_,i)=>`<div class="throw"><span class="tiny muted">Match ${i+1}</span><select data-hs="${2*i}">${opt('')}</select><span class="tiny muted">vs</span><select data-hs="${2*i+1}">${opt('')}</select></div>`).join('')}</div>
+  <p class="ferr" id="hErr"></p><button class="btn brand wide" id="hGo">Save the draw</button>`,bg=>{
+  bg.querySelector('#hGo').onclick=async()=>{const v=qsa('[data-hs]',bg).map(s=>s.value),used=v.filter(Boolean),err=t=>bg.querySelector('#hErr').textContent=t;
+   if(new Set(used).size!==used.length)return err('A team is in the draw twice.');if(used.length!==teams.length)return err(`Put all ${teams.length} teams in the draw.`);
+   for(let i=0;i<v.length;i+=2)if(!v[i]&&!v[i+1])return err(`Match ${i/2+1} has no teams. Every match needs at least one.`);
+   await tDrawSave(T,d,v.map(id=>id?teams.find(e=>e.id===id):null))}});
+}
+async function tDrawSave(T,d,slots){
+ const teams=tTeams(T.id,d.id);let ms;
+ if(T.format==='league')ms=tBuildLeague(T,d,shuffle(teams));
+ else{if(!slots){const sh=shuffle(teams),P=koSize(sh.length),half=P/2;slots=new Array(P).fill(null);sh.forEach((e,i)=>{if(i<half)slots[2*i]=e;else slots[2*(i-half)+1]=e})}ms=tBuildKO(T,d,slots)}
+ if(!await tSaveMatches(ms))return;
+ const nt=Object.assign({},T,{divs:T.divs.map(x=>x.id===d.id?Object.assign({},x,{stage:'live',drawn:new Date().toISOString()}):x)});nt.stage=nt.divs.every(x=>x.stage!=='signup')?'live':'signup';
+ if(!await tSaveTour(nt))return;closeSheet();doneTick('Draw made');
+ notify(teams.flatMap(e=>tNamed(e)).map(to=>({to,kind:'tour_draw',data:{tour:T.id,div:d.id,venue:T.venue}})));render();
+}
+async function tPairSolos(T,d,how){
+ let solos=tSolos(T.id,d.id);if(solos.length<2)return;
+ if(how==='hand'){const [x,...rest]=solos;return tPickSheet({title:`Partner for ${slotName({uid:x.a})}`,sub:'Pick from the players signed up on their own.',sport:T.sport,filter:p=>rest.some(e=>e.a===p.id),onPick:async id=>{const y=rest.find(e=>e.a===id);await tMerge(T,x,y);closeSheet();render()}})}
+ if(d.cat==='mixed'){const m=shuffle(solos.filter(e=>(prof(e.a)||{}).gender==='male')),f=shuffle(solos.filter(e=>(prof(e.a)||{}).gender!=='male'));for(let i=0;i<Math.min(m.length,f.length);i++)await tMerge(T,m[i],f[i])}
+ else{solos=shuffle(solos);for(let i=0;i+1<solos.length;i+=2)await tMerge(T,solos[i],solos[i+1])}
+ closeSheet();doneTick('Players paired');render();
+}
+async function tMerge(T,x,y){const nx=Object.assign({},x,{b:y.a,acc:Object.assign({},x.acc,{[y.a]:true}),paired:true}),ny=Object.assign({},y,{status:'out',merged:x.id});
+ if(await tSaveEntry(nx)&&await tSaveEntry(ny))notify([{to:x.a,kind:'tour_ok',data:{tour:T.id,venue:T.venue,partner:y.a}},{to:y.a,kind:'tour_ok',data:{tour:T.id,venue:T.venue,partner:x.a}}])}
+
+/* ---------- Refereeing ---------- */
+async function tPoint(w){const m=(S.tmatches||[]).find(x=>x.id===view.tref),T=m&&tour(m.tour);if(!m||m.status!=='live')return;
+ const before=tRes(T,m),nm=Object.assign({},m,{pts:[...(m.pts||[]),w]}),r=tRes(T,nm);sfx('pop');buzz([12]);
+ upsert(S.tmatches,nm);render();if(!await tSaveMatches([nm])){upsert(S.tmatches,m);render();return}
+ if(r.done)tFinishAsk(T,nm);else if(r.sets.length>before.sets.length)toast(`${r.P?'Set':'Game'} to ${tTeamName(nm['t'+(r.sets[r.sets.length-1][0]>r.sets[r.sets.length-1][1]?'a':'b')],true)}`)}
+function tFinishAsk(T,m){const r=tRes(T,m),w=r.winner;
+ openSheet(`<h2 data-noback>Match point won</h2><p class="muted">${esc(tTeamName(m['t'+w]))} win ${r.sets.map(s=>w==='a'?s.join('–'):[s[1],s[0]].join('–')).join(', ')}.</p>
+  <button class="btn brand wide" style="margin-top:16px" data-act="tourFinish">Finish match</button><button class="btn ghost wide" style="margin-top:10px" data-act="tourUndoFinish">Undo that point</button>`)}
+async function tFinish(){const m=(S.tmatches||[]).find(x=>x.id===view.tref),T=m&&tour(m.tour);if(!m)return;const r=tRes(T,m);if(!r.done)return closeSheet();
+ const at=new Date().toISOString(),lv=u=>({uid:u,level:+fmtL(lvlOf(T.sport,u)??avg(SPORTS[T.sport].bands.intermediate))});
+ const rec={id:'m_'+rid(),venue:T.venue,sport:T.sport,format:'doubles',date:today(),time:null,len:0,court:m.court||1,a:m.ta.map(lv),b:m.tb.map(lv),sets:r.sets,winner:r.winner,by:S.uid,at,logged:true,review:{by:S.uid,at,prev:null,kept:true},tour:T.id};
+ const nm=Object.assign({},m,{status:'done',winner:r.winner,end:at,rm:rec.id}),all=(S.tmatches||[]).map(x=>x.id===nm.id?nm:Object.assign({},x)),nx=tAdvance(T,nm,all);
+ const b=document.querySelector('[data-act="tourFinish"]');if(b){b.disabled=true;b.textContent='Saving…'}
+ if(!await tSaveMatches(nx?[nm,nx]:[nm]))return;
+ try{await Store.addMatch(rec);S.matches.push(rec);rate()}catch(e){toast('The result is saved, but it could not be added to the rankings. Check your connection.')}
+ const d=tDiv(T,m.div),left=tMatches(T.id,d.id).filter(x=>x.status!=='done'&&x.status!=='bye');
+ if(!left.length){const nt=Object.assign({},T,{divs:T.divs.map(x=>x.id===d.id?Object.assign({},x,{stage:'done'}):x)});nt.stage=nt.divs.every(x=>x.stage==='done')?'done':nt.stage;await tSaveTour(nt);
+  const ch=tChampion(nt,tDiv(nt,d.id));closeSheet();celebrate(ch?`${tTeamName(ch,true)} win ${tDivLabel(d)}!`:'Division finished');
+  notify(tTeams(T.id,d.id).flatMap(e=>tNamed(e)).map(to=>({to,kind:'tour_result',data:{tour:T.id,div:d.id,venue:T.venue}})))}
+ else{closeSheet();doneTick('Match saved')}
+ view.tref=null;render();
+}
+
+/* ---------- Actions ---------- */
+Object.assign(ACT,{
+ tourOpen(v){closeSheet(true);const T=tour(v);if(T&&vidOf(T)!==VID&&isMember(S.uid,vidOf(T))){view.tid=v;view.tref=null;return setVenue(vidOf(T),'tour')}view.tab='tour';view.tid=v;view.tdiv=null;view.tref=null;view.tnew=null;window.scrollTo(0,0);render()},
+ tourBack(){view.tid=null;view.tref=null;window.scrollTo(0,0);render()},
+ tourRefBack(){view.tref=null;window.scrollTo(0,0);render()},
+ tourDiv(v){view.tdiv=v;render()},
+ tourRefresh(){tick();tRefresh(false)},
+ tourAuto(){ls.set('rc_tour_auto',!tAutoOn());toast(tAutoOn()?'Scores refresh on their own while a tournament is live.':'Auto-refresh is off. Tap the arrow to refresh.');render()},
+ tourMatch(v){view.tref=v;window.scrollTo(0,0);render()},
+ tourNew(){if(!canMakeTour())return toast('Only the club’s owners can create tournaments.');view.tnew=tDraft();window.scrollTo(0,0);render()},
+ tourEdit(){const T=tour(view.tid);if(!T)return;view.tnew=Object.assign({},T,{divs:T.divs.map(x=>Object.assign({},x))});window.scrollTo(0,0);render()},
+ tnCancel(){view.tnew=null;window.scrollTo(0,0);render()},
+ tnSport(v){const D=view.tnew;D.sport=v;D.mfmt=T_MATCH[v][0][0];render()},
+ tnVis(v){view.tnew.vis=v;render()},tnFmt(v){view.tnew.format=v;render()},tnMfmt(v){view.tnew.mfmt=v;render()},
+ tnSw(v,el){view.tnew[v]=!view.tnew[v];el.setAttribute('aria-checked',String(!!view.tnew[v]));tick()},
+ tnDivAdd(){const D=view.tnew;if(D.divs.length>=6)return toast('Up to 6 divisions.');D.divs.push({id:'d'+(D.divs.length+1),lvl:'open',cat:'open',max:8});render()},
+ tnDivDel(v){view.tnew.divs.splice(+v,1);render()},
+ tnSave(){tCreate()},
+ async tourDel(){const T=tour(view.tnew&&view.tnew.id);if(!T)return;openSheet(`<h2>Delete this tournament?</h2><p class="muted">${esc(T.name)}, its entries and its draw are removed. Games already played stay in the rankings.</p><button class="btn danger wide" style="margin-top:16px" data-act="tourDelYes">Yes, delete it</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Keep it</button>`)},
+ async tourDelYes(){const T=tour(view.tnew&&view.tnew.id);if(!T)return;try{await Store.delTour(T.id)}catch(e){return toast('Could not delete. Only owners can delete tournaments.')}
+  S.tours=S.tours.filter(x=>x.id!==T.id);S.tentries=S.tentries.filter(x=>x.tour!==T.id);S.tmatches=S.tmatches.filter(x=>x.tour!==T.id);closeSheet();view.tnew=null;view.tid=null;toast('Tournament deleted');render()},
+ tourJoin(){const T=tour(view.tid);if(T)tJoinSheet(T)},
+ tourAccept(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(e.b)return ACT.tourPartnerYes(v);tJoinSheet(T,e)},
+ async tourPartnerYes(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;const ne=Object.assign({},e,{acc:Object.assign({},e.acc,{[S.uid]:true})});if(e.status==='invited'&&e.a===S.uid)ne.status='in';
+  if(await tSaveEntry(ne)){closeSheet(true);doneTick('Confirmed');const o=tNamed(e).find(u=>u!==S.uid);if(o&&e.status!=='invited')notify([{to:o,kind:'tour_pyes',data:{tour:T.id,entry:e.id}}]);render()}},
+ async tourDecline(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;const ne=Object.assign({},e,{status:'out',acc:Object.assign({},e.acc,{[S.uid]:false}),outBy:S.uid});
+  if(await tSaveEntry(ne)){closeSheet(true);toast('Declined');const o=tNamed(e).find(u=>u!==S.uid);if(o)notify([{to:o,kind:'tour_pno',data:{tour:T.id,entry:e.id}}]);render()}},
+ tourWithdraw(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;openSheet(`<h2>Pull out?</h2><p class="muted">You’ll leave ${esc(T.name)}${e.b?', and your partner too':''}. You can sign up again while sign-ups are open.</p><button class="btn danger wide" style="margin-top:16px" data-act="tourDecline" data-v="${e.id}">Yes, pull out</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Stay in</button>`)},
+ tourAddPartner(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour),d=T&&tDiv(T,e.div);if(!d)return;
+  tPickSheet({title:'Choose a partner',sub:'They get a message to confirm.',sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[p.id]),onPick:async id=>{const ne=Object.assign({},e,{b:id,acc:Object.assign({},e.acc,{[id]:false})});if(await tSaveEntry(ne)){closeSheet();notify([{to:id,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);toast(`${first(prof(id))} gets a message to confirm.`);render()}}})},
+ async tourOk(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'in'}))){notify(tNamed(e).map(to=>({to,kind:'tour_ok',data:{tour:T.id,venue:T.venue}})));toast('Accepted. They’ve been told.');render()}},
+ async tourNo(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'out',outBy:S.uid}))){notify(tNamed(e).map(to=>({to,kind:'tour_no',data:{tour:T.id,venue:T.venue}})));toast('Declined. They’ve been told.');render()}},
+ tourInvite(){const T=tour(view.tid);if(!T)return;const ds=T.divs.filter(d=>d.stage==='signup');if(!ds.length)return toast('Sign-ups have closed.');
+  const go=d=>tPickSheet({title:'Invite players',sub:`${esc(tDivLabel(d))}. They get a message and accept or decline.`,sport:T.sport,multi:true,all:'Invite everyone who can play',exclude:tEntries(T.id,d.id).filter(e=>e.status!=='out').flatMap(tNamed),filter:p=>!tElig(T,d,[p.id]),onPick:async ids=>{
+   if(!ids.length)return toast('Nobody left to invite.');const at=new Date().toISOString(),es=ids.map(u=>({id:'te_'+rid(),tour:T.id,venue:T.venue,div:d.id,a:u,b:null,acc:{},status:'invited',by:S.uid,at}));
+   for(const e of es)if(!await tSaveEntry(e,true))return;closeSheet();notify(es.map(e=>({to:e.a,kind:'tour_invite',data:{tour:T.id,entry:e.id,venue:T.venue}})));doneTick(`${es.length} invited`);render()}});
+  if(ds.length===1)return go(ds[0]);
+  openSheet(`<h2>Invite to which division?</h2>${ds.map(d=>`<button type="button" class="opt" style="margin-top:8px" data-tdi="${d.id}"><span class="ot"><b>${esc(tDivLabel(d))}</b></span></button>`).join('')}`,bg=>qsa('[data-tdi]',bg).forEach(b=>b.onclick=()=>go(tDiv(T,b.dataset.tdi))))},
+ tourPair(v){const T=tour(view.tid),d=T&&tDiv(T,v);if(!d)return;openSheet(`<h2>Pair solo players</h2><p class="muted small">${tSolos(T.id,d.id).length} players signed up on their own in ${esc(tDivLabel(d))}.${d.cat==='mixed'?' Mixed: each man is paired with a woman.':''}</p>
+  <button type="button" class="opt big" style="margin-top:14px" data-act="tourPairGo" data-v="${d.id}|random"><span class="ot"><b>Pair at random</b><span>Everyone is told who their partner is.</span></span></button>
+  <button type="button" class="opt big" style="margin-top:8px" data-act="tourPairGo" data-v="${d.id}|hand"><span class="ot"><b>Pick pairs by hand</b><span>Choose a partner for each player.</span></span></button>`)},
+ tourPairGo(v){const [id,how]=v.split('|'),T=tour(view.tid),d=T&&tDiv(T,id);if(d)tPairSolos(T,d,how)},
+ tourDraw(v){const T=tour(view.tid),d=T&&tDiv(T,v);if(d)tDrawSheet(T,d)},
+ tourDrawGo(v){const [id]=v.split('|'),T=tour(view.tid),d=T&&tDiv(T,id);if(d)tDrawSave(T,d,null)},
+ tourDrawHand(v){const T=tour(view.tid),d=T&&tDiv(T,v);if(d)tHandSheet(T,d)},
+ async tourStart(v){const m=S.tmatches.find(x=>x.id===v);if(!m||!canRunTour())return;const nm=Object.assign({},m,{status:'live',start:new Date().toISOString(),ref:S.uid,pts:[]});if(await tSaveMatches([nm])){sfx('pop');render()}},
+ tourPt(v){tPoint(v)},
+ async tourUndo(){const m=S.tmatches.find(x=>x.id===view.tref);if(!m||!(m.pts||[]).length)return;const nm=Object.assign({},m,{pts:m.pts.slice(0,-1)});upsert(S.tmatches,nm);render();if(!await tSaveMatches([nm])){upsert(S.tmatches,m);render()}},
+ async tourUndoFinish(){closeSheet(true);await ACT.tourUndo()},
+ tourFinish(){tFinish()}
+});
+
+/* ---------- Inbox messages about tournaments ---------- */
+function tMsg(g,fn){const d=g.data||{},T=tour(d.tour),i=T_ICON.trophy;
+ if(!T)return{i,t:'Tournament',p:'This tournament has since been removed.'};
+ const e=d.entry&&(S.tentries||[]).find(x=>x.id===d.entry),dv=tDiv(T,d.div||(e&&e.div)),dn=dv?esc(tDivLabel(dv)):'',nm=`<b>${esc(T.name)}</b>`;
+ const when=`${SPORTS[T.sport].name} · ${esc(dateLabel(T.date))}${T.time?', '+esc(T.time):''} · Entry ${tFee(T)}`;
+ const more=(t='Find out more',cls='ghost')=>`<button class="btn ${cls} sm" data-act="tourOpen" data-v="${esc(T.id)}">${t}</button>`;
+ const acc=e&&e.acc||{},sn=esc(staffName(g.from,vidOf(g)));
+ switch(g.kind){
+  case 'tour_new':{const open=tStage(T)==='signup';return{i,t:'An open tournament has been created in your club',p:`${nm}<br>${when}. ${(T.divs||[]).map(x=>esc(tDivLabel(x))).join(', ')}.${open?' Tap to find out more and sign up.':''}`,a:more(open?'Find out more and sign up':'See the tournament',open?'brand':'ghost')}}
+  case 'tour_invite':{const pend=e&&e.status==='invited'&&!acc[S.uid];
+   return{i,t:`You’re invited to play ${esc(T.name)}`,p:`${sn} invited you to play${dn?' '+dn:''}. ${when}.`,
+    a:pend?`<button class="btn brand sm" data-act="tourAccept" data-v="${esc(e.id)}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${esc(e.id)}">Decline</button>${more('Details','link small')}`
+     :`<span class="chip ${e&&e.status!=='out'?'st-confirmed':'st-disputed'}">${!e?'Invite withdrawn':e.status==='out'?'You declined':'You accepted'}</span>${more('Open','link small')}`}}
+  case 'tour_partner':{const pend=e&&e.status!=='out'&&e.b===S.uid&&acc[S.uid]!==true;
+   return{i,t:`${esc(fn)} wants you as their partner`,p:`In ${nm}${dn?', '+dn:''}. ${when}.`,
+    a:pend?`<button class="btn brand sm" data-act="tourPartnerYes" data-v="${esc(e.id)}">Accept</button><button class="btn ghost sm" data-act="tourDecline" data-v="${esc(e.id)}">Decline</button>${more('Details','link small')}`
+     :`<span class="chip ${e&&e.status!=='out'&&acc[S.uid]?'st-confirmed':'st-disputed'}">${e&&e.status!=='out'&&acc[S.uid]?'You’re partners':'Not playing together'}</span>`}}
+  case 'tour_pyes':return{i,t:`${esc(fn)} is your partner`,p:`${esc(fn)} confirmed you’re playing ${nm} together${dn?' in '+dn:''}.`,a:more('Open')};
+  case 'tour_pno':return{i,t:`${esc(fn)} can’t play`,p:`${esc(fn)} declined ${nm}. You can sign up again with someone else while sign-ups are open.`,a:more('Open')};
+  case 'tour_ok':return d.partner?{i,t:`Your partner for ${esc(T.name)}`,p:`The club paired you with <b>${esc(slotName({uid:d.partner}))}</b>${dn?' in '+dn:''}.`,a:more('Open')}:{i,t:`You’re in ${esc(T.name)}`,p:`${sn} accepted your entry. ${when}.${+T.fee>0?' Pay the entry fee at the club.':''}`,a:more('Open')};
+  case 'tour_no':return{i,t:`Your entry to ${esc(T.name)} wasn’t accepted`,p:`The club couldn’t fit you in this time. Ask at the club if you have questions.`};
+  case 'tour_draw':return{i,t:`The draw for ${esc(T.name)} is out`,p:`See who you play${dn?' in '+dn:''}. Every match can be followed live.`,a:more('See the draw','brand')};
+  case 'tour_result':{const ch=dv&&tChampion(T,dv);return{i,t:`${dn||'A division'} is finished`,p:`${nm}${ch?`: <b>${esc(tTeamName(ch))}</b> ${ch.includes(S.uid)?'are the champions. Congratulations!':'are the champions.'}`:'.'} Results count in levels and rankings.`,a:more('See the results')}}
+ }
+ return{i,t:'Tournament',p:nm};
+}
+function tNeeds(g){const d=g.data||{},e=d.entry&&(S.tentries||[]).find(x=>x.id===d.entry);if(!e)return false;const acc=e.acc||{};
+ if(g.kind==='tour_invite')return e.status==='invited'&&!acc[S.uid];
+ if(g.kind==='tour_partner')return e.status!=='out'&&e.b===S.uid&&acc[S.uid]!==true;return false}
+
+/* ---------- Demo tournaments: one running live at every club, plus sign-ups, an invite and a finished league at Racquet Culture ---------- */
+function tSimPts(T,pa,stop){const pts=[];for(let k=0;k<600;k++){if(tScore(T.sport,T.mfmt,pts,T.golden).done)break;if(stop&&pts.length>=stop)break;
+ pts.push(Math.random()<pa?'a':'b');if(stop&&tScore(T.sport,T.mfmt,pts,T.golden).done){pts.pop();break}}return pts}
+function demoTours(d){
+ d.tours=[];d.tentries=[];d.tmatches=[];const now=Date.now(),T0=today(),ago=h=>new Date(now-h*36e5).toISOString();
+ const st=(p,sp)=>p.levels&&p.levels[sp]?+p.levels[sp].start:null,roleIds=v=>[...new Set([d.you,...Object.values(d.staff[v]||{})])];
+ const pool=(v,sp,used)=>shuffle(d.profiles.filter(p=>p.setup&&venuesOf(p).includes(v)&&st(p,sp)!=null&&!roleIds(v).includes(p.id)&&!used.has(p.id)));
+ const pa=(T,x,y)=>{const s=u=>st(d.profiles.find(p=>p.id===u)||{},T.sport)||3,A=avg(x.map(s)),B=avg(y.map(s));return Math.min(.68,Math.max(.32,.5+(A-B)*.12))};
+ const msg=(to,from,kind,data,h)=>{if(to&&to!==from)d.msgs.push({id:'dg_t'+rid(),to,from,kind,data,read:false,at:ago(h||1)})};
+ /* teams of 2 from the club, by level band and men / women / mixed */
+ function teams(T,dv,n,used){const sp=T.sport,ok=p=>dv.lvl==='open'||tierOf(sp,st(p,sp))===dv.lvl,ps=pool(T.venue,sp,used).filter(ok);
+  const M=ps.filter(p=>p.gender==='male'),F=ps.filter(p=>p.gender==='female'),out=[];
+  while(out.length<n){let x,y;if(dv.cat==='mixed'){x=M.shift();y=F.shift()}else if(dv.cat==='men'){x=M.shift();y=M.shift()}else if(dv.cat==='women'){x=F.shift();y=F.shift()}else{x=ps.shift();y=ps.shift()}
+   if(!x||!y)break;used.add(x.id);used.add(y.id);
+   out.push({id:'te_'+rid(),tour:T.id,venue:T.venue,div:dv.id,a:x.id,b:y.id,acc:{[x.id]:true,[y.id]:true},status:'in',by:x.id,at:ago(200+out.length)})}
+  d.tentries.push(...out);return out}
+ function rec(T,m,date){const lv=u=>({uid:u,level:+fmtL(st(d.profiles.find(p=>p.id===u)||{},T.sport)||3)}),r=tScore(T.sport,T.mfmt,m.pts,T.golden);
+  const at=m.end||new Date().toISOString(),by=d.staff[T.venue]?d.staff[T.venue].admin:d.you;
+  const x={id:'m_t'+rid(),venue:T.venue,sport:T.sport,format:'doubles',date,time:null,len:0,court:m.court||1,a:m.ta.map(lv),b:m.tb.map(lv),sets:r.sets,winner:r.winner,by,at,logged:true,review:{by,at,prev:null,kept:true},tour:T.id};d.matches.push(x);return x.id}
+ function play(T,m,all,date,h){m.pa=pa(T,m.ta,m.tb);m.pts=tSimPts(T,m.pa);const r=tScore(T.sport,T.mfmt,m.pts,T.golden);m.status='done';m.winner=r.winner;m.start=ago(h+1);m.end=ago(h);m.court=1+(m.i%2);m.rm=rec(T,m,date);tAdvance(T,m,all)}
+ function live(T,m,h){m.pa=pa(T,m.ta,m.tb);m.status='live';m.sim=true;m.start=ago(h||.4);m.court=1+(m.i%2);m.pts=tSimPts(T,m.pa,12+Math.floor(Math.random()*20))}
+ const mk=(v,o)=>Object.assign({id:'t_'+rid(),venue:v,time:'10:00',fee:0,note:'',vis:'open',approve:true,format:'knockout',golden:true,stage:'signup',by:(d.staff[v]||{}).owner||d.you,at:ago(300)},o);
+ const draw=(T,dv,es)=>{const sl=shuffle(es),P=koSize(sl.length),half=P/2,slots=new Array(P).fill(null);sl.forEach((e,i)=>{if(i<half)slots[2*i]=e;else slots[2*(i-half)+1]=e});const ms=tBuildKO(T,dv,slots);d.tmatches.push(...ms);dv.stage='live';dv.drawn=ago(30);return ms};
+ /* every club: a cup running live today */
+ Object.keys(d.staff).forEach(v=>{const vn=venueOf(v);if(!vn)return;const sp=SP_KEYS.find(k=>vn.courtNos&&vn.courtNos[k])||'padel',used=new Set();
+  const T=mk(v,{name:v==='rc'?'OneCourt Winter Cup':(vn.short||vn.name).replace(/\s+club$/i,'')+' Cup',sport:sp,date:T0,time:'09:00',fee:sp==='padel'?1500:800,mfmt:sp==='padel'?'set1':'g11',note:'Prizes for the winners and runners-up. Snacks and drinks at the clubhouse after the final.',
+   divs:[{id:'d1',lvl:'intermediate',cat:'mixed',max:8,stage:'signup'},{id:'d2',lvl:'beginner',cat:'open',max:4,stage:'signup'}]});
+  const e1=teams(T,T.divs[0],8,used),e2=teams(T,T.divs[1],4,used);
+  if(e1.length>=4){const ms=draw(T,T.divs[0],e1),r1=ms.filter(m=>m.round===1).sort((a,b)=>a.i-b.i);
+   r1.forEach((m,k)=>{if(m.status!=='ready')return;if(k<r1.length-2)play(T,m,ms,T0,3-k*.5);else if(k===r1.length-2)live(T,m,.5)})}else T.divs[0].stage='signup';
+  if(e2.length>=4){const ms=draw(T,T.divs[1],e2),r1=ms.filter(m=>m.round===1).sort((a,b)=>a.i-b.i);if(r1[1]&&r1[1].status==='ready')play(T,r1[1],ms,T0,1.5);if(r1[0]&&r1[0].status==='ready')live(T,r1[0],.3)}else T.divs.splice(1,1);
+  T.stage=T.divs.every(x=>x.stage!=='signup')?'live':'signup';d.tours.push(T);
+  if(v!=='rc')return;
+  /* sign-ups open: a pickleball league, staff accept each entry */
+  const P=mk(v,{name:'Pickleball Smash',sport:'pickleball',date:addDays(T0,5),time:'17:00',fee:600,format:'league',mfmt:'g11',golden:false,note:'Every team plays every other team. Games to 11, win by 2. Paddles available at the desk.',
+   divs:[{id:'d1',lvl:'open',cat:'open',max:8,stage:'signup'},{id:'d2',lvl:'open',cat:'women',max:6,stage:'signup'}]});
+  teams(P,P.divs[0],4,used);teams(P,P.divs[1],3,used);
+  pool(v,'pickleball',used).slice(0,3).forEach((p,k)=>{used.add(p.id);d.tentries.push({id:'te_'+rid(),tour:P.id,venue:v,div:'d1',a:p.id,b:null,acc:{[p.id]:true},status:k<2?'in':'requested',by:p.id,at:ago(20-k)})});
+  d.tours.push(P);roleIds(v).forEach(u=>msg(u,P.by,'tour_new',{tour:P.id,venue:v},26));
+  /* invite only: the owners' invitational, with the demo accounts invited */
+  const I=mk(v,{name:'Owners’ Invitational',sport:'padel',date:addDays(T0,12),time:'18:30',fee:2000,vis:'invite',approve:false,mfmt:'bo3',note:'By invitation of the club owners. Best of 3 sets, golden point.',divs:[{id:'d1',lvl:'open',cat:'open',max:8,stage:'signup'}]});
+  teams(I,I.divs[0],3,used);d.tours.push(I);
+  roleIds(v).filter(u=>u!==I.by).forEach((u,k)=>{const e={id:'te_'+rid(),tour:I.id,venue:v,div:'d1',a:u,b:null,acc:{},status:'invited',by:I.by,at:ago(4+k)};d.tentries.push(e);msg(u,I.by,'tour_invite',{tour:I.id,entry:e.id,venue:v},4+k)});
+  /* finished: last month's league, with a champion and results in the rankings */
+  const L=mk(v,{name:'Monsoon Padel League',sport:'padel',date:addDays(T0,-38),time:'16:00',fee:1000,format:'league',mfmt:'set1',stage:'done',note:'',divs:[{id:'d1',lvl:'open',cat:'open',max:4,stage:'done',drawn:ago(24*39)}]});
+  const le=teams(L,L.divs[0],4,used);if(le.length===4){const ms=tBuildLeague(L,L.divs[0],le);ms.forEach((m,k)=>play(L,m,ms,L.date,24*38-k));d.tmatches.push(...ms);d.tours.push(L)}
+ });
+}
+/* Demo: the live matches move on by a point or two every few seconds, and the next match starts when one ends */
+function demoTourTick(){const d=Demo.d;if(!d||!d.tmatches)return;
+ d.tmatches.filter(m=>m.status==='live'&&m.sim&&m.venue===VID).forEach(m=>{const T=d.tours.find(t=>t.id===m.tour);if(!T)return;
+  let k=1+Math.floor(Math.random()*2);while(k--&&!tScore(T.sport,T.mfmt,m.pts,T.golden).done)m.pts=[...m.pts,Math.random()<(m.pa||.5)?'a':'b'];
+  const r=tScore(T.sport,T.mfmt,m.pts,T.golden);if(!r.done)return;
+  m.status='done';m.winner=r.winner;m.end=new Date().toISOString();
+  const lv=u=>({uid:u,level:+fmtL(lvlOf(T.sport,u)??3)}),by=(d.staff[T.venue]||{}).admin||d.you;
+  const x={id:'m_t'+rid(),venue:T.venue,sport:T.sport,format:'doubles',date:today(),time:null,len:0,court:m.court||1,a:m.ta.map(lv),b:m.tb.map(lv),sets:r.sets,winner:r.winner,by,at:m.end,logged:true,review:{by,at:m.end,prev:null,kept:true},tour:T.id};d.matches.push(x);m.rm=x.id;
+  const nx=tAdvance(T,m,d.tmatches);if(nx&&nx.status==='ready'){nx.status='live';nx.sim=true;nx.start=new Date().toISOString();nx.pts=[];nx.pa=.5}
+  const dv=T.divs.find(z=>z.id===m.div),left=d.tmatches.filter(z=>z.tour===T.id&&z.div===m.div&&z.status!=='done'&&z.status!=='bye');
+  if(dv&&!left.length){dv.stage='done';if(T.divs.every(z=>z.stage==='done'))T.stage='done'}});
+}
+
 function onRemote(pl){if(Store.mode==='demo'){if(pl&&pl.table==='rc_demo_access')demoAccessCheck();return}clearTimeout(rmT);rmT=setTimeout(async()=>{if(!S.uid||Store.mode==='demo')return;const before=unread();try{await reload()}catch(e){return}
  paintBadge();if(unread()>before){const g=S.msgs.find(x=>!x.read);if(g){const t=document.createElement('div');t.innerHTML=msgView(g).t;sfx('ding');buzz([20,80,20]);toast('New message: '+t.textContent,3600);sysNotify('OneCourt',t.textContent)}}
  const a=document.activeElement,typing=a&&/INPUT|TEXTAREA|SELECT/.test(a.tagName);

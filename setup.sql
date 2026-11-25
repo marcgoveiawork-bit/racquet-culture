@@ -703,3 +703,110 @@ begin
 end $$;
 revoke execute on function public.rc_set_pro(uuid, text, text, boolean) from public, anon;
 grant execute on function public.rc_set_pro(uuid, text, text, boolean) to authenticated;
+-- ============ Club tournaments (V1.9demo, 25 Nov 2026) ============
+-- Owners create tournaments; owners and admins run them; players sign up or answer invites.
+create table if not exists public.rc_tournaments (
+  id text primary key,
+  venue text not null default 'rc',
+  data jsonb not null default '{}',
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.rc_tour_entries (
+  id text primary key,
+  tour_id text not null references public.rc_tournaments(id) on delete cascade,
+  venue text not null default 'rc',
+  data jsonb not null default '{}',
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.rc_tour_matches (
+  id text primary key,
+  tour_id text not null references public.rc_tournaments(id) on delete cascade,
+  venue text not null default 'rc',
+  data jsonb not null default '{}',
+  created_by uuid default auth.uid(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+alter table public.rc_tournaments enable row level security;
+alter table public.rc_tour_entries enable row level security;
+alter table public.rc_tour_matches enable row level security;
+
+-- Everyone signed in can follow a tournament
+drop policy if exists "rc tour read" on public.rc_tournaments;
+create policy "rc tour read" on public.rc_tournaments for select to authenticated using (true);
+drop policy if exists "rc tour insert" on public.rc_tournaments;
+create policy "rc tour insert" on public.rc_tournaments for insert to authenticated with check (auth.uid() = created_by and public.rc_is_owner_at(venue));
+drop policy if exists "rc tour update" on public.rc_tournaments;
+create policy "rc tour update" on public.rc_tournaments for update to authenticated using (public.rc_is_admin_at(venue)) with check (public.rc_is_admin_at(venue));
+drop policy if exists "rc tour delete" on public.rc_tournaments;
+create policy "rc tour delete" on public.rc_tournaments for delete to authenticated using (public.rc_is_owner_at(venue));
+
+drop policy if exists "rc tour entry read" on public.rc_tour_entries;
+create policy "rc tour entry read" on public.rc_tour_entries for select to authenticated using (true);
+drop policy if exists "rc tour entry insert" on public.rc_tour_entries;
+create policy "rc tour entry insert" on public.rc_tour_entries for insert to authenticated with check (
+  auth.uid() = created_by and (public.rc_is_admin_at(venue) or data->>'a' = auth.uid()::text));
+drop policy if exists "rc tour entry update" on public.rc_tour_entries;
+create policy "rc tour entry update" on public.rc_tour_entries for update to authenticated
+  using (public.rc_is_admin_at(venue) or auth.uid()::text in (data->>'a', coalesce(data->>'b','')))
+  with check (public.rc_is_admin_at(venue) or auth.uid()::text in (data->>'a', coalesce(data->>'b','')));
+drop policy if exists "rc tour entry delete" on public.rc_tour_entries;
+create policy "rc tour entry delete" on public.rc_tour_entries for delete to authenticated using (public.rc_is_admin_at(venue));
+
+drop policy if exists "rc tour match read" on public.rc_tour_matches;
+create policy "rc tour match read" on public.rc_tour_matches for select to authenticated using (true);
+drop policy if exists "rc tour match write" on public.rc_tour_matches;
+create policy "rc tour match write" on public.rc_tour_matches for all to authenticated using (public.rc_is_admin_at(venue)) with check (public.rc_is_admin_at(venue));
+
+-- Players can only: ask to join an open tournament, answer an invite, confirm as a partner, add a partner to their own entry, or pull out.
+-- Only staff can accept a request, change who is in an entry, or put an entry in the draw.
+create or replace function public.rc_tour_entry_guard() returns trigger language plpgsql security definer set search_path = public as $$
+declare me text := auth.uid()::text; t jsonb; st text := new.data->>'status'; ost text;
+begin
+  if new.venue is distinct from (select venue from public.rc_tournaments where id = new.tour_id) then
+    raise exception 'Wrong club' using errcode = '42501'; end if;
+  if public.rc_is_admin_at(new.venue) then return new; end if;
+  select data into t from public.rc_tournaments where id = new.tour_id;
+  if tg_op = 'INSERT' then
+    if coalesce(t->>'vis','open') <> 'open' or coalesce(t->>'stage','signup') <> 'signup' then
+      raise exception 'This tournament is not taking sign-ups' using errcode = '42501'; end if;
+    if new.data->>'a' is distinct from me then raise exception 'Not your entry' using errcode = '42501'; end if;
+    if st not in ('requested','in') or (st = 'in' and coalesce((t->>'approve')::boolean, true)) then
+      raise exception 'Staff must accept this entry' using errcode = '42501'; end if;
+    return new;
+  end if;
+  ost := old.data->>'status';
+  if new.data->>'a' is distinct from old.data->>'a' or new.data->>'div' is distinct from old.data->>'div'
+     or new.tour_id is distinct from old.tour_id or new.data->>'seed' is distinct from old.data->>'seed' then
+    raise exception 'Only staff can change this' using errcode = '42501'; end if;
+  -- a partner can only be added by the first player, to an entry that has none
+  if new.data->>'b' is distinct from old.data->>'b' and not (old.data->>'b' is null and me = old.data->>'a') then
+    raise exception 'Only staff can change partners' using errcode = '42501'; end if;
+  if st is distinct from ost and not (st = 'out' or (ost = 'invited' and st = 'in')) then
+    raise exception 'Only staff can accept an entry' using errcode = '42501'; end if;
+  return new;
+end $$;
+revoke execute on function public.rc_tour_entry_guard() from public, anon, authenticated;
+drop trigger if exists rc_tour_entry_guard on public.rc_tour_entries;
+create trigger rc_tour_entry_guard before insert or update on public.rc_tour_entries for each row execute function public.rc_tour_entry_guard();
+
+-- Tournament notices come only from staff at that club
+drop policy if exists "rc msg insert" on public.rc_messages;
+create policy "rc msg insert" on public.rc_messages for insert to authenticated with check (
+  auth.uid() = from_user
+  and (kind not in ('community','admin_reply','conduct','role','pro','game_logged','game_edit','game_cancel','resolved','bk_confirmed','bk_declined','report_done',
+                    'tour_new','tour_invite','tour_ok','tour_no','tour_draw','tour_result')
+       or public.rc_is_admin_at(data->>'venue'))
+  and (kind <> 'demo_access' or public.rc_is_dev())
+  and length(coalesce(data->>'text','')) <= case when public.rc_is_admin_at(data->>'venue') then 600 else 160 end
+);
+
+do $$ begin
+  begin alter publication supabase_realtime add table public.rc_tournaments; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.rc_tour_entries; exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table public.rc_tour_matches; exception when duplicate_object then null; end;
+end $$;
