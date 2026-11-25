@@ -159,3 +159,7 @@ Surya's idea, asked for by Marc. Released to live as **V1.9** on 25 Nov 2026 (Ma
 - A player can ask to join a division one level from their own (Beginner and Intermediate, or Intermediate and Pro). Two levels apart is still blocked. `tElig(T,d,uids,soft)` allows it when `soft` is set, and `tOff` lists who is off-level.
 - The player gets an "Are you sure?" sheet first. The entry is always `requested`, even when the tournament doesn't need staff approval.
 - Staff see a level chip on the request (`tOffChip`), and pressing Accept opens a "Different level" sheet asking if they're sure (`ACT.tourOk(v,true)` skips it). The database guard needed no change, because players may always insert `requested`.
+
+## V1.11demo: Contact us (preview only, 25 Nov 2026)
+- Support email is onecourtsupport@gmail.com (`SUPPORT_EMAIL` in app.js). Settings has a Help card with "Email us", and the sign-in form has "Anything else? Email us". Both open a mail with the subject "OneCourt help".
+- Profile picture for the support Gmail: /mnt/project-files/brand/onecourt-profile-picture.png (made from brand/icon-512.png, on a square blue background so it crops well to a circle).
