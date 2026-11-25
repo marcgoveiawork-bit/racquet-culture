@@ -3599,9 +3599,10 @@ function tDrawSheet(T,d){
 function tHandSheet(T,d){
  const teams=tTeams(T.id,d.id),P=koSize(teams.length),slots=new Array(P).fill('');
  const opt=cur=>`<option value="">${'Bye'}</option>`+teams.map(e=>`<option value="${e.id}"${cur===e.id?' selected':''}>${esc(tTeamName(tNamed(e),true))}</option>`).join('');
- openSheet(`<h2>Set the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${P/2} first-round matches. Leave a side as Bye when there are fewer teams.</p>
+ openSheet(`${SHEET_BACK.replace('data-act="closeSheet"',`data-act="tourDraw" data-v="${d.id}"`)}<h2 data-noback>Set the draw</h2><p class="muted small">${esc(tDivLabel(d))} · ${P/2} first-round matches. Leave a side as Bye when there are fewer teams.</p>
   <div class="thand">${Array.from({length:P/2},(_,i)=>`<div class="throw"><span class="tiny muted">Match ${i+1}</span><select data-hs="${2*i}">${opt('')}</select><span class="tiny muted">vs</span><select data-hs="${2*i+1}">${opt('')}</select></div>`).join('')}</div>
-  <p class="ferr" id="hErr"></p><button class="btn brand wide" id="hGo">Save the draw</button>`,bg=>{
+  <p class="ferr" id="hErr"></p><button class="btn brand wide" id="hGo">Save the draw</button>
+  <button class="btn ghost wide" style="margin-top:10px" data-act="tourDraw" data-v="${d.id}">Back to random draw</button>`,bg=>{
   bg.querySelector('#hGo').onclick=async()=>{const v=qsa('[data-hs]',bg).map(s=>s.value),used=v.filter(Boolean),err=t=>bg.querySelector('#hErr').textContent=t;
    if(new Set(used).size!==used.length)return err('A team is in the draw twice.');if(used.length!==teams.length)return err(`Put all ${teams.length} teams in the draw.`);
    for(let i=0;i<v.length;i+=2)if(!v[i]&&!v[i+1])return err(`Match ${i/2+1} has no teams. Every match needs at least one.`);
