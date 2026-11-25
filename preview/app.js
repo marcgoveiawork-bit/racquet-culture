@@ -363,10 +363,12 @@ const Live={
   S.needSql=false;
   /* level feedback is newer still: if its table is missing, feedback is simply not shown */
   const quiet=p=>p.then(x=>x,e=>{if(missing(e))return[];throw e});
+  /* tournaments are an extra: if they can't load, the rest of the app still opens */
+  const soft=p=>p.then(x=>x,e=>{console.warn('Tournaments did not load',e);return[]});
   const [p,m,b,c,a,g,f,q,v,cf,cd,ph,co,dv,da,ow,tt,te,tm]=await Promise.all([all('rc_profiles','id,username,name,data'),all('rc_matches','id,data'),
    opt(all('rc_bookings','*',q=>q.gte('day',addDays(today(),-45)))),opt(all('rc_confirmations','*')),opt(all('rc_admins','user_id,venue',null,'user_id')),
    opt(sb.from('rc_messages').select('*').eq('to_user',S.uid).order('created_at',{ascending:false}).limit(300).then(r=>{if(r.error)throw r.error;return r.data})),
-   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,venue,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id,venue',null,'user_id')),quiet(all('rc_tournaments','id,venue,data')),quiet(all('rc_tour_entries','id,tour_id,venue,data')),quiet(all('rc_tour_matches','id,tour_id,venue,data'))]);
+   opt(all('rc_follows','*')),opt(all('rc_friend_requests','*')),quiet(all('rc_level_votes','*')),quiet(all('rc_settings','key,data',null,'key')),quiet(all('rc_conduct','*')),quiet(all('rc_private','user_id,phone,vis',null,'user_id')),quiet(all('rc_coaches','user_id,venue,sports,auto',null,'user_id')),quiet(all('rc_developers','user_id',null,'user_id')),quiet(all('rc_demo_access','user_id',null,'user_id')),quiet(all('rc_owners','user_id,venue',null,'user_id')),soft(all('rc_tournaments','id,venue,data')),soft(all('rc_tour_entries','id,tour_id,venue,data')),soft(all('rc_tour_matches','id,tour_id,venue,data'))]);
   return{profiles:p.map(flat),matches:m.map(r=>Object.assign({},r.data,{id:r.id})),bookings:b.map(bRow),confs:c.map(cRow),admins:a.map(x=>x.user_id+'@'+(x.venue||'rc')),msgs:g.map(gRow),
    follows:f.map(x=>({follower:x.follower,followee:x.followee,at:x.created_at})),reqs:q.map(x=>({id:x.id,from:x.from_user,to:x.to_user,status:x.status,at:x.created_at,resp:x.responded_at})),
    votes:v.map(x=>({id:x.id,voter:x.voter,target:x.target,sport:x.sport,match:x.match_id,vote:x.vote,at:x.created_at})),cfg:Object.fromEntries(cf.map(x=>[x.key,x.data])),
