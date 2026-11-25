@@ -154,3 +154,8 @@ Surya's idea, asked for by Marc. Released to live as **V1.9** on 25 Nov 2026 (Ma
 - Scoring: `tScore` counts rally points to the total; staff can also enter the final score in one go (`tAmScoreSheet`). The table (`tAmTable`) sorts by points won, then wins, then difference. Results still feed rankings as normal match records.
 - Each Americano/Mexicano division has Max players (4 to 48), Courts available (1 to 12) and Rounds (`d.amr`, 0 = auto). Auto rounds = enough for everyone to partner everyone about once, `ceil(n(n-1)/(4 x courts in use))`, between 3 and 15 (`tAmAuto`). It is worked out again from the real sign-ups at the draw and fixed on the division then. Players beyond courts x 4 sit out in turn (`tAmPick`). Older tournaments with `T.amr` still use it (`tAmR`).
 - Demo: Racquet Culture has "Friday Night Americano" (in progress) and "Sunday Mexicano" (taking sign-ups).
+
+### Joining a division one level away (V1.10demo)
+- A player can ask to join a division one level from their own (Beginner and Intermediate, or Intermediate and Pro). Two levels apart is still blocked. `tElig(T,d,uids,soft)` allows it when `soft` is set, and `tOff` lists who is off-level.
+- The player gets an "Are you sure?" sheet first. The entry is always `requested`, even when the tournament doesn't need staff approval.
+- Staff see a level chip on the request (`tOffChip`), and pressing Accept opens a "Different level" sheet asking if they're sure (`ACT.tourOk(v,true)` skips it). The database guard needed no change, because players may always insert `requested`.

@@ -513,6 +513,7 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 @media (hover:hover){.ibtn:hover{border-color:var(--brand-hi);box-shadow:0 0 0 3px rgba(var(--hi-rgb),.25)}.ibtn:hover>svg{animation:a_ring .9s var(--ease)}}
 .bcount{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--ball);color:var(--on-ball);font:700 11px/20px var(--body);text-align:center;box-shadow:0 0 0 2px var(--bg),0 0 12px rgba(220,245,90,.6);animation:a_pop .5s var(--ease)}
 .bcount:empty{display:none}
+.chip.toff{background:rgba(232,150,40,.18);color:#b06a00;font-size:10.5px;padding:2px 8px;display:table;margin-top:4px}
 .chip.admin{background:var(--ball);color:var(--on-ball);font-size:10.5px;padding:2px 8px;vertical-align:2px;margin-left:4px}
 /* Status of a score */
 .stx{font-weight:700}.stx.st-pending{color:#ffc76b}.stx.st-disputed{color:var(--bad)}.stx.st-reviewed{color:var(--brand-pale)}
@@ -1286,7 +1287,7 @@ a.btn{text-decoration:none}
 <script>window.RC_VER='1.10demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=69"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=118"></script>
+<script src="app.js?v=119"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;

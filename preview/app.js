@@ -3318,13 +3318,20 @@ function tLine(T,m,mine){const r=tRes(T,m),flip=mine==='b',f=x=>flip?[x[1],x[0]]
  return parts.join(', ')}
 
 /* ---------- Who can enter a division ---------- */
-function tElig(T,d,uids){
+/* Players one level away from a division can ask to join; staff decide */
+const tTierAt=(T,u)=>{const l=lvlOf(T.sport,u);return l==null?null:tierOf(T.sport,l)};
+const tNear=(a,b)=>Math.abs(TIER_KEYS.indexOf(a)-TIER_KEYS.indexOf(b))===1;
+const tOff=(T,d,uids)=>d.lvl==='open'?[]:uids.filter(Boolean).map(u=>({u,t:tTierAt(T,u)})).filter(x=>x.t&&x.t!==d.lvl);
+const tOffChip=(T,d,e)=>tOff(T,d,tNamed(e)).map(x=>`<span class="chip warn toff">${tNamed(e).length>1?esc(first(prof(x.u)))+': ':''}${lbl(TIERS,x.t)} player</span>`).join('');
+function tOffAsk({title,text,sub,yes,go}){openSheet(`<h2>${title}</h2><p style="margin-top:10px">${text}</p>${sub?`<p class="small muted" style="margin-top:8px">${sub}</p>`:''}
+ <button class="btn brand wide" id="offYes" style="margin-top:16px">${yes}</button><button class="btn ghost wide" id="offNo" style="margin-top:8px">Cancel</button>`,bg=>{bg.querySelector('#offYes').onclick=go;bg.querySelector('#offNo').onclick=()=>closeSheet()})}
+function tElig(T,d,uids,soft){
  for(const u of uids){const p=prof(u);if(!p)return'Player not found.';const n=u===S.uid?'You':first(p);
   if(!inVenue(p,T.venue))return`${n} ${u===S.uid?'aren’t':'isn’t'} a member of this club.`;
   if(d.cat==='men'&&p.gender!=='male')return`This division is for men.`;
   if(d.cat==='women'&&p.gender!=='female')return`This division is for women.`;
   if(d.lvl!=='open'){const l=lvlOf(T.sport,u);if(l==null)return`${n} need${u===S.uid?'':'s'} a ${SPORTS[T.sport].name.toLowerCase()} level first.`;
-   if(tierOf(T.sport,l)!==d.lvl)return`${n} ${u===S.uid?'are':'is'} ${lbl(TIERS,tierOf(T.sport,l))}, and this division is ${lbl(T_LVL,d.lvl)}.`}
+   if(tierOf(T.sport,l)!==d.lvl&&!(soft&&tNear(tierOf(T.sport,l),d.lvl)))return`${n} ${u===S.uid?'are':'is'} ${lbl(TIERS,tierOf(T.sport,l))}, and this division is ${lbl(T_LVL,d.lvl)}.`}
   if(tEntries(T.id,d.id).some(e=>e.status!=='out'&&tNamed(e).includes(u)))return`${n} ${u===S.uid?'are':'is'} already in this division.`}
  if(d.cat==='mixed'&&uids.length===2){const g=uids.map(u=>(prof(u)||{}).gender);if(!(g.includes('male')&&g.includes('female')))return'Mixed teams are one man and one woman.'}
  return'';
@@ -3506,7 +3513,7 @@ function tDivPanel(T,d){
    ${staff?`<div class="card tstaff rv"><div class="lhead"><span class="eyebrow">Run this division</span><span class="chip admin">Staff</span></div>
     <p class="small muted">${okN?`${n} players ready. ${d.cat==='mixed'?'Each team is a man and a woman.':n%4?`${n%4} sit${n%4===1?'s':''} out each round, taking turns.`:'Everyone plays every round.'}`:d.cat==='mixed'?'You need at least 2 men and 2 women to make the draw.':'You need at least 4 players to make the draw.'}</p>
     <div class="cta"><button class="btn brand sm" data-act="tourDraw" data-v="${d.id}"${okN?'':' disabled'}>Make the draw</button></div></div>`:''}
-   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b></span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
+   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${tOffChip(T,d,e)}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
    <div class="sec sm"><h3>Players in</h3></div><div class="list">${pl.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')||`<div class="card empty">No players yet.</div>`}</div>
    ${staff&&inv.length?`<div class="sec sm"><h3>Invited, no answer yet</h3></div><div class="list">${inv.map(e=>row(e)).join('')}</div>`:''}`}
  if(d.stage==='signup'){
@@ -3516,7 +3523,7 @@ function tDivPanel(T,d){
    ${staff?`<div class="card tstaff rv"><div class="lhead"><span class="eyebrow">Run this division</span><span class="chip admin">Staff</span></div>
     <p class="small muted">${teams.length<2?'You need at least 2 teams to make the draw.':`${teams.length} teams ready${solos.length?`, plus ${solos.length} player${solos.length===1?'':'s'} on their own to pair first`:''}.`}</p>
     <div class="cta">${solos.length>1?`<button class="btn ghost sm" data-act="tourPair" data-v="${d.id}">Pair solo players</button>`:''}<button class="btn brand sm" data-act="tourDraw" data-v="${d.id}"${teams.length<2?' disabled':''}>Make the draw</button></div></div>`:''}
-   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${e.b&&!(e.acc||{})[e.b]?'<span class="tiny muted">Partner hasn’t confirmed yet</span>':''}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
+   ${staff&&req.length?`<div class="sec sm"><h3>Asking to join</h3></div><div class="list">${req.map(e=>`<div class="card trow">${tTeamAv(tNamed(e))}<span class="nm"><b>${esc(tTeamName(tNamed(e)))}</b>${tOffChip(T,d,e)}${e.b&&!(e.acc||{})[e.b]?'<span class="tiny muted">Partner hasn’t confirmed yet</span>':''}</span><span class="tacts"><button class="btn brand sm" data-act="tourOk" data-v="${e.id}">Accept</button><button class="btn ghost sm" data-act="tourNo" data-v="${e.id}">Decline</button></span></div>`).join('')}</div>`:''}
    <div class="sec sm"><h3>Teams in</h3></div><div class="list">${teams.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')||`<div class="card empty">No teams yet.</div>`}</div>
    ${solos.length?`<div class="sec sm"><h3>On their own, to be paired</h3></div><div class="list">${solos.map(e=>row(e,tTeamLv(T,tNamed(e)))).join('')}</div>`:''}
    ${wait.length?`<div class="sec sm"><h3>Waiting for a partner to confirm</h3></div><div class="list">${wait.map(e=>row(e)).join('')}</div>`:''}
@@ -3647,9 +3654,9 @@ function tPickSheet({title,sub,sport,exclude=[],multi,filter,onPick,all}){
 /* Sign up: pick a division, then a partner or none */
 function tJoinSheet(T,inviteEntry){
  const ds=(T.divs||[]).filter(d=>d.stage==='signup'&&(!inviteEntry||d.id===inviteEntry.div));
- const opts=ds.map(d=>{const why=inviteEntry?'':tElig(T,d,[S.uid])||(tFull(T,d)?'This division is full.':'');return{d,why}});
+ const opts=ds.map(d=>{const why=inviteEntry?'':tElig(T,d,[S.uid],1)||(tFull(T,d)?'This division is full.':'');return{d,why}});
  openSheet(`<h2>${inviteEntry?'Accept your invite':'Sign up'}</h2><p class="muted small">${esc(T.name)} · ${SPORTS[T.sport].name}${+T.fee>0?` · ${tFee(T)} per player, paid at the club`:''}</p>
-  ${inviteEntry?'':`<label style="margin-top:14px">Division</label><div class="tjoinl">${opts.map(({d,why},i)=>`<button type="button" class="opt${why?' locked':''}" role="radio" aria-checked="false" data-jd="${d.id}"${why?' disabled':''}><span class="ot"><b>${esc(tDivLabel(d))}</b><span>${why?esc(why):isAm(T)?(d.max?`${tSolos(T.id,d.id).length} of ${d.max} players`:`${tSolos(T.id,d.id).length} players so far`):d.max?`${tTeams(T.id,d.id).length} of ${d.max} teams`:`${tTeams(T.id,d.id).length} teams so far`}</span></span></button>`).join('')}</div>`}
+  ${inviteEntry?'':`<label style="margin-top:14px">Division</label><div class="tjoinl">${opts.map(({d,why},i)=>`<button type="button" class="opt${why?' locked':''}" role="radio" aria-checked="false" data-jd="${d.id}"${why?' disabled':''}><span class="ot"><b>${esc(tDivLabel(d))}</b><span>${why?esc(why):!inviteEntry&&tOff(T,d,[S.uid]).length?`You’re ${lbl(TIERS,tTierAt(T,S.uid))}. You can ask to join and the club decides.`:isAm(T)?(d.max?`${tSolos(T.id,d.id).length} of ${d.max} players`:`${tSolos(T.id,d.id).length} players so far`):d.max?`${tTeams(T.id,d.id).length} of ${d.max} teams`:`${tTeams(T.id,d.id).length} teams so far`}</span></span></button>`).join('')}</div>`}
   ${isAm(T)?`<p class="small muted" style="margin-top:14px">${lbl(T_FMT,T.format)}: you sign up on your own and get a new partner every round.</p>`:''}
   <div${isAm(T)?' hidden':''}><label style="margin-top:14px">Partner</label>
   <button type="button" class="btn ghost wide" id="jP">Choose a partner</button>
@@ -3661,7 +3668,7 @@ function tJoinSheet(T,inviteEntry){
   qsa('[data-jd]',bg).forEach(b=>b.onclick=()=>{div=b.dataset.jd;partner=null;paint()});
   bg.querySelector('#jSolo').onclick=()=>{partner=null;paint()};
   bg.querySelector('#jP').onclick=()=>{const d=tDiv(T,div);if(!d)return;const keep={div};
-   tPickSheet({title:'Choose a partner',sub:`${esc(tDivLabel(d))}. They get a message to confirm.`,sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[S.uid,p.id].filter(u=>!inviteEntry||u!==S.uid)),onPick:id=>{partner=id;tJoinSheet2(T,inviteEntry,keep.div,partner)}})};
+   tPickSheet({title:'Choose a partner',sub:`${esc(tDivLabel(d))}. They get a message to confirm.`,sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[S.uid,p.id].filter(u=>!inviteEntry||u!==S.uid),1),onPick:id=>{partner=id;tJoinSheet2(T,inviteEntry,keep.div,partner)}})};
   paint();
   bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inviteEntry,div,partner);
   if(div==null&&!inviteEntry){bg.querySelector('#jGo').disabled=true;bg.querySelector('#jErr').textContent=opts.length?'You can’t enter any division here. See the reasons above.':'Sign-ups have closed.'}});
@@ -3670,16 +3677,18 @@ function tJoinSheet(T,inviteEntry){
 function tJoinSheet2(T,inv,div,partner){tJoinSheet(T,inv);setTimeout(()=>{const bg=$('sheetBg');if(!bg)return;const b=bg.querySelector(`[data-jd="${div}"]`);if(b)b.click();
  const pb=bg.querySelector('#jP'),sb=bg.querySelector('#jSolo');pb.textContent=`Partner: ${slotName({uid:partner})} · change`;sb.setAttribute('aria-checked','false');
  bg.querySelector('#jGo').onclick=()=>tJoinGo(T,inv,div,partner);sb.onclick=()=>tJoinSheet(T,inv)},30)}
-async function tJoinGo(T,inv,div,partner){
+async function tJoinGo(T,inv,div,partner,sure){
  const d=tDiv(T,div),err=t=>{const e=$('jErr');if(e)e.textContent=t};if(!d)return err('Choose a division.');
  if(inv){const e=Object.assign({},inv,{status:'in',acc:Object.assign({},inv.acc,{[S.uid]:true})});if(partner&&!e.b){e.b=partner;e.acc[partner]=false}
   if(!await tSaveEntry(e))return;closeSheet();doneTick('You’re in');
   if(partner&&inv.b!==partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);render();return}
- const why=tElig(T,d,partner?[S.uid,partner]:[S.uid]);if(why)return err(why);if(tFull(T,d))return err('This division is full.');
- const e={id:'te_'+rid(),tour:T.id,venue:T.venue,div,a:S.uid,b:partner||null,acc:partner?{[S.uid]:true,[partner]:false}:{[S.uid]:true},status:T.approve?'requested':'in',by:S.uid,at:new Date().toISOString()};
- if(!await tSaveEntry(e,true))return;closeSheet();doneTick(T.approve?'Request sent':'You’re in');
+ const us=partner?[S.uid,partner]:[S.uid],why=tElig(T,d,us,1);if(why)return err(why);if(tFull(T,d))return err('This division is full.');
+ const off=tOff(T,d,us),ask=T.approve||off.length>0;
+ if(off.length&&!sure){const me=off.find(x=>x.u===S.uid),o=me||off[0];return tOffAsk({title:'Are you sure?',text:`${me?`You’re ${lbl(TIERS,me.t)}`:`${esc(first(prof(o.u)))} is ${lbl(TIERS,o.t)}`}, and this division is for ${lbl(T_LVL,d.lvl)} players. Are you sure you want to request to join this tournament?`,sub:'The club’s owners and admins see your level and decide whether to accept you.',yes:'Yes, ask to join',go:()=>tJoinGo(T,inv,div,partner,true)})}
+ const e={id:'te_'+rid(),tour:T.id,venue:T.venue,div,a:S.uid,b:partner||null,acc:partner?{[S.uid]:true,[partner]:false}:{[S.uid]:true},status:ask?'requested':'in',by:S.uid,at:new Date().toISOString()};
+ if(!await tSaveEntry(e,true))return;closeSheet();doneTick(ask?'Request sent':'You’re in');
  if(partner)notify([{to:partner,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);
- toast(T.approve?`The club will check your entry${partner?` once ${first(prof(partner))} confirms`:''}.`:partner?`${first(prof(partner))} gets a message to confirm.`:'Staff pair you with a partner before the draw.',3800);render();
+ toast(ask?`The club will check your entry${partner?` once ${first(prof(partner))} confirms`:''}.`:partner?`${first(prof(partner))} gets a message to confirm.`:'Staff pair you with a partner before the draw.',3800);render();
 }
 /* Make the draw: random, or set by hand to match a draw done at the club */
 function tDrawSheet(T,d){
@@ -3781,7 +3790,9 @@ Object.assign(ACT,{
  tourWithdraw(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;openSheet(`<h2>Pull out?</h2><p class="muted">You’ll leave ${esc(T.name)}${e.b?', and your partner too':''}. You can sign up again while sign-ups are open.</p><button class="btn danger wide" style="margin-top:16px" data-act="tourDecline" data-v="${e.id}">Yes, pull out</button><button class="btn ghost wide" style="margin-top:10px" data-act="closeSheet">Stay in</button>`)},
  tourAddPartner(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour),d=T&&tDiv(T,e.div);if(!d)return;
   tPickSheet({title:'Choose a partner',sub:'They get a message to confirm.',sport:T.sport,exclude:[S.uid],filter:p=>!tElig(T,d,[p.id]),onPick:async id=>{const ne=Object.assign({},e,{b:id,acc:Object.assign({},e.acc,{[id]:false})});if(await tSaveEntry(ne)){closeSheet();notify([{to:id,kind:'tour_partner',data:{tour:T.id,entry:e.id}}]);toast(`${first(prof(id))} gets a message to confirm.`);render()}}})},
- async tourOk(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'in'}))){notify(tNamed(e).map(to=>({to,kind:'tour_ok',data:{tour:T.id,venue:T.venue}})));toast('Accepted. They’ve been told.');render()}},
+ async tourOk(v,sure){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;const d=tDiv(T,e.div),off=d?tOff(T,d,tNamed(e)):[];
+  if(off.length&&sure!==true){const o=off[0],nm=esc(first(prof(o.u)));return tOffAsk({title:'Different level',text:`${off.length>1?'Both players are':`${nm} is`} ${lbl(TIERS,o.t)}${off.length>1&&off[1].t!==o.t?` and ${lbl(TIERS,off[1].t)}`:''}, and this division is for ${lbl(T_LVL,d.lvl)} players. Are you sure you want to accept ${off.length>1?'them':nm}?`,sub:'Their results here still count towards their own rankings as usual.',yes:'Yes, accept',go:()=>{closeSheet();ACT.tourOk(v,true)}})}
+  if(await tSaveEntry(Object.assign({},e,{status:'in'}))){notify(tNamed(e).map(to=>({to,kind:'tour_ok',data:{tour:T.id,venue:T.venue}})));toast('Accepted. They’ve been told.');render()}},
  async tourNo(v){const e=S.tentries.find(x=>x.id===v),T=e&&tour(e.tour);if(!T)return;if(await tSaveEntry(Object.assign({},e,{status:'out',outBy:S.uid}))){notify(tNamed(e).map(to=>({to,kind:'tour_no',data:{tour:T.id,venue:T.venue}})));toast('Declined. They’ve been told.');render()}},
  tourInvite(){const T=tour(view.tid);if(!T)return;const ds=T.divs.filter(d=>d.stage==='signup');if(!ds.length)return toast('Sign-ups have closed.');
   const go=d=>tPickSheet({title:'Invite players',sub:`${esc(tDivLabel(d))}. They get a message and accept or decline.`,sport:T.sport,multi:true,all:'Invite everyone who can play',exclude:tEntries(T.id,d.id).filter(e=>e.status!=='out').flatMap(tNamed),filter:p=>!tElig(T,d,[p.id]),onPick:async ids=>{
