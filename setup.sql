@@ -813,3 +813,17 @@ do $$ begin
   begin alter publication supabase_realtime add table public.rc_tour_entries; exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table public.rc_tour_matches; exception when duplicate_object then null; end;
 end $$;
+-- ============ Never lose a player's level (25 Nov 2026) ============
+-- A set-up profile can never be turned back into a blank one, and its levels can never be wiped,
+-- whatever the app sends (for example after a failed load on a bad connection).
+create or replace function public.rc_profile_keep() returns trigger language plpgsql set search_path = public as $$
+begin
+  if coalesce(old.data->>'setup','false') = 'true' and coalesce(new.data->>'setup','false') <> 'true' then
+    raise exception 'This profile is already set up and cannot be reset' using errcode = '42501'; end if;
+  if jsonb_typeof(old.data->'levels') = 'object' and old.data->'levels' <> '{}'::jsonb
+     and (jsonb_typeof(new.data->'levels') is distinct from 'object' or new.data->'levels' = '{}'::jsonb) then
+    raise exception 'Levels cannot be wiped' using errcode = '42501'; end if;
+  return new;
+end $$;
+drop trigger if exists rc_profile_keep on public.rc_profiles;
+create trigger rc_profile_keep before update on public.rc_profiles for each row execute function public.rc_profile_keep();

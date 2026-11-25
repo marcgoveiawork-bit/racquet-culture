@@ -139,3 +139,9 @@ Surya's idea, asked for by Marc. Built on the preview only; live is still V1.8 u
 - **Messages:** `tour_new` to every club member for an open tournament ("An open tournament has been created in your club" → opens sign-up), `tour_invite` to invited players only, plus `tour_partner`, `tour_pyes`, `tour_pno`, `tour_ok`, `tour_no`, `tour_draw`, `tour_result` (`tMsg`, `tNeeds`).
 - **Demo:** `demoTours` gives every club a cup running live today (points tick in via `demoTourTick`), and Racquet Culture also gets a pickleball league taking sign-ups, an invite-only event with the demo accounts invited, and a finished league with champions.
 - Not built yet: combined groups + knockout, seeding, court scheduling for tournament matches, collecting entry fees in the app.
+
+### Levels are never lost (25 Nov 2026)
+- What happened: on the preview, the tournament tables briefly couldn't be read. The load failed, `enter()` thought Marc's account had no profile and saved a fresh blank one over it (setup false, no levels). Only Marc's profile was hit (no games were lost; he had none logged).
+- Database guard (live now, in `setup.sql`, trigger `rc_profile_keep`): a set-up profile can't be turned back into a blank one, and its levels can't be wiped, whatever the app sends.
+- Preview `enter()`: retries the load 3 times, then shows "Couldn't load the club. Your account and levels are safe" with Try again (`loadFailed`). A new profile is only made after checking the database has none for that account, and with an insert (`createProfile`), never an upsert. Live `app.js` gets the same change with the next release.
+- Tournament match view: each player's name opens their profile (`tNameBtns`).
