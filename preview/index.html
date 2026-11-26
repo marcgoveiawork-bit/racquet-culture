@@ -6,6 +6,8 @@
 <meta name="format-detection" content="telephone=no,email=no,address=no,date=no">
 <meta name="theme-color" content="#f6f3fd">
 <script>/* club colours before first paint */try{var vq=new URLSearchParams(location.search).get('venue');document.documentElement.dataset.venue=vq||JSON.parse(localStorage.getItem('rc_venue'))||'rc'}catch(e){document.documentElement.dataset.venue='rc'}</script>
+<meta name="color-scheme" content="dark light">
+<meta name="darkreader-lock">
 <script>/* theme before first paint, so there is no flash */try{var t=(JSON.parse(localStorage.getItem('rc_prefs'))||{}).theme||'light';document.documentElement.dataset.theme=t==='device'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):t}catch(e){document.documentElement.dataset.theme='dark'}</script>
 <meta name="robots" content="noindex">
 <title>OneCourt</title>
@@ -21,7 +23,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;700&family=Manrope:wght@400;500;600;700&display=swap">
 <style>
 /* Racquet Culture: deep aubergine, logo purple, white type and one touch of ball yellow. */
-:root{
+:root{color-scheme:dark;
   --bg:#0d0918;--bg2:#120c22;--card:#17112b;--card2:#1e1638;--line:rgba(var(--wr),.09);--line2:rgba(var(--wr),.16);
   --ink:#f5f2fc;--muted:#a69fc0;--faint:#6f6890;
   --brand:#6045a7;--brand-hi:#8b6fe6;--brand-soft:rgba(var(--hi-rgb),.16);
@@ -398,9 +400,9 @@ main{max-width:780px;margin:0 auto;padding:22px 18px calc(120px + var(--safe-b))
 .prefs dt{color:var(--muted);font-size:13.5px}.prefs dd{margin:0;font-weight:600;font-size:13.5px}
 .setline{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
 .setline:first-child{border-top:0}
-.switch{position:relative;width:52px;height:30px;border-radius:999px;border:0;background:rgba(var(--wr),.12);cursor:pointer;flex:none;transition:background-color .35s ease}
+.switch{position:relative;width:52px;height:30px;border-radius:999px;border:0;background:rgba(var(--wr),.2);box-shadow:inset 0 0 0 1px rgba(var(--wr),.22);cursor:pointer;flex:none;transition:background-color .35s ease}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:transform .45s var(--spring);box-shadow:0 2px 6px rgba(0,0,0,.3)}
-.switch[aria-checked="true"]{background:var(--brand-hi)}
+.switch[aria-checked="true"]{background:var(--brand-hi);box-shadow:none}
 .switch[aria-checked="true"]::after{transform:translateX(22px)}
 /* Dock: floating navigation with a sliding pill */
 .dock{position:fixed;left:50%;bottom:calc(14px + var(--safe-b));transform:translateX(-50%);z-index:45;display:flex;gap:2px;padding:6px;border-radius:999px;background:rgba(var(--dock-rgb),.78);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);border:1px solid var(--line2);box-shadow:0 18px 40px rgba(0,0,0,.45)}
@@ -1284,10 +1286,10 @@ a.btn{text-decoration:none}
 <div id="sheetRoot"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="sg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--brand-hi)" stop-opacity=".45"/><stop offset="1" style="stop-color:var(--brand-hi)" stop-opacity="0"/></linearGradient></defs></svg>
 
-<script>window.RC_VER='1.11demo';window.RC_PREVIEW=true</script>
+<script>window.RC_VER='1.12demo';window.RC_PREVIEW=true</script>
 <script src="config.js?v=69"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="app.js?v=121"></script>
+<script src="app.js?v=123"></script>
 <script>/* Keep the app up to date, including when it runs from the Home Screen (iPhone keeps the old page open there and there is no refresh) */
 (function(){
  var cur=((document.querySelector('script[src*="app.js?v="]')||{}).src||'').split('v=')[1];if(!cur||location.protocol==='file:')return;
