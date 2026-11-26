@@ -164,6 +164,6 @@ Surya's idea, asked for by Marc. Released to live as **V1.9** on 25 Nov 2026 (Ma
 - Support email is onecourtsupport@gmail.com (`SUPPORT_EMAIL` in app.js). Settings has a Help card with "Email us", and the sign-in form has "Anything else? Email us". Both open a mail with the subject "OneCourt help".
 - Profile picture for the support Gmail: /mnt/project-files/brand/onecourt-profile-picture.png (made from brand/icon-512.png, on a square blue background so it crops well to a circle).
 
-## V1.12demo: toggles easier to see in dark mode (preview only, 26 Nov 2026)
+## V1.12: toggles easier to see in dark mode (released live 26 Nov 2026)
 - The page now declares `color-scheme: dark` (with `<meta name="color-scheme">`) and `<meta name="darkreader-lock">`. Without these, Chrome's auto dark mode and the Dark Reader extension repainted the app and turned the white switch knob dark. Light theme still sets `color-scheme: light`.
 - The off switch track is a little brighter and has a thin outline.
